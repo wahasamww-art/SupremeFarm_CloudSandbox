@@ -1,6 +1,6 @@
 // ===================================================================
 // SupremeFarm Modular - Cloud Distribution Bundle
-// Generated at: 2026-07-13T07:57:09.544Z
+// Generated at: 2026-07-13T08:04:20.101Z
 // ===================================================================
 
 // --- File: core/EventBus.js ---
@@ -624,7 +624,8 @@ SF.SplashScreen = class SplashScreen {
                 flex-direction: column;
                 align-items: center;
                 justify-content: center;
-                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                font-family: 'Tajawal', 'Cairo', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                direction: rtl;
                 opacity: 0;
                 transition: opacity 0.8s ease-in-out;
             }
@@ -645,16 +646,32 @@ SF.SplashScreen = class SplashScreen {
                 to { transform: translateY(0) scale(1); opacity: 1; }
             }
 
-            .sf-splash-logo svg {
-                width: 100px;
-                height: 100px;
-                filter: drop-shadow(0 0 15px rgba(52, 152, 219, 0.8));
-                animation: sf-pulse 2s infinite alternate;
+            .sf-splash-logo {
+                font-size: 65px;
+                filter: drop-shadow(0 0 15px rgba(241, 196, 15, 0.6));
+                animation: sf-bounce 2s infinite alternate ease-in-out;
+                display: flex;
+                gap: 20px;
+                justify-content: center;
+                margin-bottom: 10px;
             }
 
-            @keyframes sf-pulse {
-                0% { filter: drop-shadow(0 0 15px rgba(52, 152, 219, 0.6)) scale(1); }
-                100% { filter: drop-shadow(0 0 30px rgba(52, 152, 219, 1)) scale(1.05); }
+            .sf-splash-logo span {
+                display: inline-block;
+                animation: sf-float 3s infinite ease-in-out;
+            }
+            
+            .sf-splash-logo span:nth-child(2) { animation-delay: 0.5s; }
+            .sf-splash-logo span:nth-child(3) { animation-delay: 1s; }
+
+            @keyframes sf-bounce {
+                0% { filter: drop-shadow(0 0 15px rgba(241, 196, 15, 0.4)); }
+                100% { filter: drop-shadow(0 0 35px rgba(241, 196, 15, 1)); }
+            }
+
+            @keyframes sf-float {
+                0%, 100% { transform: translateY(0); }
+                50% { transform: translateY(-15px) scale(1.1); }
             }
 
             .sf-splash-title {
@@ -677,10 +694,12 @@ SF.SplashScreen = class SplashScreen {
             }
 
             .sf-splash-subtitle {
-                color: #95a5a6;
-                font-size: 14px;
-                margin-top: 10px;
-                letter-spacing: 1px;
+                color: #f1c40f;
+                font-size: 16px;
+                margin-top: 15px;
+                letter-spacing: 0px;
+                font-weight: bold;
+                text-shadow: 0 0 10px rgba(241, 196, 15, 0.5);
             }
 
             .sf-progress-bar {
@@ -725,19 +744,12 @@ SF.SplashScreen = class SplashScreen {
         this.container.innerHTML = `
             <div class="sf-splash-glass">
                 <div class="sf-splash-logo">
-                    <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-                        <!-- Wheat/Leaf Element -->
-                        <path d="M50 10 C30 30, 20 60, 50 90 C80 60, 70 30, 50 10 Z" fill="none" stroke="#2ecc71" stroke-width="4" />
-                        <path d="M50 10 C40 40, 40 70, 50 90" fill="none" stroke="#2ecc71" stroke-width="2" />
-                        <path d="M35 45 L50 35 M30 65 L50 55 M65 45 L50 35 M70 65 L50 55" fill="none" stroke="#2ecc71" stroke-width="3" stroke-linecap="round"/>
-                        <!-- Cybernetic Hexagon Overlay -->
-                        <polygon points="50,25 70,35 70,65 50,75 30,65 30,35" fill="none" stroke="#3498db" stroke-width="2" stroke-dasharray="4,4" />
-                        <!-- Core Core -->
-                        <circle cx="50" cy="50" r="5" fill="#3498db" />
-                    </svg>
+                    <span>🐮</span>
+                    <span>🌾</span>
+                    <span>🚜</span>
                 </div>
-                <div class="sf-splash-title">Supreme Farm</div>
-                <div class="sf-splash-subtitle">Elite Automation Protocol Initialized</div>
+                <div class="sf-splash-title">حصاد مظبوط</div>
+                <div class="sf-splash-subtitle">هيثم كوتش يُرحب بكم في نظام المزرعة الذكي ✨</div>
                 <div class="sf-progress-bar">
                     <div class="sf-progress-fill"></div>
                 </div>
