@@ -17,7 +17,7 @@ const runSandboxTest = () => {
         font-family: Arial, sans-serif;
         box-shadow: 0 4px 6px rgba(0,0,0,0.3);
     `;
-    testDiv.innerHTML = "✅ النظام السحابي يعمل بكفاءة! (الإصدار التجريبي 1.0)";
+    testDiv.innerHTML = "✅ماذا سيحدث؟ سيظهر المربع بالكلام الجديد الذي كتبته فوراً!";
     document.body.appendChild(testDiv);
     
     setTimeout(() => {
