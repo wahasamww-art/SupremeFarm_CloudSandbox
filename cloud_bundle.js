@@ -1,6 +1,6 @@
 // ===================================================================
 // SupremeFarm Modular - Cloud Distribution Bundle
-// Generated at: 2026-07-13T07:32:56.107Z
+// Generated at: 2026-07-13T07:57:09.544Z
 // ===================================================================
 
 // --- File: core/EventBus.js ---
@@ -603,6 +603,184 @@ SF.Styles = `
 `;
 
 
+
+
+// --- File: ui/SplashScreen.js ---
+// --- ui\SplashScreen.js ---
+window.SF = window.SF || {};
+
+SF.SplashScreen = class SplashScreen {
+    constructor() {
+        this.container = null;
+        this.styleElement = null;
+        this.cssText = `
+            #sf-splash-screen {
+                position: fixed;
+                top: 0; left: 0; width: 100vw; height: 100vh;
+                background: radial-gradient(circle at center, rgba(13, 17, 23, 0.8) 0%, rgba(0, 0, 0, 0.95) 100%);
+                backdrop-filter: blur(12px);
+                z-index: 2147483647;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                opacity: 0;
+                transition: opacity 0.8s ease-in-out;
+            }
+
+            .sf-splash-glass {
+                background: rgba(255, 255, 255, 0.03);
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                box-shadow: 0 0 40px rgba(52, 152, 219, 0.2), inset 0 0 20px rgba(255, 255, 255, 0.02);
+                border-radius: 20px;
+                padding: 40px 60px;
+                text-align: center;
+                transform: translateY(30px) scale(0.95);
+                opacity: 0;
+                animation: sf-slide-up 1s cubic-bezier(0.16, 1, 0.3, 1) 0.2s forwards;
+            }
+
+            @keyframes sf-slide-up {
+                to { transform: translateY(0) scale(1); opacity: 1; }
+            }
+
+            .sf-splash-logo svg {
+                width: 100px;
+                height: 100px;
+                filter: drop-shadow(0 0 15px rgba(52, 152, 219, 0.8));
+                animation: sf-pulse 2s infinite alternate;
+            }
+
+            @keyframes sf-pulse {
+                0% { filter: drop-shadow(0 0 15px rgba(52, 152, 219, 0.6)) scale(1); }
+                100% { filter: drop-shadow(0 0 30px rgba(52, 152, 219, 1)) scale(1.05); }
+            }
+
+            .sf-splash-title {
+                color: #fff;
+                font-size: 32px;
+                font-weight: 800;
+                margin-top: 20px;
+                letter-spacing: 2px;
+                text-transform: uppercase;
+                text-shadow: 0 0 20px rgba(52, 152, 219, 0.8);
+                background: linear-gradient(90deg, #3498db, #2ecc71, #3498db);
+                background-size: 200% auto;
+                color: transparent;
+                -webkit-background-clip: text;
+                animation: sf-shine 3s linear infinite;
+            }
+
+            @keyframes sf-shine {
+                to { background-position: 200% center; }
+            }
+
+            .sf-splash-subtitle {
+                color: #95a5a6;
+                font-size: 14px;
+                margin-top: 10px;
+                letter-spacing: 1px;
+            }
+
+            .sf-progress-bar {
+                width: 100%;
+                height: 4px;
+                background: rgba(255, 255, 255, 0.1);
+                border-radius: 2px;
+                margin-top: 30px;
+                overflow: hidden;
+                position: relative;
+            }
+
+            .sf-progress-fill {
+                height: 100%;
+                width: 0%;
+                background: #3498db;
+                box-shadow: 0 0 10px #3498db;
+                border-radius: 2px;
+                animation: sf-fill 2.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+            }
+
+            @keyframes sf-fill {
+                0% { width: 0%; }
+                40% { width: 60%; }
+                80% { width: 90%; }
+                100% { width: 100%; }
+            }
+        `;
+    }
+
+    injectCSS() {
+        this.styleElement = document.createElement('style');
+        this.styleElement.textContent = this.cssText;
+        document.head.appendChild(this.styleElement);
+    }
+
+    createUI() {
+        this.container = document.createElement('div');
+        this.container.id = 'sf-splash-screen';
+        
+        // رسم الشعار كـ SVG معقد يعطي إيحاء الذكاء الاصطناعي والمزرعة
+        this.container.innerHTML = `
+            <div class="sf-splash-glass">
+                <div class="sf-splash-logo">
+                    <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+                        <!-- Wheat/Leaf Element -->
+                        <path d="M50 10 C30 30, 20 60, 50 90 C80 60, 70 30, 50 10 Z" fill="none" stroke="#2ecc71" stroke-width="4" />
+                        <path d="M50 10 C40 40, 40 70, 50 90" fill="none" stroke="#2ecc71" stroke-width="2" />
+                        <path d="M35 45 L50 35 M30 65 L50 55 M65 45 L50 35 M70 65 L50 55" fill="none" stroke="#2ecc71" stroke-width="3" stroke-linecap="round"/>
+                        <!-- Cybernetic Hexagon Overlay -->
+                        <polygon points="50,25 70,35 70,65 50,75 30,65 30,35" fill="none" stroke="#3498db" stroke-width="2" stroke-dasharray="4,4" />
+                        <!-- Core Core -->
+                        <circle cx="50" cy="50" r="5" fill="#3498db" />
+                    </svg>
+                </div>
+                <div class="sf-splash-title">Supreme Farm</div>
+                <div class="sf-splash-subtitle">Elite Automation Protocol Initialized</div>
+                <div class="sf-progress-bar">
+                    <div class="sf-progress-fill"></div>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(this.container);
+
+        // طلب رسم لكي يبدأ الأنميشن من نقطة الصفر بشكل صحيح
+        requestAnimationFrame(() => {
+            this.container.style.opacity = '1';
+        });
+    }
+
+    show(callback) {
+        this.injectCSS();
+        this.createUI();
+
+        // إخفاء الشاشة بعد اكتمال الشريط (حوالي 3.5 ثوانٍ)
+        setTimeout(() => {
+            this.container.style.opacity = '0';
+            
+            // انتظار انتهاء أنميشن الإخفاء (Fade Out) ثم التدمير
+            setTimeout(() => {
+                this.destroy();
+                if (callback && typeof callback === 'function') {
+                    callback();
+                }
+            }, 800); // مدة التلاشي
+        }, 3000); // مدة ظهور الشاشة
+    }
+
+    destroy() {
+        if (this.container && this.container.parentNode) {
+            this.container.parentNode.removeChild(this.container);
+        }
+        if (this.styleElement && this.styleElement.parentNode) {
+            this.styleElement.parentNode.removeChild(this.styleElement);
+        }
+        // تفريغ الذاكرة (Garbage Collection)
+        this.container = null;
+        this.styleElement = null;
+    }
+};
 
 
 // --- File: ui/UIManager.js ---
@@ -4015,7 +4193,14 @@ console.log('[SF-MineModule] ✅ Registration complete. Total modules:', SF.modu
     console.log('[SupremeFarm Modular] Initializing System V2.0 (Cloud Bundle)...');
     const initApp = () => {
         if(!window.SF) window.SF = {};
-        window.SF.ui = new window.SF.UIManager();
+        if(!window.SF.SplashScreen) {
+            window.SF.ui = new window.SF.UIManager();
+            return;
+        }
+        const splash = new window.SF.SplashScreen();
+        splash.show(() => {
+            window.SF.ui = new window.SF.UIManager();
+        });
     };
 
     if (document.readyState === 'complete' || document.readyState === 'interactive') {
