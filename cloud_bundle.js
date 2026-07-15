@@ -1,6 +1,6 @@
 // ===================================================================
 // SupremeFarm Modular - Cloud Distribution Bundle
-// Generated at: 2026-07-15T19:13:57.371Z
+// Generated at: 2026-07-15T19:25:18.257Z
 // ===================================================================
 
 // --- File: core/EventBus.js ---
@@ -3409,6 +3409,11 @@ SF.MachineBuilderModule = class MachineBuilderModule extends SF.ModuleBase {
                     // بناءً على هيكل الرد الصحيح (موضح بالصورة): النجاح يعتمد على وجود mid كرقم داخل objects_to_update
                     if (responseData.objects_to_update && responseData.objects_to_update.length > 0 && responseData.objects_to_update[0].mid) {
                         isSuccess = true;
+                    } else if (responseData.error === "no need") {
+                        limitReached = false;
+                        materialQueue = materialQueue.filter(m => m !== selectedMatId);
+                        totalMissing = materialQueue.length;
+                        logMsg(`[مادة مكتملة] المادة ${selectedMatId} اكتملت (no need).`, 'info');
                     } else if (responseData.error || responseData.retrieve_error || responseData.state !== "ok") {
                         limitReached = true;
                     } else {
