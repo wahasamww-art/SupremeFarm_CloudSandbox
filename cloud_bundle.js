@@ -1,6 +1,6 @@
 // ===================================================================
 // SupremeFarm Modular - Cloud Distribution Bundle
-// Generated at: 2026-07-13T08:04:20.101Z
+// Generated at: 2026-07-15T19:13:57.371Z
 // ===================================================================
 
 // --- File: core/EventBus.js ---
@@ -2848,7 +2848,7 @@ SF.MachineBuilderModule = class MachineBuilderModule extends SF.ModuleBase {
             } else {
                 selectMachine.innerHTML = '';
                 incompleteMachines.forEach((item, index) => {
-                    let rawId = item.objData.serverData ? item.objData.serverData.id : item.objData.id;
+                    let rawId = item.objData.configData ? item.objData.configData.id : (item.objData.serverData ? item.objData.serverData.id : item.objData.id);
                     let name = "آلة مجهولة";
                     try {
                     if (item.objData.configData && item.objData.configData.name) {
@@ -3180,7 +3180,7 @@ SF.MachineBuilderModule = class MachineBuilderModule extends SF.ModuleBase {
         btnStart.disabled = true;
         btnScan.disabled = true;
 
-        let rawId = targetObj.serverData ? targetObj.serverData.id : targetObj.id;
+        let rawId = targetObj.configData ? targetObj.configData.id : (targetObj.serverData ? targetObj.serverData.id : targetObj.id);
         logMsg(`[بدء الهجوم] على الآلة ID: ${rawId} | العدد المطلوب: ${totalMissing}`);
 
         const myUid = GF.loginModel.AppData.uid;
@@ -3335,8 +3335,8 @@ SF.MachineBuilderModule = class MachineBuilderModule extends SF.ModuleBase {
                 }
 
                 let batchItems = [];
-                let rawX = targetObj.serverData ? targetObj.serverData.x : targetObj.grid_x;
-                let rawY = targetObj.serverData ? targetObj.serverData.y : targetObj.grid_y;
+                let rawX = targetObj.grid_x !== undefined ? targetObj.grid_x : (targetObj.serverData ? targetObj.serverData.x : 0);
+                let rawY = targetObj.grid_y !== undefined ? targetObj.grid_y : (targetObj.serverData ? targetObj.serverData.y : 0);
 
                 if (!currentAlt.iq) currentAlt.iq = Math.floor(Math.random() * 100000) + 1000;
                 currentAlt.iq++;
@@ -3494,6 +3494,10 @@ SF.AlbumTrackerModule = class AlbumTrackerModule extends SF.ModuleBase {
         this.langDict = { en: null, tr: null };
         this.isFetchingLangs = false;
         this.imgLoadTasks = [];
+        
+        // المتغيرات الجديدة لفحص الأصدقاء
+        this.isFriendMatching = false;
+        this.friendMissingNames = [];
     }
 
     render() {
@@ -3552,6 +3556,21 @@ SF.AlbumTrackerModule = class AlbumTrackerModule extends SF.ModuleBase {
 
                 <div id="sf-album-tracker-content" class="sf-album-content">
                     <div style="position: sticky; top: 0; z-index: 100; background: var(--sf-bg); padding-bottom: 10px; margin-bottom: 10px;">
+                        
+                        <!-- صندوق فحص النواقص للصديق -->
+                        <div style="display: flex; flex-direction: column; margin-bottom: 10px; background: rgba(0,0,0,0.2); border-radius: 5px;">
+                            <div id="sf-friend-box-header" style="display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; cursor: pointer; border-bottom: 1px solid rgba(255,255,255,0.1);">
+                                <span style="color: #f1c40f; font-size: 14px; font-weight: bold;">📋 قائمة نواقص الصديق (اضغط للطي/الفتح)</span>
+                                <span id="sf-friend-box-icon" style="color: white; font-size: 14px; transition: 0.3s; display: inline-block;">▼</span>
+                            </div>
+                            <div id="sf-friend-missing-body" style="display: flex; gap: 10px; padding: 10px; transition: 0.3s;">
+                                <textarea id="sf-album-friend-missing-text" placeholder="📝 الصق هنا قائمة النواقص المنسوخة من الصديق..." style="flex: 1; padding: 10px; border-radius:5px; border:1px solid #3498db; background: rgba(0,0,0,0.5); color: white; font-size: 13px; outline: none; resize: none; min-height: 40px; max-height: 250px; overflow-y: auto; transition: height 0.2s;"></textarea>
+                                <div style="display: flex; flex-direction: column; justify-content: flex-start; width: 120px;">
+                                    <button id="sf-btn-match-friend" class="sf-btn" style="background:#2ecc71; padding: 12px 8px; font-size:13px; height: 100%;">فحص المتطابق 🔍</button>
+                                </div>
+                            </div>
+                        </div>
+
                         <input type="text" id="sf-album-search-input" placeholder="🔍 بحث عن بطاقة..." style="width: 100%; padding: 8px; border-radius:5px; border:1px solid var(--sf-border); background: rgba(0,0,0,0.5); color: white; font-size: 13px; outline: none; margin-bottom: 8px; box-sizing: border-box;" />
                         <div style="display: flex; gap: 5px;">
                             <button id="sf-btn-filter-missing" class="sf-btn" style="flex:1; background:#e74c3c; font-size:12px;">فلترة النواقص ❌</button>
@@ -3590,8 +3609,110 @@ SF.AlbumTrackerModule = class AlbumTrackerModule extends SF.ModuleBase {
             btn.onclick = () => this.openAlbumTracker(btn, contentDiv);
         }
 
+        const ta = this.container.querySelector('#sf-album-friend-missing-text');
+        if (ta) {
+            ta.oninput = () => {
+                ta.style.height = '';
+                ta.style.height = Math.min(ta.scrollHeight, 250) + 'px';
+            };
+        }
+
+        const friendHeader = this.container.querySelector('#sf-friend-box-header');
+        if (friendHeader) {
+            friendHeader.onclick = () => this.toggleFriendBox();
+        }
+
+        const matchBtn = this.container.querySelector('#sf-btn-match-friend');
+        if (matchBtn) {
+            matchBtn.onclick = () => this.matchFriendCards();
+        }
+
         unsafeWindow.triggerAlbumSmartSearch = (cardId, isAsk, pageId) => this.triggerAlbumSmartSearch(cardId, isAsk, pageId);
         unsafeWindow.copyAlbumText = (text, btnElement) => this.copyAlbumText(text, btnElement);
+    }
+
+    toggleFriendBox(forceState = null) {
+        let body = this.container.querySelector('#sf-friend-missing-body');
+        let icon = this.container.querySelector('#sf-friend-box-icon');
+        if (!body || !icon) return;
+        
+        let isHidden = body.style.display === 'none';
+        let newState = forceState !== null ? forceState : isHidden;
+        
+        if (newState) {
+            body.style.display = 'flex';
+            icon.style.transform = 'rotate(0deg)';
+        } else {
+            body.style.display = 'none';
+            icon.style.transform = 'rotate(180deg)';
+        }
+    }
+
+    matchFriendCards() {
+        if (this.isFriendMatching) {
+            this.isFriendMatching = false;
+            this.friendMissingNames = [];
+            let ta = this.container.querySelector('#sf-album-friend-missing-text');
+            if (ta) {
+                ta.value = '';
+                ta.style.height = '40px';
+            }
+            let btn = this.container.querySelector('#sf-btn-match-friend');
+            if(btn) {
+                btn.innerText = 'فحص المتطابق 🔍';
+                btn.style.background = '#2ecc71';
+            }
+            
+            this.toggleFriendBox(true);
+            this.filterAlbumCards();
+            return;
+        }
+
+        let ta = this.container.querySelector('#sf-album-friend-missing-text');
+        let text = ta ? ta.value.trim() : '';
+        
+        if (!text) {
+            alert("يرجى لصق النواقص أولاً في الحقل المخصص.");
+            return;
+        }
+
+        let lines = text.split('\n');
+        this.friendMissingNames = [];
+        lines.forEach(line => {
+            line = line.trim();
+            if (line.startsWith('- ')) {
+                let name = line.substring(2);
+                name = name.replace(/\(نادر.*\)/, '').trim();
+                if (name) this.friendMissingNames.push(name.toLowerCase());
+            } else if (!line.startsWith('[') && line.length > 0) {
+                this.friendMissingNames.push(line.toLowerCase());
+            }
+        });
+
+        if (this.friendMissingNames.length === 0) {
+            alert("لم يتم العثور على أسماء كروت في النص.");
+            return;
+        }
+
+        // إلغاء فلتر النواقص تلقائياً لتجنب التعارض الخفي وإظهار المخزون بالكامل للمطابقة
+        if (this.showingOnlyMissing) {
+            this.showingOnlyMissing = false;
+            let btnFilter = this.container.querySelector('#sf-btn-filter-missing');
+            if (btnFilter) {
+                btnFilter.style.background = '#e74c3c';
+                btnFilter.innerText = 'فلترة النواقص ❌';
+            }
+        }
+
+        this.isFriendMatching = true;
+        let btn = this.container.querySelector('#sf-btn-match-friend');
+        if(btn) {
+            btn.innerText = 'إلغاء التطابق ❌';
+            btn.style.background = '#e74c3c';
+        }
+        
+        this.toggleFriendBox(false);
+        this.filterAlbumCards();
     }
 
     fetchLanguages() {
@@ -3651,11 +3772,24 @@ SF.AlbumTrackerModule = class AlbumTrackerModule extends SF.ModuleBase {
         rows.forEach(row => {
             let text = row.getAttribute('data-search').toLowerCase();
             let isMissing = row.getAttribute('data-missing') === 'true';
+            let cardNameRaw = row.getAttribute('data-card-name');
+            let cardName = cardNameRaw ? cardNameRaw.toLowerCase() : '';
+            let count = parseInt(row.getAttribute('data-count') || '0');
             
             let matchesSearch = text.includes(query);
             let matchesFilter = this.showingOnlyMissing ? isMissing : true;
             
-            row.style.display = (matchesSearch && matchesFilter) ? '' : 'none';
+            let matchesFriend = true;
+            if (this.isFriendMatching) {
+                if (count <= 1) {
+                    matchesFriend = false; // Player doesn't have duplicates to send
+                } else {
+                    let isRequested = this.friendMissingNames.some(reqName => cardName.includes(reqName) || reqName.includes(cardName));
+                    if (!isRequested) matchesFriend = false;
+                }
+            }
+            
+            row.style.display = (matchesSearch && matchesFilter && matchesFriend) ? '' : 'none';
         });
 
         pages.forEach(page => {
@@ -3664,7 +3798,7 @@ SF.AlbumTrackerModule = class AlbumTrackerModule extends SF.ModuleBase {
             pageRows.forEach(r => { if (r.style.display !== 'none') hasVisible = true; });
             
             page.style.display = hasVisible ? '' : 'none';
-            if (query.trim() !== '' || this.showingOnlyMissing) {
+            if (query.trim() !== '' || this.showingOnlyMissing || this.isFriendMatching) {
                 page.open = hasVisible;
             }
         });
@@ -3831,7 +3965,7 @@ SF.AlbumTrackerModule = class AlbumTrackerModule extends SF.ModuleBase {
                             <summary class="sf-page-title">
                                 ${setName} (${setId}) <span style="font-size:10px; float:left;">اضغط للفتح</span>
                             </summary>
-                            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; padding: 10px;">
+                            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; padding: 10px;">
                     `;
 
                     pageData.cards.sort((a,b) => a.id - b.id).forEach(card => {
@@ -3871,11 +4005,11 @@ SF.AlbumTrackerModule = class AlbumTrackerModule extends SF.ModuleBase {
                         let countBadgeHtml = '';
                         
                         if (card.count > 0) {
-                            imgHtml = `<img id="${imgId}" src="" style="width:60px; height:60px; object-fit:contain; border-radius:5px; border:2px solid #2ecc71; background:#fff; display:block; margin: 0 auto;" />`;
-                            countBadgeHtml = `<span style="position: absolute; top: -5px; right: -5px; background: #2ecc71; border-radius: 50%; width: 20px; height: 20px; line-height: 20px; text-align: center; font-weight: bold; color: white; border: 2px solid white; z-index: 2; font-size:10px; box-shadow: 0 2px 4px rgba(0,0,0,0.3);">${card.count}</span>`;
+                            imgHtml = `<img id="${imgId}" src="" style="width:100%; max-width:110px; aspect-ratio:1; object-fit:contain; border-radius:5px; border:2px solid #2ecc71; background:#fff; display:block; margin: 0 auto;" />`;
+                            countBadgeHtml = `<span style="position: absolute; top: -5px; right: -5px; background: #2ecc71; border-radius: 50%; width: 20px; height: 20px; line-height: 20px; text-align: center; font-weight: bold; color: white; border: 2px solid white; z-index: 2; font-size:12px; box-shadow: 0 2px 4px rgba(0,0,0,0.3);">${card.count}</span>`;
                         } else {
-                            imgHtml = `<img id="${imgId}" src="" style="width:60px; height:60px; object-fit:contain; border-radius:5px; border:2px solid #e74c3c; filter: grayscale(40%) opacity(85%); background:#fff; display:block; margin: 0 auto;" title="غير مملوك" />`;
-                            countBadgeHtml = `<span style="position: absolute; top: -5px; right: -5px; background: #e74c3c; border-radius: 50%; width: 20px; height: 20px; line-height: 20px; text-align: center; font-weight: bold; color: white; border: 2px solid white; z-index: 2; font-size:9px; box-shadow: 0 2px 4px rgba(0,0,0,0.3);">❌</span>`;
+                            imgHtml = `<img id="${imgId}" src="" style="width:100%; max-width:110px; aspect-ratio:1; object-fit:contain; border-radius:5px; border:2px solid #e74c3c; filter: grayscale(40%) opacity(85%); background:#fff; display:block; margin: 0 auto;" title="غير مملوك" />`;
+                            countBadgeHtml = `<span style="position: absolute; top: -5px; right: -5px; background: #e74c3c; border-radius: 50%; width: 20px; height: 20px; line-height: 20px; text-align: center; font-weight: bold; color: white; border: 2px solid white; z-index: 2; font-size:11px; box-shadow: 0 2px 4px rgba(0,0,0,0.3);">❌</span>`;
                         }
 
                         this.imgLoadTasks.push(() => {
@@ -3922,7 +4056,7 @@ SF.AlbumTrackerModule = class AlbumTrackerModule extends SF.ModuleBase {
                         let copyIcon = card.count === 0 ? `<button style="cursor:pointer; font-size:11px; padding: 4px; margin-bottom: 4px; width: 100%; background: #3498db; color: white; border: none; border-radius: 5px; font-weight: bold; transition: 0.3s;" onclick="window.copyAlbumText('${fullCopyText.replace(/'/g, "\\'")}', this)" title="نسخ اسم الكارت">📋 نسخ</button>` : '';
 
                         tableHtml += `
-                            <div class="sf-album-card-row" data-search="${searchText.toLowerCase()}" data-missing="${isMissingStr}" data-card-name="${card.name}" style="background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.05); border-radius: 8px; padding: 6px; display: flex; flex-direction: column; align-items: center; justify-content: space-between; box-shadow: 0 4px 6px rgba(0,0,0,0.2);">
+                            <div class="sf-album-card-row" data-search="${searchText.toLowerCase()}" data-missing="${isMissingStr}" data-card-name="${card.name}" data-count="${card.count}" style="background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.05); border-radius: 8px; padding: 8px; display: flex; flex-direction: column; align-items: center; justify-content: space-between; box-shadow: 0 4px 6px rgba(0,0,0,0.2);">
                                 
                                 <div style="position: relative; width: 100%;">
                                     ${countBadgeHtml}
