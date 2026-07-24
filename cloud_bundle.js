@@ -1,6 +1,6 @@
 // ===================================================================
 // SupremeFarm Modular - Cloud Distribution Bundle
-// Generated at: 2026-07-24T11:52:39.538Z
+// Generated at: 2026-07-24T12:02:00.031Z
 // ===================================================================
 
 // --- File: core/EventBus.js ---
@@ -4413,7 +4413,7 @@ SF.BattlePassModule = class BattlePassModule extends SF.ModuleBase {
     }
 
     extractAndPlayVisuals(rewardStr) {
-        const gw = window.unsafeWindow || window;
+        const gw = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
         if (!rewardStr) return;
 
         let visualTriggered = false;
@@ -4449,7 +4449,7 @@ SF.BattlePassModule = class BattlePassModule extends SF.ModuleBase {
 
     executeSmartExploit() {
         this.logStatus("⏳ جاري إزالة الأقفال والعرض...");
-        const gw = window.unsafeWindow || window;
+        const gw = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
         const model = gw.GF && gw.GF.newBattlePassModel;
         
         if (!model) {
@@ -4558,7 +4558,7 @@ SF.BattlePassModule = class BattlePassModule extends SF.ModuleBase {
     }
 
     manageSmartButton() {
-        const gw = window.unsafeWindow || window;
+        const gw = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
         let btn = document.getElementById('btn-bp-smart');
 
         let isUIOpen = false;
