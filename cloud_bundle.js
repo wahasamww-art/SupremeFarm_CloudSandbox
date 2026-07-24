@@ -1,6 +1,6 @@
 // ===================================================================
 // SupremeFarm Modular - Cloud Distribution Bundle
-// Generated at: 2026-07-15T19:25:18.257Z
+// Generated at: 2026-07-24T11:06:44.801Z
 // ===================================================================
 
 // --- File: core/EventBus.js ---
@@ -4336,6 +4336,222 @@ SF.MineModule = class MineModule extends SF.ModuleBase {
 console.log('[SF-MineModule] ✅ MineModule class defined. Registering now...');
 SF.modules.register(new SF.MineModule());
 console.log('[SF-MineModule] ✅ Registration complete. Total modules:', SF.modules.getModules().length);
+
+
+// --- File: features/BattlePassModule.js ---
+window.SF = window.SF || {};
+
+SF.BattlePassModule = class BattlePassModule extends SF.ModuleBase {
+    constructor() {
+        super('battlepass', 'حاصد التذكرة', '🎫');
+    }
+
+    render() {
+        return `
+            <style>
+                .sf-bp-btn {
+                    padding: 10px 15px;
+                    border: none;
+                    border-radius: 6px;
+                    font-weight: bold;
+                    cursor: pointer;
+                    width: 100%;
+                    transition: all 0.3s ease;
+                    font-family: inherit;
+                    background: linear-gradient(180deg, #ffdc3a 0%, #ff9800 100%);
+                    color: #fff;
+                    border: 1px solid #fff;
+                }
+                .sf-bp-btn:hover {
+                    opacity: 0.8;
+                }
+                .sf-bp-log {
+                    margin-top: 10px;
+                    padding: 8px;
+                    background: rgba(0,0,0,0.4);
+                    border-radius: 5px;
+                    border: 1px solid rgba(255,255,255,0.1);
+                    font-size: 11px;
+                    color: #a4b0be;
+                    text-align: right;
+                    min-height: 20px;
+                }
+            </style>
+            
+            <div class="sf-card">
+                <p style="color: var(--sf-text-muted); font-size: 13px; margin-bottom: 15px; text-align: center;">
+                    استخراج الهدايا الحقيقية من التذكرة بدون استهلاك الموارد وبدون أقفال.
+                </p>
+                
+                <button id="sf-bp-harvest-btn" class="sf-bp-btn">
+                    🎁 حصد التذكرة الذكي 🎁
+                </button>
+
+                <div id="sf-bp-status-log" class="sf-bp-log">
+                    [النظام] جاهز...
+                </div>
+            </div>
+        `;
+    }
+
+    bindEvents() {
+        const btn = this.container.querySelector('#sf-bp-harvest-btn');
+        if (btn) {
+            btn.onclick = () => {
+                this.executeSmartExploit();
+            };
+        }
+    }
+
+    logStatus(message) {
+        const logDiv = this.container.querySelector('#sf-bp-status-log');
+        if (logDiv) {
+            logDiv.innerText = message;
+        }
+        console.log(`[SF-BattlePassModule] ${message}`);
+    }
+
+    extractAndPlayVisuals(rewardStr) {
+        const gw = window.unsafeWindow || window;
+        if (!rewardStr) return;
+
+        let visualTriggered = false;
+        try {
+            if (gw.DropEventManager && gw.DropEventManager.instance) {
+                for (let k in gw.DropEventManager.instance) {
+                    if (typeof gw.DropEventManager.instance[k] === 'function' && k.toLowerCase().includes('rewardpanel')) {
+                        gw.DropEventManager.instance[k](rewardStr);
+                        visualTriggered = true; break;
+                    }
+                }
+            }
+        } catch(e) {}
+
+        if (!visualTriggered && gw.App && gw.App.CommonTips) {
+            for (let k in gw.App.CommonTips) {
+                if (typeof gw.App.CommonTips[k] === 'function' && k.toLowerCase().includes('reward') && k.toLowerCase().includes('show')) {
+                    gw.App.CommonTips[k](rewardStr);
+                    visualTriggered = true; break;
+                }
+            }
+        }
+
+        if (!visualTriggered && gw.GF && gw.GF.loginModel) {
+            for (let k in gw.GF.loginModel) {
+                if (typeof gw.GF.loginModel[k] === 'function' && k.toLowerCase().includes('showreward')) {
+                    gw.GF.loginModel[k](rewardStr);
+                    visualTriggered = true; break;
+                }
+            }
+        }
+    }
+
+    executeSmartExploit() {
+        this.logStatus("⏳ جاري إزالة الأقفال والعرض...");
+        const gw = window.unsafeWindow || window;
+        const model = gw.GF && gw.GF.newBattlePassModel;
+        
+        if (!model) {
+            this.logStatus("⚠️ تعذر العثور على بيانات التذكرة. يرجى فتح اللعبة بالكامل.");
+            return;
+        }
+
+        let eventId = "";
+        try {
+            if (typeof model.getEvent === 'function') eventId = model.getEvent();
+            else if (model.data && model.data.event) eventId = model.data.event;
+        } catch(e) {}
+
+        const netCore = gw.NetUtils || (gw.App && gw.App.NetUtils) || (gw.GF && gw.GF.NetUtils);
+
+        // 1. تحديد الجوائز المتبقية (45 حد أقصى)
+        let payloadList = [];
+        let exactRewardsArray = []; 
+        let allConfigRewards = typeof model.getRewardsList === 'function' ? model.getRewardsList() : [];
+
+        for (let i = 1; i <= 45; i++) {
+            let scoreRequired = i * 100;
+            let isClaimed = false;
+
+            if (typeof model.isBPClaimed === 'function') {
+                isClaimed = model.isBPClaimed(scoreRequired, 1);
+            } else if (model.data && model.data.bpReward && Array.isArray(model.data.bpReward)) {
+                isClaimed = model.data.bpReward.includes(scoreRequired + "_1");
+            }
+
+            if (!isClaimed) {
+                payloadList.push(scoreRequired + "_1");
+
+                try {
+                    let levelConfig = allConfigRewards.find(r => r.score == scoreRequired);
+                    if (levelConfig) {
+                        let rewardStr = levelConfig.reward1 || levelConfig.freeReward || levelConfig.reward;
+                        if (rewardStr) exactRewardsArray.push(rewardStr);
+                    }
+                } catch(e) {}
+            }
+        }
+
+        if (payloadList.length === 0) {
+            this.logStatus("✅ لقد قمت بحصد جميع الهدايا مسبقاً!");
+            return;
+        }
+
+        let payload = {
+            action: "getReward",
+            event: eventId,
+            list: payloadList
+        };
+
+        // 2. إرسال الطلب للسيرفر
+        if (netCore && netCore.request) {
+            netCore.request("Activity/NewBattlePass", payload, (res) => {
+                this._forceUnlockAndVisuals(model, payloadList, res, exactRewardsArray, gw);
+                this.logStatus("✅ تم حصد الجوائز بنجاح!");
+            }, gw);
+        } else {
+             // Fallback to enqueue if request is missing
+             if(gw.NetUtils && gw.NetUtils.enqueue) {
+                 gw.NetUtils.enqueue("Activity/NewBattlePass", payload);
+             }
+        }
+
+        // حماية إضافية (Fallback)
+        setTimeout(() => {
+            this._forceUnlockAndVisuals(model, payloadList, null, exactRewardsArray, gw);
+            this.logStatus("✅ تمت العملية (عبر نظام الحماية).");
+        }, 1500);
+    }
+
+    _forceUnlockAndVisuals(model, payloadList, res, exactRewardsArray, gw) {
+        if (model.data) {
+            if (!Array.isArray(model.data.bpReward)) model.data.bpReward = [];
+            payloadList.forEach(id => {
+                if (!model.data.bpReward.includes(id)) {
+                    model.data.bpReward.push(id);
+                }
+            });
+        }
+
+        try {
+            if (gw.GF.newBattlePassController && gw.GF.newBattlePassController.mainView && gw.GF.newBattlePassController.mainView.milestoneView) {
+                gw.GF.newBattlePassController.mainView.milestoneView.udpateBP();
+            }
+        } catch(e) {}
+
+        let serverRewardStr = (res && (res.reward || res.rewards || res.gifts || (res.data && res.data.reward))) || "";
+        let finalVisualStr = serverRewardStr;
+        if (!finalVisualStr && exactRewardsArray.length > 0) {
+            finalVisualStr = exactRewardsArray.join(",");
+        }
+
+        if (finalVisualStr) {
+            this.extractAndPlayVisuals(finalVisualStr);
+        }
+    }
+};
+
+SF.modules.register(new SF.BattlePassModule());
 
 
 // --- System Initialization ---
