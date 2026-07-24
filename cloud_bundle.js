@@ -1,6 +1,6 @@
 // ===================================================================
 // SupremeFarm Modular - Cloud Distribution Bundle
-// Generated at: 2026-07-24T11:06:44.801Z
+// Generated at: 2026-07-24T11:52:39.538Z
 // ===================================================================
 
 // --- File: core/EventBus.js ---
@@ -4344,6 +4344,7 @@ window.SF = window.SF || {};
 SF.BattlePassModule = class BattlePassModule extends SF.ModuleBase {
     constructor() {
         super('battlepass', 'حاصد التذكرة', '🎫');
+        this.smartButtonInterval = setInterval(() => this.manageSmartButton(), 500);
     }
 
     render() {
@@ -4547,6 +4548,65 @@ SF.BattlePassModule = class BattlePassModule extends SF.ModuleBase {
 
         if (finalVisualStr) {
             this.extractAndPlayVisuals(finalVisualStr);
+        }
+
+        let btn = document.getElementById('btn-bp-smart');
+        if (btn) {
+            btn.style.display = 'none';
+            btn.innerHTML = "🎁 حصد التذكرة الذكي 🎁";
+        }
+    }
+
+    manageSmartButton() {
+        const gw = window.unsafeWindow || window;
+        let btn = document.getElementById('btn-bp-smart');
+
+        let isUIOpen = false;
+        try {
+            let mainView = gw.GF.newBattlePassController.mainView;
+            if (mainView && mainView.parent) {
+                isUIOpen = true;
+            }
+        } catch(e) {}
+
+        if (isUIOpen) {
+            let hasUnclaimed = false;
+            let model = gw.GF && gw.GF.newBattlePassModel;
+            if (model) {
+                for (let i = 1; i <= 45; i++) {
+                    let scoreRequired = i * 100;
+                    let isClaimed = false;
+                    if (typeof model.isBPClaimed === 'function') {
+                        isClaimed = model.isBPClaimed(scoreRequired, 1);
+                    } else if (model.data && model.data.bpReward && Array.isArray(model.data.bpReward)) {
+                        isClaimed = model.data.bpReward.includes(scoreRequired + "_1");
+                    }
+                    if (!isClaimed) {
+                        hasUnclaimed = true;
+                        break;
+                    }
+                }
+            }
+
+            if (hasUnclaimed) {
+                if (!btn) {
+                    btn = document.createElement("button");
+                    btn.id = "btn-bp-smart";
+                    btn.innerHTML = "🎁 حصد التذكرة الذكي 🎁";
+                    btn.style.cssText = "position:absolute; top:12%; left:50%; transform:translate(-50%, -50%); z-index:9999999; padding:12px 30px; font-size:22px; font-weight:bold; background: linear-gradient(180deg, #ffdc3a 0%, #ff9800 100%); color:#fff; border:3px solid #fff; border-radius:30px; cursor:pointer; box-shadow: 0 4px 8px rgba(0,0,0,0.5); text-shadow: 1px 1px 2px #000; font-family:Tahoma;";
+
+                    btn.onclick = () => {
+                        btn.innerHTML = "⏳ جاري إزالة الأقفال والعرض...";
+                        this.executeSmartExploit();
+                    };
+                    try { document.body.appendChild(btn); } catch(e) {}
+                }
+                btn.style.display = 'block';
+            } else {
+                if (btn) btn.style.display = 'none';
+            }
+        } else {
+            if (btn) btn.style.display = 'none';
         }
     }
 };
