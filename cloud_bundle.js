@@ -1,6 +1,6 @@
 // ===================================================================
 // SupremeFarm Modular - Cloud Distribution Bundle
-// Generated at: 2026-07-24T12:02:00.031Z
+// Generated at: 2026-07-26T00:31:14.318Z
 // ===================================================================
 
 // --- File: core/EventBus.js ---
@@ -4612,6 +4612,291 @@ SF.BattlePassModule = class BattlePassModule extends SF.ModuleBase {
 };
 
 SF.modules.register(new SF.BattlePassModule());
+
+
+// --- File: features/IslandPointBuyerModule.js ---
+window.SF = window.SF || {};
+
+SF.IslandPointBuyerModule = class IslandPointBuyerModule extends SF.ModuleBase {
+    constructor() {
+        super('island_buyer', 'شراء نقاط الحدث', '🏝️');
+        this.discoveredTokens = [];
+        this.isRunning = false;
+    }
+
+    render() {
+        return `
+            <style>
+                .sf-ipb-input, .sf-ipb-select {
+                    width: 100%;
+                    padding: 8px;
+                    margin-bottom: 15px;
+                    background: #222;
+                    color: #fff;
+                    border: 1px solid var(--sf-primary);
+                    border-radius: 4px;
+                    box-sizing: border-box;
+                    font-family: inherit;
+                }
+                .sf-ipb-btn {
+                    width: 100%;
+                    padding: 10px;
+                    background: var(--sf-primary);
+                    color: #000;
+                    font-weight: bold;
+                    border: none;
+                    border-radius: 4px;
+                    cursor: pointer;
+                    margin-bottom: 5px;
+                    font-family: inherit;
+                    transition: opacity 0.2s;
+                }
+                .sf-ipb-btn:hover {
+                    opacity: 0.8;
+                }
+                .sf-ipb-btn:disabled {
+                    background: #555;
+                    cursor: not-allowed;
+                }
+                .sf-ipb-refresh {
+                    padding: 8px 12px;
+                    background: #555;
+                    color: white;
+                    border: none;
+                    border-radius: 4px;
+                    cursor: pointer;
+                    margin-left: 10px;
+                    white-space: nowrap;
+                }
+                .sf-ipb-log {
+                    height: 120px;
+                    overflow-y: auto;
+                    background: #000;
+                    color: #0f0;
+                    padding: 8px;
+                    font-size: 11px;
+                    border-radius: 4px;
+                    border: 1px solid #333;
+                    margin-bottom: 15px;
+                    text-align: right;
+                }
+            </style>
+            
+            <div class="sf-card">
+                <p style="color: var(--sf-text-muted); font-size: 13px; margin-bottom: 15px; text-align: center;">
+                    وحدة دقيقة وخالية من التخمين لشراء نقاط المهام للحدث الجاري (مثل الصيف الحافل أو المتجر الغامض) بصيغة قانونية للسيرفر.
+                </p>
+                
+                <div style="display: flex; align-items: center; margin-bottom: 5px;">
+                    <label style="flex-grow: 1; font-size: 13px;">المهام الشغالة (اختر لملء الكود):</label>
+                </div>
+                
+                <div style="display: flex; margin-bottom: 15px;">
+                    <select id="sf-ipb-select" class="sf-ipb-select" style="margin-bottom: 0;"></select>
+                    <button id="sf-ipb-refresh" class="sf-ipb-refresh">🔄 تحديث</button>
+                </div>
+
+                <label style="display: block; font-size: 13px; margin-bottom: 5px;">كود العنصر (ID):</label>
+                <input type="number" id="sf-ipb-id" class="sf-ipb-input" placeholder="اختر من القائمة أو اكتب الكود">
+
+                <label style="display: block; font-size: 13px; margin-bottom: 5px;">العدد المراد شراءه:</label>
+                <input type="number" id="sf-ipb-amount" class="sf-ipb-input" value="1" min="1">
+
+                <div id="sf-ipb-log" class="sf-ipb-log"></div>
+
+                <button id="sf-ipb-buy" class="sf-ipb-btn">🚀 بدء الشراء</button>
+            </div>
+        `;
+    }
+
+    bindEvents() {
+        this.selectEl = this.container.querySelector('#sf-ipb-select');
+        this.idInput = this.container.querySelector('#sf-ipb-id');
+        this.amountInput = this.container.querySelector('#sf-ipb-amount');
+        this.logEl = this.container.querySelector('#sf-ipb-log');
+        this.btnBuy = this.container.querySelector('#sf-ipb-buy');
+        this.btnRefresh = this.container.querySelector('#sf-ipb-refresh');
+
+        this.btnRefresh.onclick = () => this.scanTokens();
+        
+        this.selectEl.onchange = () => {
+            if (this.selectEl.value) {
+                this.idInput.value = this.selectEl.value;
+            }
+        };
+
+        this.btnBuy.onclick = () => this.executePurchase();
+
+        // Initial Scan
+        this.scanTokens();
+    }
+
+    logMsg(msg) {
+        if (!this.logEl) return;
+        this.logEl.innerHTML += \`<div>[\${new Date().toLocaleTimeString('en-US', {hour12:false})}] \${msg}</div>\`;
+        this.logEl.scrollTop = this.logEl.scrollHeight;
+        console.log(\`[SF-IslandBuyer] \${msg}\`);
+    }
+
+    scanTokens() {
+        this.discoveredTokens = [];
+        try {
+            const uw = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
+            const Config = uw.Config;
+            const GF = uw.GF;
+            
+            if (Config) {
+                for (let key in Config) {
+                    try {
+                        if (Config[key] && typeof Config[key] === 'object' && Config[key].use) {
+                            let useKey = Config[key].use;
+                            let activeData = Config[key][useKey];
+                            if (activeData && activeData.tokenId) {
+                                let tid = activeData.tokenId;
+                                let itemName = key; 
+                                try {
+                                    if (typeof Config.Store_GetItemData === 'function') {
+                                        let itemData = Config.Store_GetItemData(tid);
+                                        if (itemData && itemData.name) itemName = itemData.name;
+                                    }
+                                } catch(e1) {}
+                                this.discoveredTokens.push({ id: tid, name: itemName, event: key });
+                            }
+                        }
+                    } catch(err) {}
+                }
+            }
+            
+            const modelsToCheck = [
+                { name: 'الصيف الحافل', m: (GF && GF.BusySummerController) ? GF.BusySummerController.model : null },
+                { name: 'المتجر الغامض', m: (GF && GF.mysteryShopkeeperController) ? GF.mysteryShopkeeperController.selfModel : null },
+                { name: 'تصريح المعركة', m: (GF && GF.bpContoller) ? GF.bpContoller.bpModel : null }
+            ];
+            
+            for (let i = 0; i < modelsToCheck.length; i++) {
+                try {
+                    let entry = modelsToCheck[i];
+                    let m = entry.m;
+                    if (m && m.activeCfg && m.activeCfg.tokenId) {
+                        let tid = m.activeCfg.tokenId;
+                        if (!this.discoveredTokens.find(t => t.id == tid)) {
+                            let itemName = entry.name;
+                            try {
+                                if (Config && typeof Config.Store_GetItemData === 'function') {
+                                    let itemData = Config.Store_GetItemData(tid);
+                                    if (itemData && itemData.name) itemName = itemData.name;
+                                }
+                            } catch(e2) {}
+                            this.discoveredTokens.push({ id: tid, name: itemName, event: 'Model' });
+                        }
+                    }
+                } catch(err) {}
+            }
+        } catch(e) {
+            console.warn("[SF-IslandBuyer] Auto-Read Failed:", e);
+        }
+        
+        this.updateDropdown();
+        this.logMsg(\`🟢 تم فحص الذاكرة. وُجدت \${this.discoveredTokens.length} مهام.\`);
+    }
+
+    updateDropdown() {
+        if (!this.selectEl) return;
+        this.selectEl.innerHTML = '';
+        
+        const defOpt = document.createElement('option');
+        defOpt.value = '';
+        defOpt.innerText = this.discoveredTokens.length > 0 ? '--- اختر المهمة من هنا ---' : 'لم يتم اكتشاف مهام';
+        this.selectEl.appendChild(defOpt);
+        
+        this.discoveredTokens.forEach(t => {
+            const opt = document.createElement('option');
+            opt.value = t.id;
+            opt.innerText = \`[\${t.id}] \${t.name}\`;
+            this.selectEl.appendChild(opt);
+        });
+        
+        if (this.discoveredTokens.length === 1) {
+            this.selectEl.value = this.discoveredTokens[0].id;
+            if (this.idInput) this.idInput.value = this.discoveredTokens[0].id;
+        }
+    }
+
+    async executePurchase() {
+        if (this.isRunning) return;
+        
+        const targetId = parseInt(this.idInput.value);
+        const amount = parseInt(this.amountInput.value);
+        
+        if (isNaN(targetId) || isNaN(amount) || amount <= 0) {
+            this.logMsg('❌ بيانات غير صالحة! الرجاء إدخال كود العنصر.');
+            return;
+        }
+
+        this.isRunning = true;
+        this.btnBuy.disabled = true;
+        this.btnBuy.innerText = '⏳ جاري التنفيذ...';
+        
+        let dynamicNeedResponse = "spend_rp.save_data"; 
+        let selectedTokenObj = this.discoveredTokens.find(t => t.id === targetId);
+        
+        if (selectedTokenObj && selectedTokenObj.event && selectedTokenObj.event !== 'Model') {
+            dynamicNeedResponse = "/Activity/" + selectedTokenObj.event;
+        } else if (selectedTokenObj && selectedTokenObj.event === 'Model') {
+            if (selectedTokenObj.name === 'الصيف الحافل') dynamicNeedResponse = "/Activity/BusySummer";
+            else if (selectedTokenObj.name === 'المتجر الغامض') dynamicNeedResponse = "/Activity/MysteryShopkeeper.save_data";
+            else if (selectedTokenObj.name === 'تصريح المعركة') dynamicNeedResponse = "/Activity/BattlePass"; 
+        }
+
+        this.logMsg(\`بدء محاولة شراء \${amount} وحدة من [\${targetId}]\`);
+        this.logMsg(\`[DEBUG] مسار السيرفر: \${dynamicNeedResponse}\`);
+
+        const uw = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
+        let successCount = 0;
+
+        for (let i = 0; i < amount; i++) {
+            // Check if user navigated away from tab
+            if (document.getElementById('sf-content') && document.getElementById('sf-content').style.display === 'none') {
+                break;
+            }
+
+            try {
+                const payload = {
+                    id: targetId,
+                    type: "automation",
+                    is_gift: false,
+                    needResponse: dynamicNeedResponse,
+                    cur_sceneid: (uw.GF && uw.GF.loginModel && uw.GF.loginModel.AppData) ? (uw.GF.loginModel.AppData.cur_sceneid || 1) : 1
+                };
+
+                this.logMsg(\`إرسال الدفعة \${i + 1} / \${amount}...\`);
+                
+                if (uw.NetUtils && uw.NetUtils.enqueue) {
+                    uw.NetUtils.enqueue("spend_rp", payload);
+                } else {
+                    this.logMsg(\`❌ تعذر العثور على محرك الشبكة.\`);
+                    break;
+                }
+                
+                successCount++;
+
+                const jitter = Math.floor(Math.random() * 500) + 300; 
+                await new Promise(r => setTimeout(r, jitter));
+                
+            } catch (error) {
+                this.logMsg(\`❌ خطأ: \${error.message}\`);
+                break;
+            }
+        }
+
+        this.logMsg(\`✅ اكتمل. تم إرسال \${successCount} طلبات.\`);
+        this.isRunning = false;
+        this.btnBuy.disabled = false;
+        this.btnBuy.innerText = '🚀 بدء الشراء';
+    }
+};
+
+SF.modules.register(new SF.IslandPointBuyerModule());
 
 
 // --- System Initialization ---
