@@ -1,6 +1,6 @@
 // ===================================================================
 // SupremeFarm Modular - Cloud Distribution Bundle
-// Generated at: 2026-07-26T23:22:47.912Z
+// Generated at: 2026-07-26T23:31:11.578Z
 // ===================================================================
 
 // --- File: core/EventBus.js ---
@@ -4909,7 +4909,7 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
                         for (let obj of updates) {
                             if (obj && obj.needResponse && obj.needResponse.data) {
                                 const ch = obj.needResponse.channel;
-                                if (ch === "friend_collect" || ch === "friend_collect_trees") {
+                                if (ch === "friend_collect" || ch === "friend_collect_trees" || ch === "friend_fertilize" || ch === "friend_water") {
                                     found = true;
                                     const rData = obj.needResponse.data;
                                     
@@ -5256,22 +5256,16 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
 
             while (this.isRunning && neighborHasEnergy && this.totalHarvested < this.targetLimit) {
                 
+                let batchSize = 6;
+                let cmdToUse = harvestCmd;
+                let payloadToUse = { friend_id: friendId, itemid: itemId };
+
                 if (this.currentMode === "fertilize") {
-                    const fertPayload = { friend_id: friendId, plant_x: 0, plant_y: 0, plant_id: itemId };
-                    gw.NetUtils.enqueue(fertCmd, fertPayload);
-                    if (gw.NetUtils.flush) gw.NetUtils.flush();
-                    
-                    await this.sleep(600);
-                    
-                    this.totalHarvested += 1;
-                    this.log(`💧 تم تقديم مساعدة للجار [${friendId}]. المجموع: (${this.totalHarvested}/${this.targetLimit})`);
-                    updateStatsUI();
-                    break;
+                    cmdToUse = fertCmd;
+                    payloadToUse = { friend_id: friendId, plant_x: 0, plant_y: 0, plant_id: itemId };
+                } else {
+                    batchSize = Math.min(6, this.targetLimit - this.totalHarvested);
                 }
-
-                const harvestPayload = { friend_id: friendId, itemid: itemId };
-
-                let batchSize = Math.min(6, this.targetLimit - this.totalHarvested);
 
                 let harvestPromise = new Promise((resolve) => {
                     this.activeCallback = resolve;
@@ -5284,7 +5278,7 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
                 });
 
                 for (let b = 0; b < batchSize; b++) {
-                    gw.NetUtils.enqueue(harvestCmd, harvestPayload);
+                    gw.NetUtils.enqueue(cmdToUse, payloadToUse);
                 }
                 if (gw.NetUtils.flush) gw.NetUtils.flush();
 
@@ -5296,7 +5290,7 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
                     this.log(`⚠️ مهلة الاتصال انتهت مع الجار [${friendId}]. نتخطى...`);
                     neighborHasEnergy = false;
                 } else {
-                    if (res.totalAdded > 0) {
+                    if (res.totalAdded > 0 && this.currentMode === "harvest") {
                         this.totalHarvested += res.totalAdded;
                         this.log(`✅ ضربة كومبو! تم حصد ${res.totalAdded} ثمرة (كود ${res.product}) دفعة واحدة! المجموع: (${this.totalHarvested}/${this.targetLimit})`);
                         updateStatsUI();
@@ -5326,13 +5320,19 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
                         this.log(`⛔ الجار [${friendId}] استنفد طاقته.`);
                         this.blacklist[friendId] = true;
                         this.saveBlacklist();
+
+                        if (this.currentMode === "fertilize") {
+                            this.totalHarvested += 1;
+                            this.log(`💧 تم استكمال مساعدة الجار [${friendId}] بالكامل. المجموع: (${this.totalHarvested}/${this.targetLimit})`);
+                        }
+
                         this.update(); 
                         updateStatsUI();
                         neighborHasEnergy = false;
-                    } else if (res.totalAdded === 0) {
+                    } else if (res.totalAdded === 0 && this.currentMode === "harvest") {
                         this.log(`⚠️ الجار لا يملك المحصول أو استنفد. نعيد المحاولة...`);
-                        // ⚠️ DO NOT set neighborHasEnergy = false!
-                        // This matches the old code: keep hitting the neighbor until their energy is "used up".
+                    } else if (this.currentMode === "fertilize" && res.msg === "ok") {
+                        this.log(`⚡ جاري استنزاف طاقة الجار [${friendId}]...`);
                     }
                 }
 
