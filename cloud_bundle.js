@@ -1,6 +1,6 @@
 // ===================================================================
 // SupremeFarm Modular - Cloud Distribution Bundle
-// Generated at: 2026-07-26T17:57:28.918Z
+// Generated at: 2026-07-26T18:10:05.914Z
 // ===================================================================
 
 // --- File: core/EventBus.js ---
@@ -4813,612 +4813,401 @@ SF.IslandPointBuyerModule = class IslandPointBuyerModule extends SF.ModuleBase {
 SF.modules.register(new SF.IslandPointBuyerModule());
 
 
-// --- File: features/AutoMegaHarvest.js ---
-// ==UserScript==
-// @name         Century Extractor - Sandbox Harvester Blacklist [V6.2 Protocol]
-// @namespace    http://tampermonkey.net/
-// @version      9.7
-// @description  V6.2 Compliant: Blacklist System with 7 AM reset, Epic Progress HUD, Network Validation.
-// @author       Elite Local AI Silent Agent
-// @match        *://apps.facebook.com/family_farm/*
-// @match        *://farm.centurygames.com/*
-// @match        *://farm-us.centurygames.com/*
-// @match        *://farm-mena.centurygames.com/*
-// @run-at       document-idle
-// @grant        none
-// ==/UserScript==
+// --- File: features/AutoMegaHarvestModule.js ---
+window.SF = window.SF || {};
 
-(function() {
-    'use strict';
-
-    // ==========================================
-    // V6 CONSTITUTION: CORE PROTOCOLS
-    // ==========================================
-    const V6 = {
-        Prefix: "sf-bot-",
-        JitterMin: 50,
-        JitterMax: 150,
+SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
+    constructor() {
+        super('autoharvest_pro', 'الحصاد السريع', '🚜');
+        this.isRunning = false;
+        this.blacklist = JSON.parse(localStorage.getItem('sf_mega_harvest_blacklist') || '{}');
+        this.clearBlacklistIfNeeded();
         
-        sleep: (ms) => new Promise(resolve => setTimeout(resolve, ms)),
+        // Settings
+        this.JitterMin = 50;
+        this.JitterMax = 150;
+        this.totalHarvested = 0;
+        this.targetLimit = 0;
         
-        randomJitter: () => {
-            return Math.floor(Math.random() * (V6.JitterMax - V6.JitterMin + 1)) + V6.JitterMin;
-        },
+        // HUD Overlay element
+        this.hudElement = null;
+    }
 
-        // Protocol 6: Graceful Degradation & Telemetry
-        log: (msg, data = null) => {
-            const time = new Date().toLocaleTimeString();
-            console.log(`[V6.2 Sandbox Harvester] [${time}] ${msg}`, data ? data : '');
-        },
+    clearBlacklistIfNeeded() {
+        let lastCleared = localStorage.getItem('sf_mega_harvest_last_clear');
+        let now = new Date();
+        let targetClearTime = new Date();
+        targetClearTime.setHours(7, 0, 0, 0);
 
-        error: (msg, err) => {
-            const time = new Date().toLocaleTimeString();
-            console.error(`[V6.2 ERROR] [${time}] ${msg}`, err);
-        }
-    };
-
-    // ==========================================
-    // V6 CONSTITUTION: DYNAMIC RESOLUTION
-    // ==========================================
-    class DynamicResolver {
-        static getStore() {
-            if (window.Config && window.Config.Store) return window.Config.Store;
-            if (window.GF && window.GF.Config && window.GF.Config.Store) return window.GF.Config.Store;
-            return null;
+        if (now < targetClearTime) {
+            targetClearTime.setDate(targetClearTime.getDate() - 1);
         }
 
-        static getHarvestableItems() {
-            const store = this.getStore();
-            const items = [];
-            if (!store) {
-                V6.log("Store not loaded yet. Waiting...");
-                return items;
-            }
-
-            for (let key in store) {
-                const item = store[key];
-                if (item && (item.type === "seeds" || item.type === "trees")) {
-                    items.push({ id: item.id, name: item.name || `Item ${item.id}`, type: item.type });
-                }
-            }
-            return items;
-        }
-
-        static getNeighbors() {
-            if (window.GF && window.GF.friendsModel && window.GF.friendsModel.allNeighbors) {
-                return window.GF.friendsModel.allNeighbors.filter(n => !n.isNpc && !n.isSelf);
-            }
-            return [];
+        if (!lastCleared || new Date(parseInt(lastCleared)) < targetClearTime) {
+            this.blacklist = {};
+            this.saveBlacklist();
+            localStorage.setItem('sf_mega_harvest_last_clear', Date.now().toString());
+            console.log("[AutoMegaHarvest] تم تصفير القائمة السوداء تلقائياً (تجاوزت الساعة 7 صباحاً).");
         }
     }
 
-    // ==========================================
-    // V6 CONSTITUTION: BLACKLIST SYSTEM (7 AM Reset)
-    // ==========================================
-    class BlacklistManager {
-        static getNextResetTime() {
-            // تحدد الساعة 7:00 صباحاً بتوقيت الجهاز المحلي (والذي يفترض أنه توقيت مصر حسب إعدادات اللاعب)
-            let now = new Date();
-            let resetTime = new Date(now);
-            resetTime.setHours(7, 0, 0, 0);
-            
-            // إذا كان الوقت الحالي قد تجاوز السابعة صباحاً، فإن موعد التجديد سيكون غداً في نفس الوقت
-            if (now.getTime() >= resetTime.getTime()) {
-                resetTime.setDate(resetTime.getDate() + 1);
-            }
-            return resetTime.getTime();
-        }
-
-        static isBlacklisted(uid) {
-            let blacklist = JSON.parse(localStorage.getItem('sf_exhausted_neighbors') || '{}');
-            let expiration = blacklist[uid];
-            
-            if (expiration && Date.now() < expiration) {
-                return true;
-            }
-            
-            // تنظيف الحسابات المنتهية صلاحية حظرها
-            if (expiration && Date.now() >= expiration) {
-                delete blacklist[uid];
-                localStorage.setItem('sf_exhausted_neighbors', JSON.stringify(blacklist));
-            }
-            return false;
-        }
-
-        static addToBlacklist(uid) {
-            let blacklist = JSON.parse(localStorage.getItem('sf_exhausted_neighbors') || '{}');
-            blacklist[uid] = this.getNextResetTime();
-            localStorage.setItem('sf_exhausted_neighbors', JSON.stringify(blacklist));
-            V6.log(`تمت إضافة الجار [${uid}] للقائمة السوداء حتى الساعة 7:00 صباحاً.`);
-        }
+    saveBlacklist() {
+        localStorage.setItem('sf_mega_harvest_blacklist', JSON.stringify(this.blacklist));
     }
 
-    // ==========================================
-    // V6 CONSTITUTION: NETWORK & PAYLOAD VALIDATION
-    // ==========================================
-    class NetworkCore {
-        static activeCallback = null;
-        static interceptorInstalled = false;
-
-        static initInterceptor() {
-            if (this.interceptorInstalled || !window.App || !window.App.MessageCenter) return;
-            this.interceptorInstalled = true;
-            
-            const origDispatch = window.App.MessageCenter.dispatch;
-            window.App.MessageCenter.dispatch = function(event, ...args) {
-                try {
-                    // اصطياد الرد الفعلي من السيرفر (HTTP_SUCCESS)
-                    if (event === "HTTP_SUCCESS") {
-                        const data = args[1]; 
-                        
-                        if (NetworkCore.activeCallback && data && data.objects_to_update) {
-                            let found = false;
-                            let product = null;
-                            let msg = null;
-
-                            const updates = Array.isArray(data.objects_to_update) ? data.objects_to_update : Object.values(data.objects_to_update);
-                            
-                            for (let obj of updates) {
-                                if (obj && obj.needResponse) {
-                                    const channel = obj.needResponse.channel;
-                                    if (channel === "friend_collect" || channel === "friend_collect_trees") {
-                                        found = true;
-                                        if (obj.needResponse.data) {
-                                            product = obj.needResponse.data.product; // رقم الثمرة إذا وجدت
-                                            msg = obj.needResponse.data.msg; // رسالة الاستجابة
-                                        }
-                                        break;
-                                    }
-                                }
-                            }
-
-                            if (found) {
-                                NetworkCore.activeCallback({ product, msg });
-                                NetworkCore.activeCallback = null;
-                            }
-                        }
-                    }
-                } catch (e) {
-                    V6.error("Interceptor Error", e);
+    render() {
+        return `
+            <style>
+                .sf-harvest-btn {
+                    padding: 10px 15px;
+                    border: none;
+                    border-radius: 6px;
+                    font-weight: bold;
+                    cursor: pointer;
+                    width: 100%;
+                    transition: all 0.3s ease;
+                    font-family: inherit;
+                    margin-bottom: 8px;
                 }
-                return origDispatch.apply(this, arguments);
-            };
-        }
+                .sf-harvest-btn:hover {
+                    opacity: 0.8;
+                }
+                .sf-harvest-btn-start { background: #00d2d3; color: #222f3e; }
+                .sf-harvest-btn-stop { background: #ff6b6b; color: white; display: none; }
+                .sf-harvest-btn-clear { background: #576574; color: white; margin-top: 10px; }
+                
+                .sf-harvest-input-group {
+                    display: flex;
+                    align-items: center;
+                    margin-bottom: 15px;
+                    background: rgba(0,0,0,0.3);
+                    border-radius: 6px;
+                    padding: 8px;
+                    border: 1px solid rgba(255,255,255,0.05);
+                }
+                .sf-harvest-input-group label {
+                    flex: 1;
+                    font-size: 13px;
+                    color: #c8d6e5;
+                }
+                .sf-harvest-input-group input {
+                    width: 80px;
+                    background: rgba(0,0,0,0.5);
+                    border: 1px solid rgba(255,255,255,0.2);
+                    color: #10ac84;
+                    padding: 5px;
+                    border-radius: 4px;
+                    text-align: center;
+                    font-weight: bold;
+                    outline: none;
+                }
+                .sf-harvest-log {
+                    margin-top: 10px;
+                    padding: 8px;
+                    background: rgba(0,0,0,0.4);
+                    border-radius: 5px;
+                    border: 1px solid rgba(255,255,255,0.1);
+                    font-size: 11px;
+                    color: #a4b0be;
+                    text-align: right;
+                    min-height: 40px;
+                    max-height: 80px;
+                    overflow-y: auto;
+                }
+            </style>
+            
+            <div class="sf-card">
+                <p style="color: var(--sf-text-muted); font-size: 13px; margin-bottom: 15px; text-align: center;">
+                    قم بتحديد الثمرة المراد حصادها أولاً (بضغطة واحدة على مزرعة الجار)، ثم حدد العدد واضغط ابدأ.
+                </p>
+                
+                <div class="sf-harvest-input-group">
+                    <label>العدد المطلوب:</label>
+                    <input type="number" id="sf-harvest-target" value="1000" min="1">
+                </div>
 
-        static async executeSmartHarvest(itemId, itemType, targetLimit, useFertilizer) {
-            this.initInterceptor();
+                <button id="sf-harvest-btn-start" class="sf-harvest-btn sf-harvest-btn-start">🚀 بدء الحصاد الصاروخي</button>
+                <button id="sf-harvest-btn-stop" class="sf-harvest-btn sf-harvest-btn-stop">🛑 إيقاف الحصاد</button>
+                <button id="sf-harvest-btn-clear" class="sf-harvest-btn sf-harvest-btn-clear">🗑️ مسح القائمة السوداء (${Object.keys(this.blacklist).length})</button>
 
-            const neighbors = DynamicResolver.getNeighbors();
-            if (neighbors.length === 0) {
-                UIManager.logToUI("لا يوجد جيران متاحين.");
+                <div id="sf-harvest-log" class="sf-harvest-log">في انتظار التعليمات...</div>
+            </div>
+        `;
+    }
+
+    bindEvents() {
+        const btnStart = this.container.querySelector('#sf-harvest-btn-start');
+        const btnStop = this.container.querySelector('#sf-harvest-btn-stop');
+        const btnClear = this.container.querySelector('#sf-harvest-btn-clear');
+        const inputTarget = this.container.querySelector('#sf-harvest-target');
+        const logArea = this.container.querySelector('#sf-harvest-log');
+
+        this.logArea = logArea;
+        this.btnStart = btnStart;
+        this.btnStop = btnStop;
+        this.btnClear = btnClear;
+        this.inputTarget = inputTarget;
+
+        btnStart.addEventListener('click', () => {
+            let limit = parseInt(inputTarget.value);
+            if (isNaN(limit) || limit <= 0) {
+                this.log("الرجاء إدخال عدد صحيح صالح.");
                 return;
             }
+            this.targetLimit = limit;
+            this.startHarvest();
+        });
 
-            const isTree = (itemType === "trees");
-            const harvestCmd = isTree ? "friend_collect_trees" : "friend_collect";
-            const fertCmd = isTree ? "friend_water" : "friend_fertilize";
+        btnStop.addEventListener('click', () => {
+            this.stopHarvest();
+        });
 
-            let totalHarvested = 0;
-            UIManager.logToUI(`بدء حصاد: [${itemId}]. الهدف: ${targetLimit} ثمرة.`);
-            UIManager.showProgressOverlay(totalHarvested, targetLimit, itemId);
+        btnClear.addEventListener('click', () => {
+            this.blacklist = {};
+            this.saveBlacklist();
+            btnClear.textContent = `🗑️ مسح القائمة السوداء (0)`;
+            this.log("تم مسح القائمة السوداء بنجاح!");
+        });
+    }
 
-            for (let i = 0; i < neighbors.length; i++) {
-                if (totalHarvested >= targetLimit) break;
+    update() {
+        if (this.btnClear) {
+            this.btnClear.textContent = `🗑️ مسح القائمة السوداء (${Object.keys(this.blacklist).length})`;
+        }
+    }
 
-                const neighbor = neighbors[i];
-                const friendId = neighbor.uid;
+    log(msg) {
+        if (this.logArea) {
+            this.logArea.innerHTML = `<div>${msg}</div>` + this.logArea.innerHTML;
+        }
+    }
 
-                // التحقق من القائمة السوداء
-                if (BlacklistManager.isBlacklisted(friendId)) {
-                    UIManager.logToUI(`تخطي الجار [${friendId}] (موجود في القائمة السوداء، الطاقة مستنفدة).`);
-                    continue; // التخطي للجار التالي دون محاولة
+    sleep(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+    randomJitter() {
+        return Math.floor(Math.random() * (this.JitterMax - this.JitterMin + 1)) + this.JitterMin;
+    }
+
+    getGameSignature() {
+        try {
+            const uid = window.GF.loginModel.AppData.unique_id;
+            const key = window.JSDataManager.singleton.key;
+            return { uid, key };
+        } catch(e) {
+            return null;
+        }
+    }
+
+    buildPayload(friendId) {
+        const sig = this.getGameSignature();
+        if (!sig) return null;
+        
+        const timestamp = Math.floor(Date.now() / 1000);
+        const md5_hash = window.md5.hex(sig.uid + "_" + timestamp);
+        
+        return {
+            startTime_log: timestamp,
+            hash: md5_hash,
+            x: 50,
+            y: 50,
+            friend_id: friendId
+        };
+    }
+
+    // Creates the simplified live HUD (Only shows during harvest)
+    showProgressOverlay(current, target) {
+        if (!this.hudElement) {
+            this.hudElement = document.createElement('div');
+            this.hudElement.id = 'sf-harvest-hud';
+            Object.assign(this.hudElement.style, {
+                position: 'fixed',
+                bottom: '100px',
+                left: '50%',
+                transform: 'translateX(-50%)',
+                background: 'rgba(0, 0, 0, 0.75)',
+                backdropFilter: 'blur(10px)',
+                color: '#fff',
+                padding: '10px 25px',
+                borderRadius: '30px',
+                fontFamily: 'Tajawal, sans-serif',
+                fontSize: '22px',
+                fontWeight: 'bold',
+                zIndex: '9999',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '15px',
+                boxShadow: '0 10px 25px rgba(0,0,0,0.5)',
+                border: '2px solid rgba(0, 210, 211, 0.4)',
+                pointerEvents: 'none'
+            });
+
+            const countText = document.createElement('div');
+            countText.id = 'sf-harvest-hud-text';
+            
+            this.hudElement.appendChild(countText);
+            document.body.appendChild(this.hudElement);
+        }
+
+        const textEl = this.hudElement.querySelector('#sf-harvest-hud-text');
+        if (textEl) {
+            textEl.innerHTML = `<span style="color: #00d2d3;">تم حصد:</span> <span style="color: #feca57; font-size: 26px;">${current}</span> / <span style="color: #c8d6e5;">${target}</span>`;
+        }
+    }
+
+    hideProgressOverlay() {
+        if (this.hudElement && this.hudElement.parentNode) {
+            this.hudElement.parentNode.removeChild(this.hudElement);
+            this.hudElement = null;
+        }
+    }
+
+    async startHarvest() {
+        if (!window.GF || !window.GF.loginModel) {
+            this.log("⚠️ اللعبة لم تحمل بالكامل.");
+            return;
+        }
+
+        // Validate selected plant
+        const currentPlant = window.GF.gameController.getCurrPlant();
+        if (!currentPlant) {
+            this.log("⚠️ قم بالضغط على ثمرة واحدة في مزرعة الجار لتحديد نوع المحصول أولاً!");
+            return;
+        }
+
+        const friendInfo = window.GF.friendsController.visitingFriend;
+        if (!friendInfo) {
+            this.log("⚠️ يجب أن تكون داخل مزرعة أحد الجيران للبدء!");
+            return;
+        }
+
+        this.isRunning = true;
+        this.totalHarvested = 0;
+        
+        if(this.btnStart) this.btnStart.style.display = 'none';
+        if(this.btnStop) this.btnStop.style.display = 'block';
+
+        this.log(`🔥 انطلاق الحصاد الصاروخي! الهدف: ${this.targetLimit}`);
+        this.showProgressOverlay(0, this.targetLimit);
+
+        while (this.isRunning && this.totalHarvested < this.targetLimit) {
+            const friendsList = window.GF.loginModel.AppData.friends;
+            let targetFriend = null;
+
+            for (let f of friendsList) {
+                if (!this.blacklist[f.id]) {
+                    targetFriend = f;
+                    break;
+                }
+            }
+
+            if (!targetFriend) {
+                this.log("❌ جميع الجيران في القائمة السوداء (استنفدت طاقتهم). اكتمل العمل لليوم!");
+                this.stopHarvest();
+                break;
+            }
+
+            const friendId = targetFriend.id;
+            let neighborHasEnergy = true;
+
+            while (this.isRunning && neighborHasEnergy && this.totalHarvested < this.targetLimit) {
+                // Simulate controller apply to trick anti-cheat
+                window.App.ControllerManager.applyFunc(window.ControllerConst.Game, window.GameConst.HARVEST_PLANT_BY_FRIENDS);
+
+                let payload = this.buildPayload(friendId);
+                if (!payload) {
+                    this.log("❌ فشل في بناء الـ Payload.");
+                    this.stopHarvest();
+                    break;
                 }
 
-                UIManager.logToUI(`--> جاري فحص وحصاد الجار: [${friendId}] ${neighbor.name}`);
-
-                let neighborHasEnergy = true;
-                let attemptsOnNeighbor = 0;
-
-                while (neighborHasEnergy && totalHarvested < targetLimit && attemptsOnNeighbor < 100) {
-                    attemptsOnNeighbor++;
-                    
-                    const harvestPayload = { friend_id: friendId, itemid: itemId };
-                    
-                    if (useFertilizer) {
-                        const fertPayload = { friend_id: friendId, plant_x: 0, plant_y: 0, plant_id: itemId };
-                        window.NetUtils.enqueue(fertCmd, fertPayload);
-                        if (window.NetUtils.flush) window.NetUtils.flush();
-                        await V6.sleep(600); // إعطاء السيرفر وقت لتسجيل التسميد
-                    }
-
-                    // فخ الرد (Promise)
-                    let harvestPromise = new Promise((resolve) => {
-                        NetworkCore.activeCallback = resolve;
-                        setTimeout(() => {
-                            if (NetworkCore.activeCallback === resolve) {
-                                NetworkCore.activeCallback = null;
-                                resolve(null); // Timeout
-                            }
-                        }, 5000); 
+                try {
+                    let res = await new Promise((resolve, reject) => {
+                        window.NetUtils.enqueue("friend_collect", payload, function(response) {
+                            resolve(response);
+                        }, this);
                     });
 
-                    window.NetUtils.enqueue(harvestCmd, harvestPayload);
-                    if (window.NetUtils.flush) window.NetUtils.flush();
-
-                    const res = await harvestPromise;
-
-                    if (!res) {
-                        UIManager.logToUI(`فشل الاتصال أو تأخر الرد من الجار [${friendId}]. تخطي...`);
+                    if (res && res.error) {
+                        this.log(`⚠️ خطأ من السيرفر: ${res.error}. نتخطى الجار مؤقتاً...`);
                         neighborHasEnergy = false;
-                    } else if (res.msg === "ok" && res.product) {
-                        // السيرفر وافق وأرسل ثمرة
+                    } else if (res && res.msg === "ok" && res.product) {
                         const actualProductId = res.product;
-                        const actualAmount = res.product_num || 1; // إذا لم يرسل السيرفر الكمية نعتبرها 1
+                        const actualAmount = res.product_num || 1;
                         
-                        totalHarvested += actualAmount;
-                        UIManager.logToUI(`نجاح! تم حصد ثمرة (رقم ${actualProductId}) بكمية ${actualAmount}. الإجمالي: (${totalHarvested}/${targetLimit})`);
-                        
-                        // إضافة الثمرة للذاكرة محلياً بناءً على رد السيرفر الفعلي وليس تخميناً!
+                        this.totalHarvested += actualAmount;
+                        this.showProgressOverlay(this.totalHarvested, this.targetLimit);
+
+                        // Update local storage instantly based on server response
                         if (window.GF && window.GF.loginModel) {
                             window.GF.loginModel.addStorage(actualProductId, actualAmount);
                         }
-                        
-                        UIManager.showProgressOverlay(totalHarvested, targetLimit, actualProductId);
 
-                        // --- تشغيل المؤثر البصري اللحظي (V6 Visual Hook) ---
+                        // V6 Visual Animation
                         try {
                             if (window.GF && window.GF.gameController && window.Animations) {
-                                window.GF.gameController.collectTopTip(itemId, 1);
-                                let startRect = egret.Rectangle.create();
+                                window.GF.gameController.collectTopTip(actualProductId, 1);
+                                let startRect = window.egret.Rectangle.create();
                                 startRect.x = window.innerWidth / 2;
                                 startRect.y = window.innerHeight / 2;
                                 startRect.width = 75;
                                 startRect.height = 75;
-                                let endPoint = egret.Point.create(100, window.innerHeight - 100); 
+                                let endPoint = window.egret.Point.create(100, window.innerHeight - 100); 
                                 if (window.GF.gameController.operArea && window.GF.gameController.operArea.btnWarehouse) {
                                     window.GF.gameController.operArea.btnWarehouse.localToGlobal(0, 0, endPoint);
                                 }
-                                window.Animations.flyItemTo(itemId, startRect, endPoint);
+                                window.Animations.flyItemTo(actualProductId, startRect, endPoint);
                             }
                         } catch(e) {}
-                        // --------------------------------------------------
-                    } else if (res.msg === "used up") {
-                        // الدليل اليقيني من السيرفر على استنفاد الطاقة بالكامل
-                        UIManager.logToUI(`استنفدت طاقة الجار [${friendId}] بناءً على رد السيرفر. الإدراج في القائمة السوداء...`);
-                        BlacklistManager.addToBlacklist(friendId);
-                        neighborHasEnergy = false; // الخروج من الحلقة للجار الحالي
+
+                    } else if (res && res.msg === "used up") {
+                        this.log(`⛔ الجار [${friendId}] استنفد طاقته. تم إدراجه في القائمة السوداء.`);
+                        this.blacklist[friendId] = true;
+                        this.saveBlacklist();
+                        this.update(); // Update clear button count
+                        neighborHasEnergy = false;
                     } else {
-                        // لا يوجد ثمار من هذا النوع، لكن بناءً على طلب المستخدم، سنستمر بضربه حتى تنفد طاقته
-                        UIManager.logToUI(`نقرة فارغة على الجار [${friendId}]. جاري الاستمرار لإنهاء طاقته...`);
-                        // لا نفعل neighborHasEnergy = false لنتركه يكمل الضرب
+                        this.log(`⚠️ استجابة غير معروفة. نتخطى الجار...`);
+                        neighborHasEnergy = false;
                     }
 
-                    const jitter = V6.randomJitter();
-                    await V6.sleep(jitter);
-                }
-            }
-
-            UIManager.hideProgressOverlay();
-            UIManager.showEpicCompletion(totalHarvested, targetLimit);
-            UIManager.logToUI(`=== اكتملت المهمة! إجمالي الحصاد الفعلي: ${totalHarvested} ثمرة ===`);
-        }
-    }
-
-    // ==========================================
-    // V6 CONSTITUTION: DOM ISOLATION & UI
-    // ==========================================
-    class UIManager {
-        static createUI() {
-            if (document.getElementById(`${V6.Prefix}main-panel`)) return;
-
-            const panel = document.createElement("div");
-            panel.id = `${V6.Prefix}main-panel`;
-            panel.style.cssText = `
-                position: fixed;
-                top: 10px;
-                left: 10px;
-                width: 330px;
-                background: rgba(15, 15, 15, 0.95);
-                border: 2px solid #00ffcc;
-                border-radius: 8px;
-                color: #00ffcc;
-                font-family: 'Courier New', monospace;
-                font-size: 13px;
-                padding: 15px;
-                z-index: 999999;
-                box-shadow: 0 0 15px #00ffcc;
-                backdrop-filter: blur(5px);
-            `;
-
-            const title = document.createElement("div");
-            title.innerText = "V6.2 Epic Auto-Router";
-            title.style.cssText = "font-weight: bold; font-size: 15px; text-align: center; border-bottom: 1px solid #00ffcc; padding-bottom: 10px; margin-bottom: 10px;";
-            panel.appendChild(title);
-
-            // Item Search
-            const searchInput = document.createElement("input");
-            searchInput.type = "text";
-            searchInput.id = `${V6.Prefix}search-input`;
-            searchInput.placeholder = "ابحث عن المحصول أو الشجرة...";
-            searchInput.style.cssText = "width: 100%; padding: 5px; margin-bottom: 5px; background: #222; border: 1px solid #00ffcc; color: #fff; box-sizing: border-box;";
-            
-            const resultsSelect = document.createElement("select");
-            resultsSelect.id = `${V6.Prefix}results-select`;
-            resultsSelect.size = 5;
-            resultsSelect.style.cssText = "width: 100%; padding: 5px; background: #222; border: 1px solid #00ffcc; color: #fff; box-sizing: border-box;";
-
-            panel.appendChild(searchInput);
-            panel.appendChild(resultsSelect);
-
-            const optionsContainer = document.createElement("div");
-            optionsContainer.style.cssText = "display: flex; gap: 10px; margin-top: 10px; align-items: center; justify-content: space-between;";
-
-            // Count Input (Target Yield)
-            const countContainer = document.createElement("div");
-            const countLabel = document.createElement("span");
-            countLabel.innerText = "العدد المستهدف:";
-            countLabel.style.marginRight = "5px";
-            
-            const countInput = document.createElement("input");
-            countInput.type = "number";
-            countInput.id = `${V6.Prefix}target-input`;
-            countInput.value = "100";
-            countInput.min = "1";
-            countInput.style.cssText = "width: 70px; padding: 4px; background: #222; border: 1px solid #00ffcc; color: #fff; box-sizing: border-box;";
-            
-            countContainer.appendChild(countLabel);
-            countContainer.appendChild(countInput);
-            optionsContainer.appendChild(countContainer);
-
-            // Fertilizer Checkbox
-            const fertLabel = document.createElement("label");
-            fertLabel.style.cssText = "display: flex; align-items: center; cursor: pointer; font-size: 11px;";
-            const fertCheck = document.createElement("input");
-            fertCheck.type = "checkbox";
-            fertCheck.id = `${V6.Prefix}fert-check`;
-            fertCheck.style.cssText = "margin-right: 5px;";
-            fertLabel.appendChild(fertCheck);
-            fertLabel.appendChild(document.createTextNode("تسميد (Fertilize)"));
-            optionsContainer.appendChild(fertLabel);
-
-            panel.appendChild(optionsContainer);
-
-            // Run Button
-            const runBtn = document.createElement("button");
-            runBtn.innerText = "Start Smart Harvest";
-            runBtn.id = `${V6.Prefix}run-btn`;
-            runBtn.style.cssText = "width: 100%; padding: 8px; margin-top: 15px; background: #00ffcc; color: #000; border: none; font-weight: bold; cursor: pointer; border-radius: 4px;";
-            runBtn.onmouseover = () => runBtn.style.background = "#fff";
-            runBtn.onmouseout = () => runBtn.style.background = "#00ffcc";
-            panel.appendChild(runBtn);
-
-            // Clear Blacklist Button
-            const clearBtn = document.createElement("button");
-            clearBtn.innerText = "مسح القائمة السوداء (تصفير)";
-            clearBtn.id = `${V6.Prefix}clear-btn`;
-            clearBtn.style.cssText = "width: 100%; padding: 5px; margin-top: 5px; background: #ff3366; color: #fff; border: none; font-weight: bold; cursor: pointer; border-radius: 4px; font-size: 11px;";
-            clearBtn.onmouseover = () => clearBtn.style.background = "#ff6699";
-            clearBtn.onmouseout = () => clearBtn.style.background = "#ff3366";
-            panel.appendChild(clearBtn);
-
-            const logDiv = document.createElement("div");
-            logDiv.id = `${V6.Prefix}log`;
-            logDiv.style.cssText = "margin-top: 10px; height: 120px; overflow-y: auto; background: #111; padding: 5px; font-size: 11px; border: 1px dashed #00ffcc; font-family: tahoma, sans-serif;";
-            panel.appendChild(logDiv);
-
-            document.body.appendChild(panel);
-
-            // Add CSS Animations globally
-            if (!document.getElementById('sf-animations')) {
-                const style = document.createElement('style');
-                style.id = 'sf-animations';
-                style.innerHTML = `
-                    @keyframes sfFadeIn { from { opacity: 0; } to { opacity: 1; } }
-                    @keyframes sfFadeOut { from { opacity: 1; } to { opacity: 0; } }
-                    @keyframes sfPopUp { 
-                        0% { transform: scale(0.5); opacity: 0; }
-                        70% { transform: scale(1.1); opacity: 1; }
-                        100% { transform: scale(1); opacity: 1; }
+                    if (this.isRunning) {
+                        await this.sleep(this.randomJitter());
                     }
-                `;
-                document.head.appendChild(style);
-            }
 
-            this.bindEvents();
-        }
-
-        static bindEvents() {
-            const searchInput = document.getElementById(`${V6.Prefix}search-input`);
-            const resultsSelect = document.getElementById(`${V6.Prefix}results-select`);
-            const targetInput = document.getElementById(`${V6.Prefix}target-input`);
-            const fertCheck = document.getElementById(`${V6.Prefix}fert-check`);
-            const runBtn = document.getElementById(`${V6.Prefix}run-btn`);
-
-            let allItems = [];
-
-            const lazyLoadData = () => {
-                if (allItems.length === 0) {
-                    allItems = DynamicResolver.getHarvestableItems();
-                    if (allItems.length > 0) {
-                        this.logToUI(`Loaded ${allItems.length} items dynamically.`);
-                    }
+                } catch (err) {
+                    this.log(`⚠️ خطأ شبكي: ${err.message}. نتخطى الجار...`);
+                    neighborHasEnergy = false;
+                    await this.sleep(1000);
                 }
-            };
-
-            searchInput.addEventListener("focus", lazyLoadData);
-
-            searchInput.addEventListener("input", (e) => {
-                const query = e.target.value.trim().toLowerCase();
-                resultsSelect.innerHTML = "";
-                if (!query) return;
-
-                const filtered = allItems.filter(item => item.name.toLowerCase().includes(query) || String(item.id).includes(query));
-                
-                filtered.slice(0, 50).forEach(item => {
-                    const opt = document.createElement("option");
-                    opt.value = JSON.stringify(item);
-                    opt.innerText = `[${item.id}] ${item.name} (${item.type === 'trees' ? 'شجرة' : 'محصول'})`;
-                    resultsSelect.appendChild(opt);
-                });
-            });
-
-            runBtn.addEventListener("click", async () => {
-                const selectedOpt = resultsSelect.options[resultsSelect.selectedIndex];
-                const targetLimit = parseInt(targetInput.value) || 1;
-                const useFert = fertCheck.checked;
-
-                if (!selectedOpt) {
-                    this.logToUI("Error: Select an item first.");
-                    return;
-                }
-
-                const item = JSON.parse(selectedOpt.value);
-                
-                runBtn.disabled = true;
-                runBtn.style.background = "#555";
-                
-                await NetworkCore.executeSmartHarvest(item.id, item.type, targetLimit, useFert);
-                
-                runBtn.disabled = false;
-                runBtn.style.background = "#00ffcc";
-            });
-
-            const clearBtn = document.getElementById(`${V6.Prefix}clear-btn`);
-            if (clearBtn) {
-                clearBtn.addEventListener("click", () => {
-                    localStorage.removeItem('sf_exhausted_neighbors');
-                    this.logToUI("تم مسح القائمة السوداء القديمة بالكامل! الجيران الآن متاحون للحصاد.");
-                });
             }
         }
 
-        static logToUI(msg) {
-            const logDiv = document.getElementById(`${V6.Prefix}log`);
-            if (logDiv) {
-                const p = document.createElement("div");
-                p.innerText = `> ${msg}`;
-                logDiv.appendChild(p);
-                logDiv.scrollTop = logDiv.scrollHeight;
-            }
-            V6.log(msg);
+        if (this.totalHarvested >= this.targetLimit) {
+            this.log(`✅ تمت المهمة بنجاح! تم حصد ${this.totalHarvested} ثمرة.`);
+            setTimeout(() => this.hideProgressOverlay(), 3000); // Hide after 3 seconds on success
+        } else {
+            this.hideProgressOverlay(); // Hide immediately if manually stopped
         }
 
-        static showProgressOverlay(current, target, itemId = null) {
-            let overlay = document.getElementById(`${V6.Prefix}progress-overlay`);
-            if (!overlay) {
-                overlay = document.createElement('div');
-                overlay.id = `${V6.Prefix}progress-overlay`;
-                overlay.style.cssText = `
-                    position: fixed;
-                    bottom: 20px;
-                    left: 50%;
-                    transform: translateX(-50%);
-                    background: rgba(0, 0, 0, 0.85);
-                    border: 3px solid #00ffcc;
-                    border-radius: 15px;
-                    padding: 15px 35px;
-                    color: #00ffcc;
-                    font-family: 'Courier New', monospace;
-                    font-size: 28px;
-                    font-weight: bold;
-                    z-index: 9999999;
-                    box-shadow: 0 0 30px #00ffcc, inset 0 0 20px #00ffcc;
-                    backdrop-filter: blur(10px);
-                    text-align: center;
-                    transition: all 0.2s ease;
-                    white-space: nowrap;
-                `;
-                document.body.appendChild(overlay);
-            }
-            
-            let storageText = "";
-            if (itemId && window.GF && window.GF.loginModel) {
-                const qty = window.GF.loginModel.getStorageQtyById(itemId) || 0;
-                storageText = ` | 📦 في الحظيرة: ${qty}`;
-            }
-            
-            overlay.innerText = `[ ${current} / ${target} ]${storageText}`;
-            
-            // Pulse effect
-            overlay.style.transform = 'translateX(-50%) scale(1.1)';
-            setTimeout(() => {
-                if(overlay) overlay.style.transform = 'translateX(-50%) scale(1)';
-            }, 150);
-        }
-
-        static hideProgressOverlay() {
-            let overlay = document.getElementById(`${V6.Prefix}progress-overlay`);
-            if (overlay) overlay.remove();
-        }
-
-        static showEpicCompletion(total, target) {
-            const epicBox = document.createElement("div");
-            epicBox.id = `${V6.Prefix}epic-completion`;
-            epicBox.style.cssText = `
-                position: fixed;
-                top: 0; left: 0; width: 100vw; height: 100vh;
-                background: rgba(0, 0, 0, 0.85);
-                display: flex;
-                flex-direction: column;
-                align-items: center;
-                justify-content: center;
-                z-index: 10000000;
-                backdrop-filter: blur(15px);
-                animation: sfFadeIn 0.5s ease;
-            `;
-            
-            const content = document.createElement("div");
-            content.style.cssText = `
-                background: linear-gradient(135deg, #111, #222);
-                border: 4px solid #00ffcc;
-                border-radius: 20px;
-                padding: 50px;
-                text-align: center;
-                box-shadow: 0 0 50px #00ffcc, inset 0 0 30px #00ffcc;
-                animation: sfPopUp 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-            `;
-
-            const title = document.createElement("h1");
-            title.innerText = "تم إنجاز المهمة بنجاح!";
-            title.style.cssText = "color: #00ffcc; font-size: 50px; margin: 0 0 20px 0; text-shadow: 0 0 20px #00ffcc;";
-            
-            const stats = document.createElement("div");
-            stats.innerText = `تم حصاد ${total} من أصل ${target} ثمرة`;
-            stats.style.cssText = "color: #fff; font-size: 30px; margin-bottom: 40px;";
-            
-            const closeBtn = document.createElement("button");
-            closeBtn.innerText = "إغلاق";
-            closeBtn.style.cssText = "background: #00ffcc; color: #000; border: none; padding: 15px 40px; font-size: 24px; font-weight: bold; border-radius: 10px; cursor: pointer; transition: all 0.3s;";
-            closeBtn.onmouseover = () => { closeBtn.style.background = "#fff"; closeBtn.style.boxShadow = "0 0 20px #fff"; };
-            closeBtn.onmouseout = () => { closeBtn.style.background = "#00ffcc"; closeBtn.style.boxShadow = "none"; };
-            closeBtn.onclick = () => {
-                epicBox.style.animation = "sfFadeOut 0.5s ease";
-                setTimeout(() => epicBox.remove(), 450);
-            };
-
-            content.appendChild(title);
-            content.appendChild(stats);
-            content.appendChild(closeBtn);
-            epicBox.appendChild(content);
-            document.body.appendChild(epicBox);
-        }
+        this.stopHarvest();
     }
 
-    // Initialize
-    function init() {
-        V6.log("Initializing V6.2 Architecture (Blacklist & UI)...");
-        setTimeout(() => {
-            UIManager.createUI();
-        }, 3000);
+    stopHarvest() {
+        this.isRunning = false;
+        if(this.btnStart) this.btnStart.style.display = 'block';
+        if(this.btnStop) this.btnStop.style.display = 'none';
+        if (this.totalHarvested < this.targetLimit) {
+            this.hideProgressOverlay();
+        }
     }
+};
 
-    if (document.readyState === "complete" || document.readyState === "interactive") {
-        init();
-    } else {
-        window.addEventListener("DOMContentLoaded", init);
-    }
-
-})();
+// Register module
+if (window.SF && window.SF.modules) {
+    window.SF.modules.register(new SF.AutoMegaHarvestModule());
+}
 
 
 // --- System Initialization ---
