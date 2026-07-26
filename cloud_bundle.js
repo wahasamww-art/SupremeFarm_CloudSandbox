@@ -1,6 +1,6 @@
 // ===================================================================
 // SupremeFarm Modular - Cloud Distribution Bundle
-// Generated at: 2026-07-26T00:33:44.158Z
+// Generated at: 2026-07-26T01:59:47.954Z
 // ===================================================================
 
 // --- File: core/EventBus.js ---
@@ -4897,6 +4897,355 @@ SF.IslandPointBuyerModule = class IslandPointBuyerModule extends SF.ModuleBase {
 };
 
 SF.modules.register(new SF.IslandPointBuyerModule());
+
+
+// --- File: features/Sandbox_EventHelperFix.js ---
+// --- features\Sandbox_EventHelperFix.js ---
+window.SF = window.SF || {};
+
+SF.SandboxEventHelper = class SandboxEventHelper extends SF.ModuleBase {
+    constructor() {
+        super('sandbox_event_helper', 'بوت دعم المهام السريع (Bots)', '🎁');
+        this.isRunning = false;
+        this.alts = [];
+        this.activeEventsList = [];
+    }
+
+    render() {
+        const BOT_PREFIX = 'sf-botevt-';
+        return `
+            <div class="sf-card" style="border-top: 3px solid #f43f5e;">
+                <h3 class="sf-card-title" style="color: #fb7185;">🎁 بوت دعم مهام الأصدقاء (Sandbox)</h3>
+                <p style="color: var(--sf-text-muted); font-size: 13px; margin-bottom: 10px;">
+                    هذا البوت يقرأ المهمات النشطة ديناميكياً ويرسل الدعم للحساب الأساسي عبر حسابات (الروبوتات) التي تحددها في قائمة التوكنات، تماماً مثل نظام نقرات الآلات.
+                </p>
+
+                <div class="sf-form-group">
+                    <label class="sf-label" style="color:#cbd5e1;">1. الحساب الأساسي المستهدف (Target):</label>
+                    <input type="text" id="${BOT_PREFIX}target-id" class="sf-input" readonly 
+                           style="background: #0f172a; color: #fde047; font-weight: bold; text-align: center;" 
+                           value="جاري الاستخراج...">
+                </div>
+
+                <div class="sf-form-group">
+                    <label class="sf-label" style="color:#cbd5e1;">2. اختر المهمة (Active Events):</label>
+                    <select id="${BOT_PREFIX}select-event" class="sf-select" style="background: #1e293b; color: #fff;">
+                        <option value="">جاري فحص المهام النشطة...</option>
+                    </select>
+                </div>
+
+                <div class="sf-form-group">
+                    <label class="sf-label" style="color:#cbd5e1; display:flex; justify-content:space-between;">
+                        <span>3. حسابات المساعدة (Tokens):</span>
+                        <span id="${BOT_PREFIX}alts-count" style="color:#fb7185; font-weight:bold;">0 حساب</span>
+                    </label>
+                    <textarea id="${BOT_PREFIX}textarea-alts" class="sf-input" rows="4" placeholder="إلصق مصفوفة الحسابات هنا... (نفس صيغة نقرات الآلات)" style="font-family: monospace; font-size: 11px; white-space: nowrap;"></textarea>
+                </div>
+
+                <button id="${BOT_PREFIX}btn-start" class="sf-btn sf-btn-danger" style="width: 100%; font-weight: bold; margin-bottom: 10px;">
+                    بدء إرسال الدعم 🚀
+                </button>
+
+                <div id="${BOT_PREFIX}log" style="font-size: 11px; color: #94a3b8; height: 120px; overflow-y: auto; background: #020617; padding: 8px; border-radius: 4px; border: 1px solid #334155;">
+                    [النظام] في انتظار المهام...
+                </div>
+            </div>
+        `;
+    }
+
+    init(container) {
+        super.init(container);
+        this.container = container;
+        this.BOT_PREFIX = 'sf-botevt-';
+        
+        this.ui = {
+            targetId: container.querySelector(`#${this.BOT_PREFIX}target-id`),
+            selectEvent: container.querySelector(`#${this.BOT_PREFIX}select-event`),
+            textareaAlts: container.querySelector(`#${this.BOT_PREFIX}textarea-alts`),
+            btnStart: container.querySelector(`#${this.BOT_PREFIX}btn-start`),
+            log: container.querySelector(`#${this.BOT_PREFIX}log`),
+            altsCount: container.querySelector(`#${this.BOT_PREFIX}alts-count`)
+        };
+
+        this.bindEvents();
+        this.populateInitialData();
+    }
+
+    logMsg(msg, type = 'info') {
+        if (!this.ui.log) return;
+        const colors = {
+            info: '#94a3b8',
+            success: '#4ade80',
+            warning: '#fde047',
+            error: '#ef4444'
+        };
+        const color = colors[type] || colors.info;
+        const time = new Date().toLocaleTimeString('en-US', { hour12: false });
+        this.ui.log.innerHTML += `<div style="color: ${color}; margin-bottom: 4px;">[${time}] ${msg}</div>`;
+        this.ui.log.scrollTop = this.ui.log.scrollHeight;
+        console.log(`[EventHelper] ${msg}`);
+    }
+
+    populateInitialData() {
+        // 1. تحديد الحساب الأساسي بدقة (uid)
+        setTimeout(() => {
+            try {
+                if (unsafeWindow.GF && unsafeWindow.GF.loginModel && unsafeWindow.GF.loginModel.AppData) {
+                    const myUid = unsafeWindow.GF.loginModel.AppData.uid;
+                    if (myUid) {
+                        this.ui.targetId.value = myUid;
+                        this.logMsg(`تم رصد الحساب الأساسي: ${myUid}`, 'success');
+                    }
+                }
+            } catch (e) {
+                this.ui.targetId.value = "ERROR";
+                this.logMsg('فشل في رصد الـ UID الأساسي.', 'error');
+            }
+
+            // 2. تحميل الحسابات المحفوظة مسبقاً
+            try {
+                if (unsafeWindow.SupremeFarm_Data && unsafeWindow.SupremeFarm_Data.botAccounts) {
+                    this.ui.textareaAlts.value = JSON.stringify(unsafeWindow.SupremeFarm_Data.botAccounts, null, 2);
+                    this.updateAltsCount();
+                } else {
+                    const saved = localStorage.getItem('SF_BOT_ACCOUNTS_v2');
+                    if (saved) {
+                        this.ui.textareaAlts.value = saved;
+                        this.updateAltsCount();
+                    }
+                }
+            } catch (e) {}
+
+            // 3. قراءة المهمات النشطة
+            this.scanActiveEvents();
+
+        }, 1500);
+    }
+
+    scanActiveEvents() {
+        this.activeEventsList = [];
+        this.ui.selectEvent.innerHTML = '<option value="">-- اختر المهمة --</option>';
+
+        try {
+            // البحث عن SharingToken أحداث
+            let sharingTokens = {};
+            
+            // محاولة 1: من Config مباشر
+            if (unsafeWindow.Config && typeof unsafeWindow.Config.getConfig === 'function') {
+                const conf = unsafeWindow.Config.getConfig('SharingToken');
+                if (conf) sharingTokens = Object.assign({}, sharingTokens, conf);
+            }
+
+            // محاولة 2: من AppData
+            if (unsafeWindow.GF && unsafeWindow.GF.loginModel && unsafeWindow.GF.loginModel.AppData) {
+                const act = unsafeWindow.GF.loginModel.AppData.activity;
+                if (act && act.SharingToken) {
+                    sharingTokens = Object.assign({}, sharingTokens, act.SharingToken);
+                }
+            }
+
+            // إذا لم نجد، نضيف مهمة صيد السمك كاحتياطي لأنها كانت في تشارلز
+            if (Object.keys(sharingTokens).length === 0) {
+                this.activeEventsList.push({ id: '3CatchingtheBigOne_revival', name: 'Catching the Big One (Fallback)' });
+            } else {
+                for (let key in sharingTokens) {
+                    if (key && typeof key === 'string') {
+                        this.activeEventsList.push({ id: key, name: key });
+                    }
+                }
+            }
+
+            // تعبئة القائمة
+            this.activeEventsList.forEach(evt => {
+                const opt = document.createElement('option');
+                opt.value = evt.id;
+                opt.textContent = evt.name;
+                this.ui.selectEvent.appendChild(opt);
+            });
+
+            this.logMsg(`تم مسح ورصد ${this.activeEventsList.length} مهام نشطة للدعم.`, 'success');
+
+        } catch (e) {
+            this.logMsg(`خطأ أثناء قراءة المهام: ${e.message}`, 'error');
+            // احتياطي
+            this.ui.selectEvent.innerHTML = '<option value="3CatchingtheBigOne_revival">3CatchingtheBigOne_revival</option>';
+        }
+    }
+
+    updateAltsCount() {
+        try {
+            const val = this.ui.textareaAlts.value.trim();
+            if (!val) {
+                this.ui.altsCount.textContent = "0 حساب";
+                this.alts = [];
+                return;
+            }
+            const parsed = JSON.parse(val);
+            if (Array.isArray(parsed)) {
+                this.alts = parsed;
+                this.ui.altsCount.textContent = `${parsed.length} حساب`;
+            } else {
+                this.ui.altsCount.textContent = "صيغة خطأ";
+            }
+        } catch (e) {
+            this.ui.altsCount.textContent = "صيغة خطأ";
+        }
+    }
+
+    bindEvents() {
+        this.ui.textareaAlts.addEventListener('input', () => this.updateAltsCount());
+
+        this.ui.btnStart.addEventListener('click', () => {
+            if (this.isRunning) return;
+            
+            const targetUid = this.ui.targetId.value.trim();
+            const activityId = this.ui.selectEvent.value;
+
+            if (!targetUid || targetUid === "ERROR") {
+                this.logMsg('الحساب الأساسي غير محدد!', 'error');
+                return;
+            }
+
+            if (!activityId) {
+                this.logMsg('يجب اختيار المهمة أولاً!', 'error');
+                return;
+            }
+
+            if (!this.alts || this.alts.length === 0) {
+                this.logMsg('لا يوجد حسابات مساعدة (Tokens)!', 'error');
+                return;
+            }
+
+            this.isRunning = true;
+            this.ui.btnStart.disabled = true;
+            this.ui.btnStart.textContent = "جاري إرسال الدعم...";
+            this.ui.btnStart.className = "sf-btn sf-btn-warning";
+            
+            this.logMsg(`بدء الإرسال المتسلسل للمهمة: ${activityId}`);
+            this.processBots(targetUid, activityId, 0);
+        });
+    }
+
+    async processBots(targetUid, activityId, index) {
+        if (index >= this.alts.length) {
+            this.logMsg('🎉 تم الانتهاء من جميع الحسابات المساعدة!', 'success');
+            this.isRunning = false;
+            this.ui.btnStart.disabled = false;
+            this.ui.btnStart.textContent = "بدء إرسال الدعم 🚀";
+            this.ui.btnStart.className = "sf-btn sf-btn-danger";
+            return;
+        }
+
+        const currentAlt = this.alts[index];
+        const currentUid = currentAlt.uid;
+        const currentSgnKey = currentAlt.sgnKey;
+        const currentLoginSession = currentAlt.loginSession;
+
+        if (!currentUid || !currentSgnKey) {
+            this.logMsg(`[تخطي] حساب رقم ${index+1} بياناته ناقصة.`, 'error');
+            return this.processBots(targetUid, activityId, index + 1);
+        }
+
+        this.logMsg(`[حساب ${index+1}/${this.alts.length}] جاري الإرسال من ${currentUid.substring(0, 5)}...`);
+
+        try {
+            // محاكاة نفس نظام نقرات الآلات عبر استبدال التوكنات لعمل Bypass 
+            let pBytes = await this.getRawAmfBytes(activityId, targetUid);
+            if (pBytes) {
+                // استبدال الـ uid الخاص بالأساسي بـ uid الروبوت لكي يبدو الطلب أنه من الروبوت
+                const myMainUid = this.ui.targetId.value.trim();
+                pBytes = new Uint8Array(this.replaceAmfString(pBytes.buffer, 'fb_sig_user', currentUid));
+                pBytes = new Uint8Array(this.replaceAmfString(pBytes.buffer, 'uid', currentUid));
+                pBytes = new Uint8Array(this.replaceAmfString(pBytes.buffer, 'sgnKey', currentSgnKey));
+                if (currentLoginSession) {
+                    pBytes = new Uint8Array(this.replaceAmfString(pBytes.buffer, 'loginSession', currentLoginSession));
+                }
+
+                const sUrl = "https://farm-us.centurygames.com/gateway.php?s=" + (currentLoginSession ? currentLoginSession.substring(0,6) : "bot") + "_" + currentUid;
+                
+                const response = await fetch(sUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-amf' },
+                    body: pBytes
+                });
+
+                if (response.ok) {
+                    this.logMsg(`✔ الحساب ${currentUid.substring(0, 5)} أرسل الدعم بنجاح!`, 'success');
+                } else {
+                    this.logMsg(`❌ الحساب ${currentUid.substring(0, 5)} فشل في الاتصال.`, 'error');
+                }
+            } else {
+                this.logMsg(`❌ فشل في بناء الـ Payload.`, 'error');
+            }
+
+        } catch (e) {
+            this.logMsg(`❌ خطأ في الحساب ${currentUid.substring(0, 5)}: ${e.message}`, 'error');
+        }
+
+        // الانتظار قليلاً قبل الحساب التالي لتجنب الحظر
+        setTimeout(() => {
+            this.processBots(targetUid, activityId, index + 1);
+        }, 1500 + Math.random() * 1000);
+    }
+
+    // بناء الـ Request Bytes بالاعتماد على NetUtils_Proxy إذا كان متاحاً
+    async getRawAmfBytes(activityId, targetMainUid) {
+        return new Promise((resolve) => {
+            if (!unsafeWindow.NetUtils_Proxy) {
+                this.logMsg('محرك NetUtils_Proxy غير مفعل! تأكد من تفعيله في إعدادات السكربت.', 'error');
+                resolve(null);
+                return;
+            }
+
+            const payload = {
+                action: "accept",
+                activity: activityId,
+                fromSnsids: targetMainUid
+            };
+
+            try {
+                // نطلب من محرك اللعبة تشفير الـ Payload بصمت
+                const amfBytes = unsafeWindow.NetUtils_Proxy.encodeRequest("Activity/SharingToken", payload, "Activity/SharingToken3");
+                resolve(amfBytes);
+            } catch (e) {
+                console.error(e);
+                resolve(null);
+            }
+        });
+    }
+
+    // دالة استبدال النصوص في الـ AMF مأخوذة من نظام الآلات الخاص بك
+    replaceAmfString(buffer, key, newValue) {
+        const textDecoder = new TextDecoder('utf-8');
+        const textEncoder = new TextEncoder();
+        
+        let hexString = Array.from(new Uint8Array(buffer)).map(b => b.toString(16).padStart(2, '0')).join('');
+        const keyHex = Array.from(textEncoder.encode(key)).map(b => b.toString(16).padStart(2, '0')).join('');
+        
+        let regex = new RegExp(`06([0-9a-f]{2,4})${keyHex}06([0-9a-f]{2,4})([0-9a-f]+?)(?=06|03|00)`, 'i');
+        let match = hexString.match(regex);
+        
+        if (match) {
+            const oldLenHex = match[2];
+            const oldValHex = match[3];
+            
+            const newValBytes = textEncoder.encode(newValue);
+            const newValHex = Array.from(newValBytes).map(b => b.toString(16).padStart(2, '0')).join('');
+            
+            let newLenStr = ((newValBytes.length << 1) | 1).toString(16).padStart(oldLenHex.length, '0');
+            
+            const fullOldStr = match[0];
+            const fullNewStr = `06${match[1]}${keyHex}06${newLenStr}${newValHex}`;
+            
+            hexString = hexString.replace(fullOldStr, fullNewStr);
+        }
+        
+        const newBytes = new Uint8Array(hexString.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
+        return newBytes.buffer;
+    }
+};
+
+SF.modules.register(new SF.SandboxEventHelper());
 
 
 // --- System Initialization ---
