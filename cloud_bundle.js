@@ -1,6 +1,6 @@
 // ===================================================================
 // SupremeFarm Modular - Cloud Distribution Bundle
-// Generated at: 2026-07-26T00:31:14.318Z
+// Generated at: 2026-07-26T00:33:44.158Z
 // ===================================================================
 
 // --- File: core/EventBus.js ---
@@ -4733,9 +4733,9 @@ SF.IslandPointBuyerModule = class IslandPointBuyerModule extends SF.ModuleBase {
 
     logMsg(msg) {
         if (!this.logEl) return;
-        this.logEl.innerHTML += \`<div>[\${new Date().toLocaleTimeString('en-US', {hour12:false})}] \${msg}</div>\`;
+        this.logEl.innerHTML += `<div>[${new Date().toLocaleTimeString('en-US', {hour12:false})}] ${msg}</div>`;
         this.logEl.scrollTop = this.logEl.scrollHeight;
-        console.log(\`[SF-IslandBuyer] \${msg}\`);
+        console.log(`[SF-IslandBuyer] ${msg}`);
     }
 
     scanTokens() {
@@ -4797,7 +4797,7 @@ SF.IslandPointBuyerModule = class IslandPointBuyerModule extends SF.ModuleBase {
         }
         
         this.updateDropdown();
-        this.logMsg(\`🟢 تم فحص الذاكرة. وُجدت \${this.discoveredTokens.length} مهام.\`);
+        this.logMsg(`🟢 تم فحص الذاكرة. وُجدت ${this.discoveredTokens.length} مهام.`);
     }
 
     updateDropdown() {
@@ -4812,7 +4812,7 @@ SF.IslandPointBuyerModule = class IslandPointBuyerModule extends SF.ModuleBase {
         this.discoveredTokens.forEach(t => {
             const opt = document.createElement('option');
             opt.value = t.id;
-            opt.innerText = \`[\${t.id}] \${t.name}\`;
+            opt.innerText = `[${t.id}] ${t.name}`;
             this.selectEl.appendChild(opt);
         });
         
@@ -4848,8 +4848,8 @@ SF.IslandPointBuyerModule = class IslandPointBuyerModule extends SF.ModuleBase {
             else if (selectedTokenObj.name === 'تصريح المعركة') dynamicNeedResponse = "/Activity/BattlePass"; 
         }
 
-        this.logMsg(\`بدء محاولة شراء \${amount} وحدة من [\${targetId}]\`);
-        this.logMsg(\`[DEBUG] مسار السيرفر: \${dynamicNeedResponse}\`);
+        this.logMsg(`بدء محاولة شراء ${amount} وحدة من [${targetId}]`);
+        this.logMsg(`[DEBUG] مسار السيرفر: ${dynamicNeedResponse}`);
 
         const uw = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
         let successCount = 0;
@@ -4869,12 +4869,12 @@ SF.IslandPointBuyerModule = class IslandPointBuyerModule extends SF.ModuleBase {
                     cur_sceneid: (uw.GF && uw.GF.loginModel && uw.GF.loginModel.AppData) ? (uw.GF.loginModel.AppData.cur_sceneid || 1) : 1
                 };
 
-                this.logMsg(\`إرسال الدفعة \${i + 1} / \${amount}...\`);
+                this.logMsg(`إرسال الدفعة ${i + 1} / ${amount}...`);
                 
                 if (uw.NetUtils && uw.NetUtils.enqueue) {
                     uw.NetUtils.enqueue("spend_rp", payload);
                 } else {
-                    this.logMsg(\`❌ تعذر العثور على محرك الشبكة.\`);
+                    this.logMsg(`❌ تعذر العثور على محرك الشبكة.`);
                     break;
                 }
                 
@@ -4884,12 +4884,12 @@ SF.IslandPointBuyerModule = class IslandPointBuyerModule extends SF.ModuleBase {
                 await new Promise(r => setTimeout(r, jitter));
                 
             } catch (error) {
-                this.logMsg(\`❌ خطأ: \${error.message}\`);
+                this.logMsg(`❌ خطأ: ${error.message}`);
                 break;
             }
         }
 
-        this.logMsg(\`✅ اكتمل. تم إرسال \${successCount} طلبات.\`);
+        this.logMsg(`✅ اكتمل. تم إرسال ${successCount} طلبات.`);
         this.isRunning = false;
         this.btnBuy.disabled = false;
         this.btnBuy.innerText = '🚀 بدء الشراء';
