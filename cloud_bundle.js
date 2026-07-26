@@ -1,6 +1,6 @@
 // ===================================================================
 // SupremeFarm Modular - Cloud Distribution Bundle
-// Generated at: 2026-07-26T22:50:28.533Z
+// Generated at: 2026-07-26T23:05:16.284Z
 // ===================================================================
 
 // --- File: core/EventBus.js ---
@@ -4903,25 +4903,32 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
                         let found = false;
                         let product = null;
                         let msg = null;
+                        let totalAdded = 0;
+                        let usedUpFound = false;
 
                         for (let obj of updates) {
                             if (obj && obj.needResponse && obj.needResponse.data) {
                                 const ch = obj.needResponse.channel;
                                 if (ch === "friend_collect" || ch === "friend_collect_trees") {
                                     found = true;
-                                    if (obj.needResponse.data.msg === "ok") {
-                                        product = obj.needResponse.data.product; 
-                                        msg = obj.needResponse.data.msg; 
-                                    } else {
-                                        msg = obj.needResponse.data.msg || obj.needResponse.data.error;
+                                    const rData = obj.needResponse.data;
+                                    
+                                    if (rData.msg === "ok" && rData.product) {
+                                        product = rData.product;
+                                        totalAdded += (rData.product_num || 1);
+                                        msg = "ok";
+                                    } else if (rData.msg === "used up") {
+                                        usedUpFound = true;
+                                    } else if (!msg) {
+                                        msg = rData.msg || rData.error;
                                     }
-                                    break;
                                 }
                             }
                         }
 
                         if (found && self.activeCallback) {
-                            self.activeCallback({ product, msg });
+                            if (usedUpFound) msg = "used up";
+                            self.activeCallback({ product, msg, totalAdded });
                             self.activeCallback = null;
                         }
                     }
@@ -5225,6 +5232,8 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
             while (this.isRunning && neighborHasEnergy && this.totalHarvested < this.targetLimit) {
                 const harvestPayload = { friend_id: friendId, itemid: itemId };
 
+                let batchSize = Math.min(5, this.targetLimit - this.totalHarvested);
+
                 let harvestPromise = new Promise((resolve) => {
                     this.activeCallback = resolve;
                     setTimeout(() => {
@@ -5235,7 +5244,9 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
                     }, 5000);
                 });
 
-                gw.NetUtils.enqueue(harvestCmd, harvestPayload);
+                for (let b = 0; b < batchSize; b++) {
+                    gw.NetUtils.enqueue(harvestCmd, harvestPayload);
+                }
                 if (gw.NetUtils.flush) gw.NetUtils.flush();
 
                 const res = await harvestPromise;
@@ -5245,45 +5256,45 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
                 if (!res) {
                     this.log(`⚠️ مهلة الاتصال انتهت مع الجار [${friendId}]. نتخطى...`);
                     neighborHasEnergy = false;
-                } else if (res.msg === "ok" && res.product) {
-                    const actualProductId = res.product;
-                    const actualAmount = res.product_num || 1;
-                    
-                    this.totalHarvested += actualAmount;
-                    this.log(`✅ رائع! تم حصد ثمرة (كود ${actualProductId}) كمية ${actualAmount}. المجموع: (${this.totalHarvested}/${this.targetLimit})`);
-                    updateStatsUI();
+                } else {
+                    if (res.totalAdded > 0) {
+                        this.totalHarvested += res.totalAdded;
+                        this.log(`✅ ضربة كومبو! تم حصد ${res.totalAdded} ثمرة (كود ${res.product}) دفعة واحدة! المجموع: (${this.totalHarvested}/${this.targetLimit})`);
+                        updateStatsUI();
 
-                    if (gw.GF && gw.GF.loginModel) {
-                        gw.GF.loginModel.addStorage(actualProductId, actualAmount);
+                        if (gw.GF && gw.GF.loginModel) {
+                            gw.GF.loginModel.addStorage(res.product, res.totalAdded);
+                        }
+
+                        try {
+                            if (gw.GF && gw.GF.gameController && gw.Animations) {
+                                gw.GF.gameController.collectTopTip(res.product, res.totalAdded);
+                                let startRect = gw.egret.Rectangle.create();
+                                startRect.x = window.innerWidth / 2;
+                                startRect.y = window.innerHeight / 2;
+                                startRect.width = 75;
+                                startRect.height = 75;
+                                let endPoint = gw.egret.Point.create(100, window.innerHeight - 100); 
+                                if (gw.GF.gameController.operArea && gw.GF.gameController.operArea.btnWarehouse) {
+                                    gw.GF.gameController.operArea.btnWarehouse.localToGlobal(0, 0, endPoint);
+                                }
+                                gw.Animations.flyItemTo(res.product, startRect, endPoint);
+                            }
+                        } catch(e) {}
                     }
 
-                    try {
-                        if (gw.GF && gw.GF.gameController && gw.Animations) {
-                            gw.GF.gameController.collectTopTip(actualProductId, 1);
-                            let startRect = gw.egret.Rectangle.create();
-                            startRect.x = window.innerWidth / 2;
-                            startRect.y = window.innerHeight / 2;
-                            startRect.width = 75;
-                            startRect.height = 75;
-                            let endPoint = gw.egret.Point.create(100, window.innerHeight - 100); 
-                            if (gw.GF.gameController.operArea && gw.GF.gameController.operArea.btnWarehouse) {
-                                gw.GF.gameController.operArea.btnWarehouse.localToGlobal(0, 0, endPoint);
-                            }
-                            gw.Animations.flyItemTo(actualProductId, startRect, endPoint);
-                        }
-                    } catch(e) {}
-
-                } else if (res.msg === "used up") {
-                    this.log(`⛔ الجار [${friendId}] استنفد طاقته.`);
-                    this.blacklist[friendId] = true;
-                    this.saveBlacklist();
-                    this.update(); 
-                    updateStatsUI();
-                    neighborHasEnergy = false;
-                } else {
-                    this.log(`⚠️ الجار لا يملك المحصول أو استنفد. نعيد المحاولة...`);
-                    // ⚠️ DO NOT set neighborHasEnergy = false!
-                    // This matches the old code: keep hitting the neighbor until their energy is "used up".
+                    if (res.msg === "used up") {
+                        this.log(`⛔ الجار [${friendId}] استنفد طاقته.`);
+                        this.blacklist[friendId] = true;
+                        this.saveBlacklist();
+                        this.update(); 
+                        updateStatsUI();
+                        neighborHasEnergy = false;
+                    } else if (res.totalAdded === 0) {
+                        this.log(`⚠️ الجار لا يملك المحصول أو استنفد. نعيد المحاولة...`);
+                        // ⚠️ DO NOT set neighborHasEnergy = false!
+                        // This matches the old code: keep hitting the neighbor until their energy is "used up".
+                    }
                 }
 
                 if (this.isRunning) {
