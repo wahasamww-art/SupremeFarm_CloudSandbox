@@ -1,6 +1,6 @@
 // ===================================================================
 // SupremeFarm Modular - Cloud Distribution Bundle
-// Generated at: 2026-07-26T18:10:05.914Z
+// Generated at: 2026-07-26T18:15:49.504Z
 // ===================================================================
 
 // --- File: core/EventBus.js ---
@@ -4831,6 +4831,7 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
         
         // HUD Overlay element
         this.hudElement = null;
+        this.allItems = [];
     }
 
     clearBlacklistIfNeeded() {
@@ -4853,6 +4854,29 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
 
     saveBlacklist() {
         localStorage.setItem('sf_mega_harvest_blacklist', JSON.stringify(this.blacklist));
+    }
+
+    getStore() {
+        if (window.Config && window.Config.Store) return window.Config.Store;
+        if (window.GF && window.GF.Config && window.GF.Config.Store) return window.GF.Config.Store;
+        return null;
+    }
+
+    getHarvestableItems() {
+        const store = this.getStore();
+        const items = [];
+        if (!store) {
+            this.log("⚠️ المتجر غير محمل بعد. لا يمكن استخراج المحاصيل.");
+            return items;
+        }
+
+        for (let key in store) {
+            const item = store[key];
+            if (item && (item.type === "seeds" || item.type === "trees")) {
+                items.push({ id: item.id, name: item.name || `Item ${item.id}`, type: item.type });
+            }
+        }
+        return items;
     }
 
     render() {
@@ -4879,7 +4903,7 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
                 .sf-harvest-input-group {
                     display: flex;
                     align-items: center;
-                    margin-bottom: 15px;
+                    margin-bottom: 10px;
                     background: rgba(0,0,0,0.3);
                     border-radius: 6px;
                     padding: 8px;
@@ -4890,16 +4914,23 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
                     font-size: 13px;
                     color: #c8d6e5;
                 }
-                .sf-harvest-input-group input {
-                    width: 80px;
+                .sf-harvest-input-group input, .sf-harvest-input-group select {
                     background: rgba(0,0,0,0.5);
                     border: 1px solid rgba(255,255,255,0.2);
                     color: #10ac84;
                     padding: 5px;
                     border-radius: 4px;
-                    text-align: center;
-                    font-weight: bold;
                     outline: none;
+                }
+                .sf-harvest-input-group input[type="text"] {
+                    width: 100%;
+                    color: #fff;
+                    margin-bottom: 5px;
+                }
+                .sf-harvest-input-group select {
+                    width: 100%;
+                    color: #fff;
+                    margin-bottom: 10px;
                 }
                 .sf-harvest-log {
                     margin-top: 10px;
@@ -4917,17 +4948,22 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
             </style>
             
             <div class="sf-card">
-                <p style="color: var(--sf-text-muted); font-size: 13px; margin-bottom: 15px; text-align: center;">
-                    قم بتحديد الثمرة المراد حصادها أولاً (بضغطة واحدة على مزرعة الجار)، ثم حدد العدد واضغط ابدأ.
+                <p style="color: var(--sf-text-muted); font-size: 12px; margin-bottom: 15px; text-align: center;">
+                    ابحث عن المحصول واختره من القائمة لتفعيل الحصاد السريع له.
                 </p>
                 
+                <div style="background: rgba(0,0,0,0.3); padding: 8px; border-radius: 6px; margin-bottom: 10px;">
+                    <input type="text" id="sf-harvest-search" placeholder="🔍 ابحث عن اسم أو كود المحصول/الشجرة..." style="width: 100%; padding: 5px; background: rgba(0,0,0,0.5); border: 1px solid #00d2d3; color: #fff; border-radius: 4px; outline: none; margin-bottom: 5px;">
+                    <select id="sf-harvest-results" size="4" style="width: 100%; padding: 5px; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.2); color: #fff; border-radius: 4px; outline: none;"></select>
+                </div>
+
                 <div class="sf-harvest-input-group">
                     <label>العدد المطلوب:</label>
-                    <input type="number" id="sf-harvest-target" value="1000" min="1">
+                    <input type="number" id="sf-harvest-target" value="1000" min="1" style="width: 80px; text-align: center; font-weight: bold;">
                 </div>
 
                 <button id="sf-harvest-btn-start" class="sf-harvest-btn sf-harvest-btn-start">🚀 بدء الحصاد الصاروخي</button>
-                <button id="sf-harvest-btn-stop" class="sf-harvest-btn sf-harvest-btn-stop">🛑 إيقاف الحصاد</button>
+                <button id="sf-harvest-btn-stop" class="sf-harvest-btn sf-harvest-btn-stop">🛑 إيقاف الحصاد فوراً</button>
                 <button id="sf-harvest-btn-clear" class="sf-harvest-btn sf-harvest-btn-clear">🗑️ مسح القائمة السوداء (${Object.keys(this.blacklist).length})</button>
 
                 <div id="sf-harvest-log" class="sf-harvest-log">في انتظار التعليمات...</div>
@@ -4936,6 +4972,8 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
     }
 
     bindEvents() {
+        const searchInput = this.container.querySelector('#sf-harvest-search');
+        const resultsSelect = this.container.querySelector('#sf-harvest-results');
         const btnStart = this.container.querySelector('#sf-harvest-btn-start');
         const btnStop = this.container.querySelector('#sf-harvest-btn-stop');
         const btnClear = this.container.querySelector('#sf-harvest-btn-clear');
@@ -4947,18 +4985,54 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
         this.btnStop = btnStop;
         this.btnClear = btnClear;
         this.inputTarget = inputTarget;
+        this.resultsSelect = resultsSelect;
+
+        const lazyLoadData = () => {
+            if (this.allItems.length === 0) {
+                this.allItems = this.getHarvestableItems();
+                if (this.allItems.length > 0) {
+                    this.log(`تم تحميل ${this.allItems.length} محصول بنجاح.`);
+                }
+            }
+        };
+
+        searchInput.addEventListener("focus", lazyLoadData);
+
+        searchInput.addEventListener("input", (e) => {
+            const query = e.target.value.trim().toLowerCase();
+            resultsSelect.innerHTML = "";
+            if (!query) return;
+
+            const filtered = this.allItems.filter(item => item.name.toLowerCase().includes(query) || String(item.id).includes(query));
+            
+            filtered.slice(0, 50).forEach(item => {
+                const opt = document.createElement("option");
+                opt.value = JSON.stringify(item);
+                opt.innerText = `[${item.id}] ${item.name} (${item.type === 'trees' ? 'شجرة' : 'محصول'})`;
+                resultsSelect.appendChild(opt);
+            });
+        });
 
         btnStart.addEventListener('click', () => {
-            let limit = parseInt(inputTarget.value);
-            if (isNaN(limit) || limit <= 0) {
-                this.log("الرجاء إدخال عدد صحيح صالح.");
+            const selectedOpt = resultsSelect.options[resultsSelect.selectedIndex];
+            if (!selectedOpt) {
+                this.log("⚠️ الرجاء البحث وتحديد المحصول من القائمة أولاً.");
                 return;
             }
+
+            let limit = parseInt(inputTarget.value);
+            if (isNaN(limit) || limit <= 0) {
+                this.log("⚠️ الرجاء إدخال عدد صحيح صالح.");
+                return;
+            }
+
+            const item = JSON.parse(selectedOpt.value);
             this.targetLimit = limit;
-            this.startHarvest();
+            this.startHarvest(item.id, item.type);
         });
 
         btnStop.addEventListener('click', () => {
+            this.log("🛑 جاري الإيقاف الفوري...");
             this.stopHarvest();
         });
 
@@ -4966,7 +5040,7 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
             this.blacklist = {};
             this.saveBlacklist();
             btnClear.textContent = `🗑️ مسح القائمة السوداء (0)`;
-            this.log("تم مسح القائمة السوداء بنجاح!");
+            this.log("✅ تم مسح القائمة السوداء بنجاح!");
         });
     }
 
@@ -5063,16 +5137,9 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
         }
     }
 
-    async startHarvest() {
+    async startHarvest(itemId, itemType) {
         if (!window.GF || !window.GF.loginModel) {
             this.log("⚠️ اللعبة لم تحمل بالكامل.");
-            return;
-        }
-
-        // Validate selected plant
-        const currentPlant = window.GF.gameController.getCurrPlant();
-        if (!currentPlant) {
-            this.log("⚠️ قم بالضغط على ثمرة واحدة في مزرعة الجار لتحديد نوع المحصول أولاً!");
             return;
         }
 
@@ -5088,32 +5155,26 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
         if(this.btnStart) this.btnStart.style.display = 'none';
         if(this.btnStop) this.btnStop.style.display = 'block';
 
-        this.log(`🔥 انطلاق الحصاد الصاروخي! الهدف: ${this.targetLimit}`);
+        this.log(`🔥 انطلاق الحصاد الصاروخي لمحصول [${itemId}]! الهدف: ${this.targetLimit}`);
         this.showProgressOverlay(0, this.targetLimit);
 
-        while (this.isRunning && this.totalHarvested < this.targetLimit) {
-            const friendsList = window.GF.loginModel.AppData.friends;
-            let targetFriend = null;
+        const harvestCmd = (itemType === "trees") ? "friend_collect_trees" : "friend_collect";
+        const friendsList = window.GF.loginModel.AppData.friends;
 
-            for (let f of friendsList) {
-                if (!this.blacklist[f.id]) {
-                    targetFriend = f;
-                    break;
-                }
-            }
+        for (let i = 0; i < friendsList.length; i++) {
+            if (!this.isRunning || this.totalHarvested >= this.targetLimit) break; // Check immediately!
 
-            if (!targetFriend) {
-                this.log("❌ جميع الجيران في القائمة السوداء (استنفدت طاقتهم). اكتمل العمل لليوم!");
-                this.stopHarvest();
-                break;
-            }
+            let targetFriend = friendsList[i];
+            if (this.blacklist[targetFriend.id]) continue; // Skip blacklisted
 
             const friendId = targetFriend.id;
             let neighborHasEnergy = true;
 
             while (this.isRunning && neighborHasEnergy && this.totalHarvested < this.targetLimit) {
                 // Simulate controller apply to trick anti-cheat
-                window.App.ControllerManager.applyFunc(window.ControllerConst.Game, window.GameConst.HARVEST_PLANT_BY_FRIENDS);
+                try {
+                    window.App.ControllerManager.applyFunc(window.ControllerConst.Game, window.GameConst.HARVEST_PLANT_BY_FRIENDS);
+                } catch(e) {}
 
                 let payload = this.buildPayload(friendId);
                 if (!payload) {
@@ -5123,14 +5184,20 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
                 }
 
                 try {
-                    let res = await new Promise((resolve, reject) => {
-                        window.NetUtils.enqueue("friend_collect", payload, function(response) {
-                            resolve(response);
-                        }, this);
-                    });
+                    // Fast Promise with timeout so it doesn't hang if user stops
+                    let res = await Promise.race([
+                        new Promise((resolve) => {
+                            window.NetUtils.enqueue(harvestCmd, payload, function(response) {
+                                resolve(response);
+                            }, this);
+                        }),
+                        new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 5000))
+                    ]);
+
+                    if (!this.isRunning) break; // Exit immediately if stopped during request
 
                     if (res && res.error) {
-                        this.log(`⚠️ خطأ من السيرفر: ${res.error}. نتخطى الجار مؤقتاً...`);
+                        this.log(`⚠️ خطأ من السيرفر: ${res.error}. نتخطى الجار...`);
                         neighborHasEnergy = false;
                     } else if (res && res.msg === "ok" && res.product) {
                         const actualProductId = res.product;
@@ -5162,13 +5229,14 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
                         } catch(e) {}
 
                     } else if (res && res.msg === "used up") {
-                        this.log(`⛔ الجار [${friendId}] استنفد طاقته. تم إدراجه في القائمة السوداء.`);
+                        this.log(`⛔ الجار [${friendId}] استنفد طاقته.`);
                         this.blacklist[friendId] = true;
                         this.saveBlacklist();
                         this.update(); // Update clear button count
                         neighborHasEnergy = false;
                     } else {
-                        this.log(`⚠️ استجابة غير معروفة. نتخطى الجار...`);
+                        // Sometimes the server sends empty response if no crops available
+                        this.log(`⚠️ لم نجد شيء. نتخطى الجار...`);
                         neighborHasEnergy = false;
                     }
 
@@ -5177,9 +5245,11 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
                     }
 
                 } catch (err) {
-                    this.log(`⚠️ خطأ شبكي: ${err.message}. نتخطى الجار...`);
-                    neighborHasEnergy = false;
-                    await this.sleep(1000);
+                    if (this.isRunning) {
+                        this.log(`⚠️ خطأ: ${err.message}. نتخطى الجار...`);
+                        neighborHasEnergy = false;
+                        await this.sleep(500);
+                    }
                 }
             }
         }
@@ -5188,18 +5258,19 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
             this.log(`✅ تمت المهمة بنجاح! تم حصد ${this.totalHarvested} ثمرة.`);
             setTimeout(() => this.hideProgressOverlay(), 3000); // Hide after 3 seconds on success
         } else {
-            this.hideProgressOverlay(); // Hide immediately if manually stopped
+            this.hideProgressOverlay(); // Hide immediately if stopped early
         }
 
-        this.stopHarvest();
+        this.stopHarvest(); // Reset UI state
     }
 
     stopHarvest() {
-        this.isRunning = false;
+        this.isRunning = false; // This instantly kills the loop
         if(this.btnStart) this.btnStart.style.display = 'block';
         if(this.btnStop) this.btnStop.style.display = 'none';
         if (this.totalHarvested < this.targetLimit) {
             this.hideProgressOverlay();
+            this.log("🛑 تم إيقاف الحصاد يدوياً.");
         }
     }
 };
