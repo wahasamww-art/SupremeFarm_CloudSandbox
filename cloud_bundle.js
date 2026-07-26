@@ -1,6 +1,6 @@
 // ===================================================================
 // SupremeFarm Modular - Cloud Distribution Bundle
-// Generated at: 2026-07-26T23:05:16.284Z
+// Generated at: 2026-07-26T23:22:47.912Z
 // ===================================================================
 
 // --- File: core/EventBus.js ---
@@ -5006,8 +5006,16 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
                 </div>
 
                 <div class="sf-harvest-input-group">
+                    <label>الوضع:</label>
+                    <select id="sf-harvest-mode" style="width: 140px; margin-bottom: 0;">
+                        <option value="harvest">حصاد (تجميع ثمار)</option>
+                        <option value="fertilize">تسميد / ساقية (مساعدة)</option>
+                    </select>
+                </div>
+
+                <div class="sf-harvest-input-group">
                     <label>العدد المطلوب:</label>
-                    <input type="number" id="sf-harvest-target" value="1000" min="1" style="width: 80px; text-align: center; font-weight: bold;">
+                    <input type="number" id="sf-harvest-target" placeholder="عدد الثمار..." min="1" style="width: 140px; text-align: center; font-weight: bold;">
                 </div>
 
                 <button id="sf-harvest-btn-start" class="sf-harvest-btn sf-harvest-btn-start">🚀 بدء الحصاد الصاروخي</button>
@@ -5024,6 +5032,7 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
         const btnStop = this.container.querySelector('#sf-harvest-btn-stop');
         const btnClear = this.container.querySelector('#sf-harvest-btn-clear');
         const inputTarget = this.container.querySelector('#sf-harvest-target');
+        const modeSelect = this.container.querySelector('#sf-harvest-mode');
 
         this.btnStart = btnStart;
         this.btnStop = btnStop;
@@ -5039,6 +5048,14 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
                 }
             }
         };
+
+        modeSelect.addEventListener('change', () => {
+            if (modeSelect.value === 'harvest') {
+                inputTarget.placeholder = "عدد الثمار...";
+            } else {
+                inputTarget.placeholder = "عدد الجيران...";
+            }
+        });
 
         searchInput.addEventListener("focus", lazyLoadData);
 
@@ -5086,6 +5103,7 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
             }
 
             const item = JSON.parse(selectedOpt.value);
+            this.currentMode = modeSelect.value;
             this.targetLimit = limit;
             this.startHarvest(item.id, item.type);
         });
@@ -5149,9 +5167,11 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
             document.body.appendChild(this.hudElement);
         }
 
+        const actionText = (this.currentMode === "fertilize") ? "تم مساعدة:" : "تم حصد:";
+
         this.hudElement.innerHTML = `
             <div style="font-size: 22px; font-weight: bold; margin-bottom: 5px;">
-                <span style="color: #00d2d3;">تم حصد:</span> 
+                <span style="color: #00d2d3;">${actionText}</span> 
                 <span style="color: #feca57; font-size: 28px;">${current}</span> / <span style="color: #c8d6e5;">${target}</span>
             </div>
             <div style="display: flex; gap: 20px; font-size: 14px; font-weight: bold; background: rgba(0,0,0,0.4); padding: 8px 15px; border-radius: 8px; flex-direction: row-reverse;">
@@ -5192,9 +5212,14 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
         if(this.btnStart) this.btnStart.style.display = 'none';
         if(this.btnStop) this.btnStop.style.display = 'block';
 
-        this.log(`🔥 انطلاق الحصاد الصاروخي لمحصول [${itemId}]! الهدف: ${this.targetLimit}`);
+        const isFertilize = (this.currentMode === "fertilize");
+        const modeName = isFertilize ? "التسميد/الساقية" : "الحصاد";
+        const targetName = isFertilize ? "جار" : "ثمرة";
+
+        this.log(`🔥 انطلاق وضع [${modeName}] لمحصول [${itemId}]! الهدف: ${this.targetLimit} ${targetName}`);
 
         const harvestCmd = (itemType === "trees") ? "friend_collect_trees" : "friend_collect";
+        const fertCmd = (itemType === "trees") ? "friend_water" : "friend_fertilize";
         
         let friendsList = [];
         if (gw.GF.friendsModel && gw.GF.friendsModel.allNeighbors) {
@@ -5230,9 +5255,23 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
             let neighborHasEnergy = true;
 
             while (this.isRunning && neighborHasEnergy && this.totalHarvested < this.targetLimit) {
+                
+                if (this.currentMode === "fertilize") {
+                    const fertPayload = { friend_id: friendId, plant_x: 0, plant_y: 0, plant_id: itemId };
+                    gw.NetUtils.enqueue(fertCmd, fertPayload);
+                    if (gw.NetUtils.flush) gw.NetUtils.flush();
+                    
+                    await this.sleep(600);
+                    
+                    this.totalHarvested += 1;
+                    this.log(`💧 تم تقديم مساعدة للجار [${friendId}]. المجموع: (${this.totalHarvested}/${this.targetLimit})`);
+                    updateStatsUI();
+                    break;
+                }
+
                 const harvestPayload = { friend_id: friendId, itemid: itemId };
 
-                let batchSize = Math.min(5, this.targetLimit - this.totalHarvested);
+                let batchSize = Math.min(6, this.targetLimit - this.totalHarvested);
 
                 let harvestPromise = new Promise((resolve) => {
                     this.activeCallback = resolve;
