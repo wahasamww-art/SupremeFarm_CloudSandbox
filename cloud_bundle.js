@@ -1,6 +1,6 @@
 // ===================================================================
 // SupremeFarm Modular - Cloud Distribution Bundle
-// Generated at: 2026-07-26T18:36:53.703Z
+// Generated at: 2026-07-26T22:50:28.533Z
 // ===================================================================
 
 // --- File: core/EventBus.js ---
@@ -4986,19 +4986,6 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
                     color: #fff;
                     margin-bottom: 10px;
                 }
-                .sf-harvest-log {
-                    margin-top: 10px;
-                    padding: 8px;
-                    background: rgba(0,0,0,0.4);
-                    border-radius: 5px;
-                    border: 1px solid rgba(255,255,255,0.1);
-                    font-size: 11px;
-                    color: #a4b0be;
-                    text-align: right;
-                    min-height: 40px;
-                    max-height: 80px;
-                    overflow-y: auto;
-                }
             </style>
             
             <div class="sf-card">
@@ -5008,7 +4995,7 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
                 
                 <div style="background: rgba(0,0,0,0.3); padding: 8px; border-radius: 6px; margin-bottom: 10px;">
                     <input type="text" id="sf-harvest-search" placeholder="🔍 ابحث عن اسم أو كود المحصول/الشجرة..." style="width: 100%; padding: 5px; background: rgba(0,0,0,0.5); border: 1px solid #00d2d3; color: #fff; border-radius: 4px; outline: none; margin-bottom: 5px;">
-                    <select id="sf-harvest-results" size="4" style="width: 100%; padding: 5px; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.2); color: #fff; border-radius: 4px; outline: none;"></select>
+                    <select id="sf-harvest-results" size="8" style="width: 100%; padding: 5px; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.2); color: #fff; border-radius: 4px; outline: none;"></select>
                 </div>
 
                 <div class="sf-harvest-input-group">
@@ -5019,8 +5006,6 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
                 <button id="sf-harvest-btn-start" class="sf-harvest-btn sf-harvest-btn-start">🚀 بدء الحصاد الصاروخي</button>
                 <button id="sf-harvest-btn-stop" class="sf-harvest-btn sf-harvest-btn-stop">🛑 إيقاف الحصاد فوراً</button>
                 <button id="sf-harvest-btn-clear" class="sf-harvest-btn sf-harvest-btn-clear">🗑️ مسح القائمة السوداء (${Object.keys(this.blacklist).length})</button>
-
-                <div id="sf-harvest-log" class="sf-harvest-log">في انتظار التعليمات...</div>
             </div>
         `;
     }
@@ -5032,9 +5017,7 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
         const btnStop = this.container.querySelector('#sf-harvest-btn-stop');
         const btnClear = this.container.querySelector('#sf-harvest-btn-clear');
         const inputTarget = this.container.querySelector('#sf-harvest-target');
-        const logArea = this.container.querySelector('#sf-harvest-log');
 
-        this.logArea = logArea;
         this.btnStart = btnStart;
         this.btnStop = btnStop;
         this.btnClear = btnClear;
@@ -5055,7 +5038,10 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
         searchInput.addEventListener("input", (e) => {
             const query = e.target.value.trim().toLowerCase();
             resultsSelect.innerHTML = "";
-            if (!query) return;
+            if (!query) {
+                resultsSelect.size = 8;
+                return;
+            }
 
             const filtered = this.allItems.filter(item => item.name.toLowerCase().includes(query) || String(item.id).includes(query));
             
@@ -5065,18 +5051,30 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
                 opt.innerText = `[${item.id}] ${item.name} (${item.type === 'trees' ? 'شجرة' : 'محصول'})`;
                 resultsSelect.appendChild(opt);
             });
+            resultsSelect.size = Math.min(8, Math.max(2, filtered.length));
+        });
+
+        resultsSelect.addEventListener("change", (e) => {
+            const selectedOpt = resultsSelect.options[resultsSelect.selectedIndex];
+            if (selectedOpt) {
+                const item = JSON.parse(selectedOpt.value);
+                searchInput.value = item.name;
+                resultsSelect.innerHTML = "";
+                resultsSelect.appendChild(selectedOpt);
+                resultsSelect.size = 2; // Shrink to look neat
+            }
         });
 
         btnStart.addEventListener('click', () => {
             const selectedOpt = resultsSelect.options[resultsSelect.selectedIndex];
             if (!selectedOpt) {
-                this.log("⚠️ الرجاء البحث وتحديد المحصول من القائمة أولاً.");
+                alert("⚠️ الرجاء البحث وتحديد المحصول من القائمة أولاً.");
                 return;
             }
 
             let limit = parseInt(inputTarget.value);
             if (isNaN(limit) || limit <= 0) {
-                this.log("⚠️ الرجاء إدخال عدد صحيح صالح.");
+                alert("⚠️ الرجاء إدخال عدد صحيح صالح.");
                 return;
             }
 
@@ -5094,7 +5092,7 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
             this.blacklist = {};
             this.saveBlacklist();
             btnClear.textContent = `🗑️ مسح القائمة السوداء (0)`;
-            this.log("✅ تم مسح القائمة السوداء بنجاح!");
+            alert("✅ تم مسح القائمة السوداء بنجاح!");
         });
     }
 
@@ -5105,9 +5103,7 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
     }
 
     log(msg) {
-        if (this.logArea) {
-            this.logArea.innerHTML = `<div>${msg}</div>` + this.logArea.innerHTML;
-        }
+        console.log(`[AutoMegaHarvest] ${msg}`);
     }
 
     sleep(ms) {
@@ -5118,43 +5114,54 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
         return Math.floor(Math.random() * (this.JitterMax - this.JitterMin + 1)) + this.JitterMin;
     }
 
-    showProgressOverlay(current, target) {
+    showProgressOverlay(current, target, stats = { total: 0, depleted: 0, active: 0 }) {
         if (!this.hudElement) {
             this.hudElement = document.createElement('div');
             this.hudElement.id = 'sf-harvest-hud';
             Object.assign(this.hudElement.style, {
                 position: 'fixed',
-                bottom: '100px',
+                bottom: '80px',
                 left: '50%',
                 transform: 'translateX(-50%)',
-                background: 'rgba(0, 0, 0, 0.75)',
-                backdropFilter: 'blur(10px)',
+                background: 'rgba(15, 23, 42, 0.9)',
+                backdropFilter: 'blur(12px)',
                 color: '#fff',
-                padding: '10px 25px',
-                borderRadius: '30px',
+                padding: '15px 30px',
+                borderRadius: '16px',
                 fontFamily: 'Tajawal, sans-serif',
-                fontSize: '22px',
-                fontWeight: 'bold',
                 zIndex: '9999',
                 display: 'flex',
+                flexDirection: 'column',
                 alignItems: 'center',
-                gap: '15px',
-                boxShadow: '0 10px 25px rgba(0,0,0,0.5)',
-                border: '2px solid rgba(0, 210, 211, 0.4)',
-                pointerEvents: 'none'
+                gap: '10px',
+                boxShadow: '0 10px 30px rgba(0,0,0,0.6)',
+                border: '1px solid rgba(0, 210, 211, 0.5)',
+                pointerEvents: 'none',
+                minWidth: '320px'
             });
-
-            const countText = document.createElement('div');
-            countText.id = 'sf-harvest-hud-text';
-            
-            this.hudElement.appendChild(countText);
             document.body.appendChild(this.hudElement);
         }
 
-        const textEl = this.hudElement.querySelector('#sf-harvest-hud-text');
-        if (textEl) {
-            textEl.innerHTML = `<span style="color: #00d2d3;">تم حصد:</span> <span style="color: #feca57; font-size: 26px;">${current}</span> / <span style="color: #c8d6e5;">${target}</span>`;
-        }
+        this.hudElement.innerHTML = `
+            <div style="font-size: 22px; font-weight: bold; margin-bottom: 5px;">
+                <span style="color: #00d2d3;">تم حصد:</span> 
+                <span style="color: #feca57; font-size: 28px;">${current}</span> / <span style="color: #c8d6e5;">${target}</span>
+            </div>
+            <div style="display: flex; gap: 20px; font-size: 14px; font-weight: bold; background: rgba(0,0,0,0.4); padding: 8px 15px; border-radius: 8px; flex-direction: row-reverse;">
+                <div style="text-align: center;">
+                    <div style="color: #a4b0be; font-size: 11px;">كل الجيران</div>
+                    <div style="color: #48dbfb;">${stats.total}</div>
+                </div>
+                <div style="text-align: center; border-left: 1px solid rgba(255,255,255,0.1); padding-left: 15px;">
+                    <div style="color: #a4b0be; font-size: 11px;">مستنفد (محظور)</div>
+                    <div style="color: #ff6b6b;">${stats.depleted}</div>
+                </div>
+                <div style="text-align: center; border-left: 1px solid rgba(255,255,255,0.1); padding-left: 15px;">
+                    <div style="color: #a4b0be; font-size: 11px;">جاهز (نشط)</div>
+                    <div style="color: #1dd1a1;">${stats.active}</div>
+                </div>
+            </div>
+        `;
     }
 
     hideProgressOverlay() {
@@ -5179,7 +5186,6 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
         if(this.btnStop) this.btnStop.style.display = 'block';
 
         this.log(`🔥 انطلاق الحصاد الصاروخي لمحصول [${itemId}]! الهدف: ${this.targetLimit}`);
-        this.showProgressOverlay(0, this.targetLimit);
 
         const harvestCmd = (itemType === "trees") ? "friend_collect_trees" : "friend_collect";
         
@@ -5193,6 +5199,18 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
             this.stopHarvest();
             return;
         }
+
+        const updateStatsUI = () => {
+            const total = friendsList.length;
+            let depletedCount = 0;
+            friendsList.forEach(f => {
+                if (this.blacklist[f.uid]) depletedCount++;
+            });
+            const active = total - depletedCount;
+            this.showProgressOverlay(this.totalHarvested, this.targetLimit, { total, depleted: depletedCount, active });
+        };
+
+        updateStatsUI();
 
         for (let i = 0; i < friendsList.length; i++) {
             if (!this.isRunning || this.totalHarvested >= this.targetLimit) break;
@@ -5232,7 +5250,8 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
                     const actualAmount = res.product_num || 1;
                     
                     this.totalHarvested += actualAmount;
-                    this.showProgressOverlay(this.totalHarvested, this.targetLimit);
+                    this.log(`✅ رائع! تم حصد ثمرة (كود ${actualProductId}) كمية ${actualAmount}. المجموع: (${this.totalHarvested}/${this.targetLimit})`);
+                    updateStatsUI();
 
                     if (gw.GF && gw.GF.loginModel) {
                         gw.GF.loginModel.addStorage(actualProductId, actualAmount);
@@ -5259,10 +5278,12 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
                     this.blacklist[friendId] = true;
                     this.saveBlacklist();
                     this.update(); 
+                    updateStatsUI();
                     neighborHasEnergy = false;
                 } else {
-                    this.log(`⚠️ رسالة: ${res.msg}. نتخطى الجار...`);
-                    neighborHasEnergy = false;
+                    this.log(`⚠️ الجار لا يملك المحصول أو استنفد. نعيد المحاولة...`);
+                    // ⚠️ DO NOT set neighborHasEnergy = false!
+                    // This matches the old code: keep hitting the neighbor until their energy is "used up".
                 }
 
                 if (this.isRunning) {
