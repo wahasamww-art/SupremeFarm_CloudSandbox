@@ -1,6 +1,6 @@
 // ===================================================================
 // SupremeFarm Modular - Cloud Distribution Bundle
-// Generated at: 2026-07-26T18:15:49.504Z
+// Generated at: 2026-07-26T18:21:01.167Z
 // ===================================================================
 
 // --- File: core/EventBus.js ---
@@ -4857,8 +4857,9 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
     }
 
     getStore() {
-        if (window.Config && window.Config.Store) return window.Config.Store;
-        if (window.GF && window.GF.Config && window.GF.Config.Store) return window.GF.Config.Store;
+        const gw = (typeof unsafeWindow !== 'undefined') ? unsafeWindow : window;
+        if (gw.Config && gw.Config.Store) return gw.Config.Store;
+        if (gw.GF && gw.GF.Config && gw.GF.Config.Store) return gw.GF.Config.Store;
         return null;
     }
 
@@ -5065,9 +5066,10 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
     }
 
     getGameSignature() {
+        const gw = (typeof unsafeWindow !== 'undefined') ? unsafeWindow : window;
         try {
-            const uid = window.GF.loginModel.AppData.unique_id;
-            const key = window.JSDataManager.singleton.key;
+            const uid = gw.GF.loginModel.AppData.unique_id;
+            const key = gw.JSDataManager.singleton.key;
             return { uid, key };
         } catch(e) {
             return null;
@@ -5075,11 +5077,12 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
     }
 
     buildPayload(friendId) {
+        const gw = (typeof unsafeWindow !== 'undefined') ? unsafeWindow : window;
         const sig = this.getGameSignature();
         if (!sig) return null;
         
         const timestamp = Math.floor(Date.now() / 1000);
-        const md5_hash = window.md5.hex(sig.uid + "_" + timestamp);
+        const md5_hash = gw.md5.hex(sig.uid + "_" + timestamp);
         
         return {
             startTime_log: timestamp,
@@ -5138,12 +5141,13 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
     }
 
     async startHarvest(itemId, itemType) {
-        if (!window.GF || !window.GF.loginModel) {
+        const gw = (typeof unsafeWindow !== 'undefined') ? unsafeWindow : window;
+        if (!gw.GF || !gw.GF.loginModel) {
             this.log("⚠️ اللعبة لم تحمل بالكامل.");
             return;
         }
 
-        const friendInfo = window.GF.friendsController.visitingFriend;
+        const friendInfo = gw.GF.friendsController.visitingFriend;
         if (!friendInfo) {
             this.log("⚠️ يجب أن تكون داخل مزرعة أحد الجيران للبدء!");
             return;
@@ -5159,7 +5163,7 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
         this.showProgressOverlay(0, this.targetLimit);
 
         const harvestCmd = (itemType === "trees") ? "friend_collect_trees" : "friend_collect";
-        const friendsList = window.GF.loginModel.AppData.friends;
+        const friendsList = gw.GF.loginModel.AppData.friends;
 
         for (let i = 0; i < friendsList.length; i++) {
             if (!this.isRunning || this.totalHarvested >= this.targetLimit) break; // Check immediately!
@@ -5173,7 +5177,7 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
             while (this.isRunning && neighborHasEnergy && this.totalHarvested < this.targetLimit) {
                 // Simulate controller apply to trick anti-cheat
                 try {
-                    window.App.ControllerManager.applyFunc(window.ControllerConst.Game, window.GameConst.HARVEST_PLANT_BY_FRIENDS);
+                    gw.App.ControllerManager.applyFunc(gw.ControllerConst.Game, gw.GameConst.HARVEST_PLANT_BY_FRIENDS);
                 } catch(e) {}
 
                 let payload = this.buildPayload(friendId);
@@ -5187,7 +5191,7 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
                     // Fast Promise with timeout so it doesn't hang if user stops
                     let res = await Promise.race([
                         new Promise((resolve) => {
-                            window.NetUtils.enqueue(harvestCmd, payload, function(response) {
+                            gw.NetUtils.enqueue(harvestCmd, payload, function(response) {
                                 resolve(response);
                             }, this);
                         }),
@@ -5207,24 +5211,24 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
                         this.showProgressOverlay(this.totalHarvested, this.targetLimit);
 
                         // Update local storage instantly based on server response
-                        if (window.GF && window.GF.loginModel) {
-                            window.GF.loginModel.addStorage(actualProductId, actualAmount);
+                        if (gw.GF && gw.GF.loginModel) {
+                            gw.GF.loginModel.addStorage(actualProductId, actualAmount);
                         }
 
                         // V6 Visual Animation
                         try {
-                            if (window.GF && window.GF.gameController && window.Animations) {
-                                window.GF.gameController.collectTopTip(actualProductId, 1);
-                                let startRect = window.egret.Rectangle.create();
+                            if (gw.GF && gw.GF.gameController && gw.Animations) {
+                                gw.GF.gameController.collectTopTip(actualProductId, 1);
+                                let startRect = gw.egret.Rectangle.create();
                                 startRect.x = window.innerWidth / 2;
                                 startRect.y = window.innerHeight / 2;
                                 startRect.width = 75;
                                 startRect.height = 75;
-                                let endPoint = window.egret.Point.create(100, window.innerHeight - 100); 
-                                if (window.GF.gameController.operArea && window.GF.gameController.operArea.btnWarehouse) {
-                                    window.GF.gameController.operArea.btnWarehouse.localToGlobal(0, 0, endPoint);
+                                let endPoint = gw.egret.Point.create(100, window.innerHeight - 100); 
+                                if (gw.GF.gameController.operArea && gw.GF.gameController.operArea.btnWarehouse) {
+                                    gw.GF.gameController.operArea.btnWarehouse.localToGlobal(0, 0, endPoint);
                                 }
-                                window.Animations.flyItemTo(actualProductId, startRect, endPoint);
+                                gw.Animations.flyItemTo(actualProductId, startRect, endPoint);
                             }
                         } catch(e) {}
 
