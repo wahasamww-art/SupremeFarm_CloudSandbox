@@ -1,6 +1,6 @@
 // ===================================================================
 // SupremeFarm Modular - Cloud Distribution Bundle
-// Generated at: 2026-07-26T18:21:01.167Z
+// Generated at: 2026-07-26T18:24:13.147Z
 // ===================================================================
 
 // --- File: core/EventBus.js ---
@@ -5147,11 +5147,8 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
             return;
         }
 
-        const friendInfo = gw.GF.friendsController.visitingFriend;
-        if (!friendInfo) {
-            this.log("⚠️ يجب أن تكون داخل مزرعة أحد الجيران للبدء!");
-            return;
-        }
+        // ⚠️ No need to be visiting a friend for packet automation
+        // We will just iterate over all friends globally.
 
         this.isRunning = true;
         this.totalHarvested = 0;
