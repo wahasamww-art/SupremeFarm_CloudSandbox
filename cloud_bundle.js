@@ -1,6 +1,6 @@
 // ===================================================================
 // SupremeFarm Modular - Cloud Distribution Bundle
-// Generated at: 2026-07-26T18:32:37.389Z
+// Generated at: 2026-07-26T18:36:53.703Z
 // ===================================================================
 
 // --- File: core/EventBus.js ---
@@ -4832,6 +4832,9 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
         // HUD Overlay element
         this.hudElement = null;
         this.allItems = [];
+
+        this.interceptorInited = false;
+        this.activeCallback = null;
     }
 
     clearBlacklistIfNeeded() {
@@ -4878,6 +4881,56 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
             }
         }
         return items;
+    }
+
+    initInterceptor() {
+        if (this.interceptorInited) return;
+        this.interceptorInited = true;
+        const gw = (typeof unsafeWindow !== 'undefined') ? unsafeWindow : window;
+        
+        if (!gw.App || !gw.App.MessageCenter) return;
+
+        const origDispatch = gw.App.MessageCenter.dispatch;
+        const self = this;
+
+        gw.App.MessageCenter.dispatch = function(event, ...args) {
+            try {
+                if (event === "HTTP_SUCCESS") {
+                    const data = args[1];
+                    if (data && data.objects_to_update) {
+                        const updates = Array.isArray(data.objects_to_update) ? data.objects_to_update : Object.values(data.objects_to_update);
+                        
+                        let found = false;
+                        let product = null;
+                        let msg = null;
+
+                        for (let obj of updates) {
+                            if (obj && obj.needResponse && obj.needResponse.data) {
+                                const ch = obj.needResponse.channel;
+                                if (ch === "friend_collect" || ch === "friend_collect_trees") {
+                                    found = true;
+                                    if (obj.needResponse.data.msg === "ok") {
+                                        product = obj.needResponse.data.product; 
+                                        msg = obj.needResponse.data.msg; 
+                                    } else {
+                                        msg = obj.needResponse.data.msg || obj.needResponse.data.error;
+                                    }
+                                    break;
+                                }
+                            }
+                        }
+
+                        if (found && self.activeCallback) {
+                            self.activeCallback({ product, msg });
+                            self.activeCallback = null;
+                        }
+                    }
+                }
+            } catch (e) {
+                console.error("Interceptor Error", e);
+            }
+            return origDispatch.apply(this, arguments);
+        };
     }
 
     render() {
@@ -5065,35 +5118,6 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
         return Math.floor(Math.random() * (this.JitterMax - this.JitterMin + 1)) + this.JitterMin;
     }
 
-    getGameSignature() {
-        const gw = (typeof unsafeWindow !== 'undefined') ? unsafeWindow : window;
-        try {
-            const uid = gw.GF.loginModel.AppData.unique_id;
-            const key = gw.JSDataManager.singleton.key;
-            return { uid, key };
-        } catch(e) {
-            return null;
-        }
-    }
-
-    buildPayload(friendId) {
-        const gw = (typeof unsafeWindow !== 'undefined') ? unsafeWindow : window;
-        const sig = this.getGameSignature();
-        if (!sig) return null;
-        
-        const timestamp = Math.floor(Date.now() / 1000);
-        const md5_hash = gw.md5.hex(sig.uid + "_" + timestamp);
-        
-        return {
-            startTime_log: timestamp,
-            hash: md5_hash,
-            x: 50,
-            y: 50,
-            friend_id: friendId
-        };
-    }
-
-    // Creates the simplified live HUD (Only shows during harvest)
     showProgressOverlay(current, target) {
         if (!this.hudElement) {
             this.hudElement = document.createElement('div');
@@ -5147,9 +5171,7 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
             return;
         }
 
-        // ⚠️ No need to be visiting a friend for packet automation
-        // We will just iterate over all friends globally.
-
+        this.initInterceptor();
         this.isRunning = true;
         this.totalHarvested = 0;
         
@@ -5161,7 +5183,6 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
 
         const harvestCmd = (itemType === "trees") ? "friend_collect_trees" : "friend_collect";
         
-        // Fetch neighbors safely
         let friendsList = [];
         if (gw.GF.friendsModel && gw.GF.friendsModel.allNeighbors) {
             friendsList = gw.GF.friendsModel.allNeighbors.filter(n => !n.isNpc && !n.isSelf);
@@ -5174,110 +5195,94 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
         }
 
         for (let i = 0; i < friendsList.length; i++) {
-            if (!this.isRunning || this.totalHarvested >= this.targetLimit) break; // Check immediately!
+            if (!this.isRunning || this.totalHarvested >= this.targetLimit) break;
 
-            let targetFriend = friendsList[i];
-            if (this.blacklist[targetFriend.id]) continue; // Skip blacklisted
+            let neighbor = friendsList[i];
+            const friendId = neighbor.uid;
 
-            const friendId = targetFriend.id;
+            if (this.blacklist[friendId]) continue;
+
             let neighborHasEnergy = true;
 
             while (this.isRunning && neighborHasEnergy && this.totalHarvested < this.targetLimit) {
-                // Simulate controller apply to trick anti-cheat
-                try {
-                    gw.App.ControllerManager.applyFunc(gw.ControllerConst.Game, gw.GameConst.HARVEST_PLANT_BY_FRIENDS);
-                } catch(e) {}
+                const harvestPayload = { friend_id: friendId, itemid: itemId };
 
-                let payload = this.buildPayload(friendId);
-                if (!payload) {
-                    this.log("❌ فشل في بناء الـ Payload.");
-                    this.stopHarvest();
-                    break;
+                let harvestPromise = new Promise((resolve) => {
+                    this.activeCallback = resolve;
+                    setTimeout(() => {
+                        if (this.activeCallback === resolve) {
+                            this.activeCallback = null;
+                            resolve(null); // Timeout
+                        }
+                    }, 5000);
+                });
+
+                gw.NetUtils.enqueue(harvestCmd, harvestPayload);
+                if (gw.NetUtils.flush) gw.NetUtils.flush();
+
+                const res = await harvestPromise;
+
+                if (!this.isRunning) break;
+
+                if (!res) {
+                    this.log(`⚠️ مهلة الاتصال انتهت مع الجار [${friendId}]. نتخطى...`);
+                    neighborHasEnergy = false;
+                } else if (res.msg === "ok" && res.product) {
+                    const actualProductId = res.product;
+                    const actualAmount = res.product_num || 1;
+                    
+                    this.totalHarvested += actualAmount;
+                    this.showProgressOverlay(this.totalHarvested, this.targetLimit);
+
+                    if (gw.GF && gw.GF.loginModel) {
+                        gw.GF.loginModel.addStorage(actualProductId, actualAmount);
+                    }
+
+                    try {
+                        if (gw.GF && gw.GF.gameController && gw.Animations) {
+                            gw.GF.gameController.collectTopTip(actualProductId, 1);
+                            let startRect = gw.egret.Rectangle.create();
+                            startRect.x = window.innerWidth / 2;
+                            startRect.y = window.innerHeight / 2;
+                            startRect.width = 75;
+                            startRect.height = 75;
+                            let endPoint = gw.egret.Point.create(100, window.innerHeight - 100); 
+                            if (gw.GF.gameController.operArea && gw.GF.gameController.operArea.btnWarehouse) {
+                                gw.GF.gameController.operArea.btnWarehouse.localToGlobal(0, 0, endPoint);
+                            }
+                            gw.Animations.flyItemTo(actualProductId, startRect, endPoint);
+                        }
+                    } catch(e) {}
+
+                } else if (res.msg === "used up") {
+                    this.log(`⛔ الجار [${friendId}] استنفد طاقته.`);
+                    this.blacklist[friendId] = true;
+                    this.saveBlacklist();
+                    this.update(); 
+                    neighborHasEnergy = false;
+                } else {
+                    this.log(`⚠️ رسالة: ${res.msg}. نتخطى الجار...`);
+                    neighborHasEnergy = false;
                 }
 
-                try {
-                    // Fast Promise with timeout so it doesn't hang if user stops
-                    let res = await Promise.race([
-                        new Promise((resolve) => {
-                            gw.NetUtils.enqueue(harvestCmd, payload, function(response) {
-                                resolve(response);
-                            }, this);
-                        }),
-                        new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 5000))
-                    ]);
-
-                    if (!this.isRunning) break; // Exit immediately if stopped during request
-
-                    if (res && res.error) {
-                        this.log(`⚠️ خطأ من السيرفر: ${res.error}. نتخطى الجار...`);
-                        neighborHasEnergy = false;
-                    } else if (res && res.msg === "ok" && res.product) {
-                        const actualProductId = res.product;
-                        const actualAmount = res.product_num || 1;
-                        
-                        this.totalHarvested += actualAmount;
-                        this.showProgressOverlay(this.totalHarvested, this.targetLimit);
-
-                        // Update local storage instantly based on server response
-                        if (gw.GF && gw.GF.loginModel) {
-                            gw.GF.loginModel.addStorage(actualProductId, actualAmount);
-                        }
-
-                        // V6 Visual Animation
-                        try {
-                            if (gw.GF && gw.GF.gameController && gw.Animations) {
-                                gw.GF.gameController.collectTopTip(actualProductId, 1);
-                                let startRect = gw.egret.Rectangle.create();
-                                startRect.x = window.innerWidth / 2;
-                                startRect.y = window.innerHeight / 2;
-                                startRect.width = 75;
-                                startRect.height = 75;
-                                let endPoint = gw.egret.Point.create(100, window.innerHeight - 100); 
-                                if (gw.GF.gameController.operArea && gw.GF.gameController.operArea.btnWarehouse) {
-                                    gw.GF.gameController.operArea.btnWarehouse.localToGlobal(0, 0, endPoint);
-                                }
-                                gw.Animations.flyItemTo(actualProductId, startRect, endPoint);
-                            }
-                        } catch(e) {}
-
-                    } else if (res && res.msg === "used up") {
-                        this.log(`⛔ الجار [${friendId}] استنفد طاقته.`);
-                        this.blacklist[friendId] = true;
-                        this.saveBlacklist();
-                        this.update(); // Update clear button count
-                        neighborHasEnergy = false;
-                    } else {
-                        // Sometimes the server sends empty response if no crops available
-                        this.log(`⚠️ لم نجد شيء. نتخطى الجار...`);
-                        neighborHasEnergy = false;
-                    }
-
-                    if (this.isRunning) {
-                        await this.sleep(this.randomJitter());
-                    }
-
-                } catch (err) {
-                    if (this.isRunning) {
-                        this.log(`⚠️ خطأ: ${err.message}. نتخطى الجار...`);
-                        neighborHasEnergy = false;
-                        await this.sleep(500);
-                    }
+                if (this.isRunning) {
+                    await this.sleep(this.randomJitter());
                 }
             }
         }
 
         if (this.totalHarvested >= this.targetLimit) {
             this.log(`✅ تمت المهمة بنجاح! تم حصد ${this.totalHarvested} ثمرة.`);
-            setTimeout(() => this.hideProgressOverlay(), 3000); // Hide after 3 seconds on success
+            setTimeout(() => this.hideProgressOverlay(), 3000); 
         } else {
-            this.hideProgressOverlay(); // Hide immediately if stopped early
+            this.hideProgressOverlay(); 
         }
 
-        this.stopHarvest(); // Reset UI state
+        this.stopHarvest();
     }
 
     stopHarvest() {
-        this.isRunning = false; // This instantly kills the loop
+        this.isRunning = false; 
         if(this.btnStart) this.btnStart.style.display = 'block';
         if(this.btnStop) this.btnStop.style.display = 'none';
         if (this.totalHarvested < this.targetLimit) {
