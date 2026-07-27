@@ -1,6 +1,6 @@
 // ===================================================================
 // SupremeFarm Modular - Cloud Distribution Bundle
-// Generated at: 2026-07-27T00:41:04.580Z
+// Generated at: 2026-07-27T01:02:13.467Z
 // ===================================================================
 
 // --- File: core/EventBus.js ---
@@ -1624,6 +1624,41 @@ SF.AutoFarmModule = class AutoFarmModule extends SF.ModuleBase {
                             }
                         }
                     } catch (e) {}
+
+                    // إضافة تحديث لحظي للواجهة والحظيرة لتفادي الحاجة لتحديث الصفحة
+                    try {
+                        let gw = unsafeWindow;
+                        let pObj = mo.plant || mo.crop || mo;
+                        let seedId = pObj.plant_id || pObj.plantId || pObj.seed_id || pObj.configData?.id;
+                        if (seedId && seedId != 101 && gw.Config) {
+                            let c = gw.Config.Store_GetItemData(seedId);
+                            let productId = c ? (c.product_id || c.product || seedId) : seedId;
+                            
+                            if (!c && mo.configData && mo.configData.product_id) {
+                                productId = mo.configData.product_id;
+                            }
+
+                            if (productId && gw.GF && gw.GF.loginModel) {
+                                gw.GF.loginModel.addStorage(productId, 1);
+                            }
+
+                            if (productId && gw.GF && gw.GF.gameController && gw.Animations) {
+                                gw.GF.gameController.collectTopTip(productId, 1);
+                                
+                                let startRect = gw.egret.Rectangle.create();
+                                startRect.x = mo.x || (window.innerWidth / 2);
+                                startRect.y = mo.y || (window.innerHeight / 2);
+                                startRect.width = 75;
+                                startRect.height = 75;
+                                
+                                let endPoint = gw.egret.Point.create(100, window.innerHeight - 100); 
+                                if (gw.GF.gameController.operArea && gw.GF.gameController.operArea.btnWarehouse) {
+                                    gw.GF.gameController.operArea.btnWarehouse.localToGlobal(0, 0, endPoint);
+                                }
+                                gw.Animations.flyItemTo(productId, startRect, endPoint);
+                            }
+                        }
+                    } catch(e) {}
 
                     count++;
                 } catch(e) {}
