@@ -1,6 +1,6 @@
 // ===================================================================
 // SupremeFarm Modular - Cloud Distribution Bundle
-// Generated at: 2026-07-27T00:19:03.021Z
+// Generated at: 2026-07-27T00:23:47.708Z
 // ===================================================================
 
 // --- File: core/EventBus.js ---
@@ -5167,7 +5167,7 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
             document.body.appendChild(this.hudElement);
         }
 
-        const actionText = (this.currentMode === "fertilize") ? "تم مساعدة:" : "تم حصد:";
+        const actionText = (this.currentMode === "fertilize") ? "تم مساعدة:" : "جيران مكتملين:";
 
         this.hudElement.innerHTML = `
             <div style="font-size: 22px; font-weight: bold; margin-bottom: 5px;">
@@ -5207,7 +5207,8 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
 
         this.initInterceptor();
         this.isRunning = true;
-        this.totalHarvested = 0;
+        this.totalHarvested = 0; // Number of neighbors processed
+        this.totalFruits = 0;    // Number of total fruits collected (for logging)
         
         if(this.btnStart) this.btnStart.style.display = 'none';
         if(this.btnStop) this.btnStop.style.display = 'block';
@@ -5271,7 +5272,7 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
                     this.saveBlacklist();
                     
                     this.totalHarvested += 1;
-                    this.log(`💧 تم استكمال مساعدة الجار [${friendId}] بالكامل. المجموع: (${this.totalHarvested}/${this.targetLimit})`);
+                    this.log(`💧 تم استكمال مساعدة الجار [${friendId}] بالكامل. الجيران المكتملين: (${this.totalHarvested}/${this.targetLimit})`);
                     
                     this.update();
                     updateStatsUI();
@@ -5280,7 +5281,7 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
                 }
 
                 const harvestPayload = { friend_id: friendId, itemid: itemId };
-                let batchSize = Math.min(10, this.targetLimit - this.totalHarvested);
+                let batchSize = 10; // ثابت: 10 نقرات لكل جار دائماً
 
                 let harvestPromise = new Promise((resolve) => {
                     this.activeCallback = resolve;
@@ -5306,9 +5307,8 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
                     neighborHasEnergy = false;
                 } else {
                     if (res.totalAdded > 0) {
-                        this.totalHarvested += res.totalAdded;
-                        this.log(`✅ ضربة كومبو! تم حصد ${res.totalAdded} ثمرة (كود ${res.product}) دفعة واحدة! المجموع: (${this.totalHarvested}/${this.targetLimit})`);
-                        updateStatsUI();
+                        this.totalFruits += res.totalAdded;
+                        this.log(`✅ ضربة كومبو! تم حصد ${res.totalAdded} ثمرة (كود ${res.product}) دفعة واحدة! إجمالي الثمار المجمعة حتى الآن: ${this.totalFruits}`);
 
                         if (gw.GF && gw.GF.loginModel) {
                             gw.GF.loginModel.addStorage(res.product, res.totalAdded);
@@ -5335,6 +5335,10 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
                     this.log(`⛔ الجار [${friendId}] تم توجيه 10 ضربات حصاد له، وتم وضعه في القائمة السوداء تلقائياً.`);
                     this.blacklist[friendId] = true;
                     this.saveBlacklist();
+                    
+                    this.totalHarvested += 1; // احتساب الجار كمنجز
+                    this.log(`🎯 تم الانتهاء من الجار [${friendId}]. الجيران المكتملين: (${this.totalHarvested}/${this.targetLimit})`);
+                    
                     this.update(); 
                     updateStatsUI();
                     
