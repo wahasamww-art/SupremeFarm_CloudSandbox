@@ -1,6 +1,6 @@
 // ===================================================================
 // SupremeFarm Modular - Cloud Distribution Bundle
-// Generated at: 2026-07-27T00:31:13.959Z
+// Generated at: 2026-07-27T00:41:04.580Z
 // ===================================================================
 
 // --- File: core/EventBus.js ---
@@ -5167,7 +5167,7 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
             document.body.appendChild(this.hudElement);
         }
 
-        const actionText = (this.currentMode === "fertilize") ? "تم مساعدة:" : "جيران مكتملين:";
+        const actionText = (this.currentMode === "fertilize") ? "تم مساعدة (جيران):" : "تم حصد (ثمار):";
 
         this.hudElement.innerHTML = `
             <div style="font-size: 22px; font-weight: bold; margin-bottom: 5px;">
@@ -5207,7 +5207,7 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
 
         this.initInterceptor();
         this.isRunning = true;
-        this.totalHarvested = 0; // Number of neighbors processed
+        this.totalHarvested = 0; // Number of items (fruits or neighbors depending on mode)
         this.totalFruits = 0;    // Number of total fruits collected (for logging)
         
         if(this.btnStart) this.btnStart.style.display = 'none';
@@ -5307,7 +5307,8 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
                     } else {
                         if (res.totalAdded > 0) {
                             this.totalFruits += res.totalAdded;
-                            this.log(`✅ الضربة القاضية (10 نقرات مدمجة): تم حصد ${res.totalAdded} ثمرة! إجمالي الثمار: ${this.totalFruits}`);
+                            this.totalHarvested += res.totalAdded; // إضافة الثمار للعداد الرئيسي
+                            this.log(`✅ الضربة القاضية (10 نقرات مدمجة): تم حصد ${res.totalAdded} ثمرة! إجمالي الثمار: ${this.totalHarvested}/${this.targetLimit}`);
 
                             if (gw.GF && gw.GF.loginModel) {
                                 gw.GF.loginModel.addStorage(res.product, res.totalAdded);
@@ -5334,9 +5335,6 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
                     this.log(`⛔ تم توجيه الضربة المدمجة للجار [${friendId}]. إضافته للقائمة السوداء.`);
                     this.blacklist[friendId] = true;
                     this.saveBlacklist();
-                    
-                    this.totalHarvested += 1; 
-                    this.log(`🎯 الجيران المكتملين: (${this.totalHarvested}/${this.targetLimit})`);
                     
                     this.update(); 
                     updateStatsUI();
