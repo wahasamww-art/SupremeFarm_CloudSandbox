@@ -1,6 +1,6 @@
 // ===================================================================
 // SupremeFarm Modular - Cloud Distribution Bundle
-// Generated at: 2026-07-27T00:23:47.708Z
+// Generated at: 2026-07-27T00:31:13.959Z
 // ===================================================================
 
 // --- File: core/EventBus.js ---
@@ -5260,6 +5260,7 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
                 if (this.currentMode === "fertilize") {
                     const payloadToUse = { friend_id: friendId, plant_x: 0, plant_y: 0, plant_id: itemId };
                     
+                    // 10 ضربات في دفعة واحدة كما طلبت
                     for (let b = 0; b < 10; b++) {
                         gw.NetUtils.enqueue(fertCmd, payloadToUse);
                     }
@@ -5267,7 +5268,7 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
                     
                     await this.sleep(1000); // إعطاء السيرفر ثانية لمعالجة الطلبات
                     
-                    this.log(`⛔ الجار [${friendId}] تم استنزاف طاقته بـ 10 ضربات تسميد متتالية.`);
+                    this.log(`⛔ الجار [${friendId}] تم توجيه 10 ضربات تسميد مدمجة له بنجاح.`);
                     this.blacklist[friendId] = true;
                     this.saveBlacklist();
                     
@@ -5280,73 +5281,67 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
                     break; // الانتقال للجار التالي
                 }
 
-                const harvestPayload = { friend_id: friendId, itemid: itemId };
-                let batchSize = 10; // ثابت: 10 نقرات لكل جار دائماً
-
-                let harvestPromise = new Promise((resolve) => {
-                    this.activeCallback = resolve;
-                    setTimeout(() => {
-                        if (this.activeCallback === resolve) {
-                            this.activeCallback = null;
-                            resolve(null); // Timeout
-                        }
-                    }, 5000);
-                });
-
-                for (let b = 0; b < batchSize; b++) {
-                    gw.NetUtils.enqueue(harvestCmd, harvestPayload);
-                }
-                if (gw.NetUtils.flush) gw.NetUtils.flush();
-
-                const res = await harvestPromise;
-
-                if (!this.isRunning) break;
-
-                if (!res) {
-                    this.log(`⚠️ مهلة الاتصال انتهت مع الجار [${friendId}]. نتخطى...`);
-                    neighborHasEnergy = false;
-                } else {
-                    if (res.totalAdded > 0) {
-                        this.totalFruits += res.totalAdded;
-                        this.log(`✅ ضربة كومبو! تم حصد ${res.totalAdded} ثمرة (كود ${res.product}) دفعة واحدة! إجمالي الثمار المجمعة حتى الآن: ${this.totalFruits}`);
-
-                        if (gw.GF && gw.GF.loginModel) {
-                            gw.GF.loginModel.addStorage(res.product, res.totalAdded);
-                        }
-
-                        try {
-                            if (gw.GF && gw.GF.gameController && gw.Animations) {
-                                gw.GF.gameController.collectTopTip(res.product, res.totalAdded);
-                                let startRect = gw.egret.Rectangle.create();
-                                startRect.x = window.innerWidth / 2;
-                                startRect.y = window.innerHeight / 2;
-                                startRect.width = 75;
-                                startRect.height = 75;
-                                let endPoint = gw.egret.Point.create(100, window.innerHeight - 100); 
-                                if (gw.GF.gameController.operArea && gw.GF.gameController.operArea.btnWarehouse) {
-                                    gw.GF.gameController.operArea.btnWarehouse.localToGlobal(0, 0, endPoint);
-                                }
-                                gw.Animations.flyItemTo(res.product, startRect, endPoint);
+                if (this.currentMode === "harvest") {
+                    const harvestPayload = { friend_id: friendId, itemid: itemId };
+                    
+                    let harvestPromise = new Promise((resolve) => {
+                        this.activeCallback = resolve;
+                        setTimeout(() => {
+                            if (this.activeCallback === resolve) {
+                                this.activeCallback = null;
+                                resolve(null); // Timeout
                             }
-                        } catch(e) {}
+                        }, 5000);
+                    });
+
+                    // 10 ضربات في دفعة واحدة كما طلبت
+                    for (let b = 0; b < 10; b++) {
+                        gw.NetUtils.enqueue(harvestCmd, harvestPayload);
+                    }
+                    if (gw.NetUtils.flush) gw.NetUtils.flush();
+
+                    const res = await harvestPromise;
+
+                    if (!res) {
+                        this.log(`⚠️ مهلة الاتصال انتهت مع الجار [${friendId}].`);
+                    } else {
+                        if (res.totalAdded > 0) {
+                            this.totalFruits += res.totalAdded;
+                            this.log(`✅ الضربة القاضية (10 نقرات مدمجة): تم حصد ${res.totalAdded} ثمرة! إجمالي الثمار: ${this.totalFruits}`);
+
+                            if (gw.GF && gw.GF.loginModel) {
+                                gw.GF.loginModel.addStorage(res.product, res.totalAdded);
+                            }
+
+                            try {
+                                if (gw.GF && gw.GF.gameController && gw.Animations) {
+                                    gw.GF.gameController.collectTopTip(res.product, res.totalAdded);
+                                    let startRect = gw.egret.Rectangle.create();
+                                    startRect.x = window.innerWidth / 2;
+                                    startRect.y = window.innerHeight / 2;
+                                    startRect.width = 75;
+                                    startRect.height = 75;
+                                    let endPoint = gw.egret.Point.create(100, window.innerHeight - 100); 
+                                    if (gw.GF.gameController.operArea && gw.GF.gameController.operArea.btnWarehouse) {
+                                        gw.GF.gameController.operArea.btnWarehouse.localToGlobal(0, 0, endPoint);
+                                    }
+                                    gw.Animations.flyItemTo(res.product, startRect, endPoint);
+                                }
+                            } catch(e) {}
+                        }
                     }
 
-                    // في وضع الحصاد، بناءً على طلب المستخدم، نضع الجار في القائمة السوداء تلقائياً بعد 10 ضربات وننتقل للتالي
-                    this.log(`⛔ الجار [${friendId}] تم توجيه 10 ضربات حصاد له، وتم وضعه في القائمة السوداء تلقائياً.`);
+                    this.log(`⛔ تم توجيه الضربة المدمجة للجار [${friendId}]. إضافته للقائمة السوداء.`);
                     this.blacklist[friendId] = true;
                     this.saveBlacklist();
                     
-                    this.totalHarvested += 1; // احتساب الجار كمنجز
-                    this.log(`🎯 تم الانتهاء من الجار [${friendId}]. الجيران المكتملين: (${this.totalHarvested}/${this.targetLimit})`);
+                    this.totalHarvested += 1; 
+                    this.log(`🎯 الجيران المكتملين: (${this.totalHarvested}/${this.targetLimit})`);
                     
                     this.update(); 
                     updateStatsUI();
                     
                     neighborHasEnergy = false; // يكسر حلقة الـ while لينتقل للجار التالي
-                }
-
-                if (this.isRunning && this.currentMode === "harvest") {
-                    await this.sleep(this.randomJitter());
                 }
             }
         }
