@@ -1,6 +1,6 @@
 // ===================================================================
 // SupremeFarm Modular - Cloud Distribution Bundle
-// Generated at: 2026-07-27T01:02:13.467Z
+// Generated at: 2026-07-27T01:11:25.670Z
 // ===================================================================
 
 // --- File: core/EventBus.js ---
@@ -1638,8 +1638,9 @@ SF.AutoFarmModule = class AutoFarmModule extends SF.ModuleBase {
                                 productId = mo.configData.product_id;
                             }
 
-                            if (productId && gw.GF && gw.GF.loginModel) {
-                                gw.GF.loginModel.addStorage(productId, 1);
+                            if (productId && gw.GF && gw.GF.loginModel && gw.GF.loginModel.AppData && gw.GF.loginModel.AppData.storage) {
+                                let curQty = gw.GF.loginModel.AppData.storage[productId] || 0;
+                                gw.GF.loginModel.AppData.storage[productId] = curQty + 1;
                             }
 
                             if (productId && gw.GF && gw.GF.gameController && gw.Animations) {
@@ -5345,8 +5346,9 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
                             this.totalHarvested += res.totalAdded; // إضافة الثمار للعداد الرئيسي
                             this.log(`✅ الضربة القاضية (10 نقرات مدمجة): تم حصد ${res.totalAdded} ثمرة! إجمالي الثمار: ${this.totalHarvested}/${this.targetLimit}`);
 
-                            if (gw.GF && gw.GF.loginModel) {
-                                gw.GF.loginModel.addStorage(res.product, res.totalAdded);
+                            if (gw.GF && gw.GF.loginModel && gw.GF.loginModel.AppData && gw.GF.loginModel.AppData.storage) {
+                                let curQty = gw.GF.loginModel.AppData.storage[res.product] || 0;
+                                gw.GF.loginModel.AppData.storage[res.product] = curQty + res.totalAdded;
                             }
 
                             try {
