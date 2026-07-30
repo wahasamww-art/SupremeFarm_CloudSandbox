@@ -1,6 +1,6 @@
 // ===================================================================
 // SupremeFarm Modular - Cloud Distribution Bundle
-// Generated at: 2026-07-30T15:58:00.391Z
+// Generated at: 2026-07-30T16:06:40.572Z
 // ===================================================================
 
 // --- File: core/EventBus.js ---
@@ -5279,8 +5279,10 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
             if (this.blacklist[friendId]) continue;
 
             let neighborHasEnergy = true;
+            let attempts = 0;
 
-            while (this.isRunning && neighborHasEnergy && this.totalHarvested < this.targetLimit) {
+            while (this.isRunning && neighborHasEnergy && this.totalHarvested < this.targetLimit && attempts < 100) {
+                attempts++;
                 
                 if (this.currentMode === "fertilize") {
                     const payloadToUse = { friend_id: friendId, plant_x: 0, plant_y: 0, plant_id: itemId };
@@ -5307,7 +5309,19 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
                 }
 
                 if (this.currentMode === "harvest") {
-                    const harvestPayload = { friend_id: friendId, itemid: itemId };
+                    let harvestPayload;
+                    if (itemType === "trees") {
+                        harvestPayload = { 
+                            friend_id: friendId, 
+                            friendName: neighbor.name || "", 
+                            itemid: itemId, 
+                            cur_sceneid: 1, 
+                            id: itemId, 
+                            achievement_add: "social_1825_9758" 
+                        };
+                    } else {
+                        harvestPayload = { friend_id: friendId, itemid: itemId };
+                    }
                     
                     let harvestPromise = new Promise((resolve) => {
                         this.activeCallback = resolve;
@@ -5363,10 +5377,10 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
                             this.blacklist[friendId] = true;
                             this.saveBlacklist();
                             neighborHasEnergy = false;
-                        } else if (res.totalAdded === 0) {
-                            this.log(`⚠️ لا يوجد ثمار متبقية لدى الجار [${friendId}]. الانتقال للجار التالي...`);
-                            neighborHasEnergy = false;
                         } else {
+                            if (res.totalAdded === 0) {
+                                this.log(`⚠️ نقرة فارغة للجار [${friendId}]. مستمرون بالضرب حتى نفاذ طاقته...`);
+                            }
                             await this.sleep(this.randomJitter());
                         }
                     }
