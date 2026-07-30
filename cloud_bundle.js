@@ -1,6 +1,6 @@
 // ===================================================================
 // SupremeFarm Modular - Cloud Distribution Bundle
-// Generated at: 2026-07-27T01:11:25.670Z
+// Generated at: 2026-07-30T15:58:00.391Z
 // ===================================================================
 
 // --- File: core/EventBus.js ---
@@ -1573,7 +1573,7 @@ SF.AutoFarmModule = class AutoFarmModule extends SF.ModuleBase {
         });
 
         let count = 0;
-        const batchSize = 25; // تصغير الدفعة لتفادي تهنيج الواجهة
+        const batchSize = 250; // زيادة الدفعة لتسريع الحصاد (سرعة البرق)
         for (let i = 0; i < toHarvest.length; i += batchSize) {
             const batch = toHarvest.slice(i, i + batchSize);
             for (let b = 0; b < batch.length; b++) {
@@ -1645,18 +1645,7 @@ SF.AutoFarmModule = class AutoFarmModule extends SF.ModuleBase {
 
                             if (productId && gw.GF && gw.GF.gameController && gw.Animations) {
                                 gw.GF.gameController.collectTopTip(productId, 1);
-                                
-                                let startRect = gw.egret.Rectangle.create();
-                                startRect.x = mo.x || (window.innerWidth / 2);
-                                startRect.y = mo.y || (window.innerHeight / 2);
-                                startRect.width = 75;
-                                startRect.height = 75;
-                                
-                                let endPoint = gw.egret.Point.create(100, window.innerHeight - 100); 
-                                if (gw.GF.gameController.operArea && gw.GF.gameController.operArea.btnWarehouse) {
-                                    gw.GF.gameController.operArea.btnWarehouse.localToGlobal(0, 0, endPoint);
-                                }
-                                gw.Animations.flyItemTo(productId, startRect, endPoint);
+                                // [تعديل حصاد البرق]: تم تعطيل الرسوم المتحركة flyItemTo لتفادي تهنيج المتصفح
                             }
                         }
                     } catch(e) {}
@@ -1664,7 +1653,7 @@ SF.AutoFarmModule = class AutoFarmModule extends SF.ModuleBase {
                     count++;
                 } catch(e) {}
             }
-            await new Promise(r => setTimeout(r, 60)); // راحة للمعالج
+            await new Promise(r => setTimeout(r, 0)); // تفريغ الذاكرة فورياً بدون تأخير (0ms)
         }
         return count;
     }
@@ -5296,15 +5285,15 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
                 if (this.currentMode === "fertilize") {
                     const payloadToUse = { friend_id: friendId, plant_x: 0, plant_y: 0, plant_id: itemId };
                     
-                    // 10 ضربات في دفعة واحدة كما طلبت
-                    for (let b = 0; b < 10; b++) {
+                    let burst = Math.floor(Math.random() * 4) + 1;
+                    for (let b = 0; b < burst; b++) {
                         gw.NetUtils.enqueue(fertCmd, payloadToUse);
                     }
                     if (gw.NetUtils.flush) gw.NetUtils.flush();
                     
                     await this.sleep(1000); // إعطاء السيرفر ثانية لمعالجة الطلبات
                     
-                    this.log(`⛔ الجار [${friendId}] تم توجيه 10 ضربات تسميد مدمجة له بنجاح.`);
+                    this.log(`⛔ الجار [${friendId}] تم توجيه ${burst} نقرات تسميد عشوائية له بنجاح.`);
                     this.blacklist[friendId] = true;
                     this.saveBlacklist();
                     
@@ -5330,8 +5319,8 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
                         }, 5000);
                     });
 
-                    // 10 ضربات في دفعة واحدة كما طلبت
-                    for (let b = 0; b < 10; b++) {
+                    let burst = Math.floor(Math.random() * 3) + 1;
+                    for (let b = 0; b < burst; b++) {
                         gw.NetUtils.enqueue(harvestCmd, harvestPayload);
                     }
                     if (gw.NetUtils.flush) gw.NetUtils.flush();
@@ -5340,11 +5329,12 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
 
                     if (!res) {
                         this.log(`⚠️ مهلة الاتصال انتهت مع الجار [${friendId}].`);
+                        neighborHasEnergy = false;
                     } else {
                         if (res.totalAdded > 0) {
                             this.totalFruits += res.totalAdded;
                             this.totalHarvested += res.totalAdded; // إضافة الثمار للعداد الرئيسي
-                            this.log(`✅ الضربة القاضية (10 نقرات مدمجة): تم حصد ${res.totalAdded} ثمرة! إجمالي الثمار: ${this.totalHarvested}/${this.targetLimit}`);
+                            this.log(`✅ الضربة القاضية (نقرات عشوائية): تم حصد ${res.totalAdded} ثمرة! إجمالي الثمار: ${this.totalHarvested}/${this.targetLimit}`);
 
                             if (gw.GF && gw.GF.loginModel && gw.GF.loginModel.AppData && gw.GF.loginModel.AppData.storage) {
                                 let curQty = gw.GF.loginModel.AppData.storage[res.product] || 0;
@@ -5367,16 +5357,22 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
                                 }
                             } catch(e) {}
                         }
+                        
+                        if (res.msg === "used up") {
+                            this.log(`⛔ استنفدت طاقة الجار [${friendId}]. إضافته للقائمة السوداء.`);
+                            this.blacklist[friendId] = true;
+                            this.saveBlacklist();
+                            neighborHasEnergy = false;
+                        } else if (res.totalAdded === 0) {
+                            this.log(`⚠️ لا يوجد ثمار متبقية لدى الجار [${friendId}]. الانتقال للجار التالي...`);
+                            neighborHasEnergy = false;
+                        } else {
+                            await this.sleep(this.randomJitter());
+                        }
                     }
 
-                    this.log(`⛔ تم توجيه الضربة المدمجة للجار [${friendId}]. إضافته للقائمة السوداء.`);
-                    this.blacklist[friendId] = true;
-                    this.saveBlacklist();
-                    
                     this.update(); 
                     updateStatsUI();
-                    
-                    neighborHasEnergy = false; // يكسر حلقة الـ while لينتقل للجار التالي
                 }
             }
         }
