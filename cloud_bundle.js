@@ -1,6 +1,6 @@
 // ===================================================================
 // SupremeFarm Modular - Cloud Distribution Bundle
-// Generated at: 2026-07-30T16:06:40.572Z
+// Generated at: 2026-08-02T21:43:16.013Z
 // ===================================================================
 
 // --- File: core/EventBus.js ---
@@ -5287,7 +5287,7 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
                 if (this.currentMode === "fertilize") {
                     const payloadToUse = { friend_id: friendId, plant_x: 0, plant_y: 0, plant_id: itemId };
                     
-                    let burst = Math.floor(Math.random() * 4) + 1;
+                    let burst = 10;
                     for (let b = 0; b < burst; b++) {
                         gw.NetUtils.enqueue(fertCmd, payloadToUse);
                     }
@@ -5295,7 +5295,7 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
                     
                     await this.sleep(1000); // إعطاء السيرفر ثانية لمعالجة الطلبات
                     
-                    this.log(`⛔ الجار [${friendId}] تم توجيه ${burst} نقرات تسميد عشوائية له بنجاح.`);
+                    this.log(`⛔ الجار [${friendId}] تم توجيه 10 نقرات تسميد مدمجة له بنجاح.`);
                     this.blacklist[friendId] = true;
                     this.saveBlacklist();
                     
@@ -5333,7 +5333,7 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
                         }, 5000);
                     });
 
-                    let burst = Math.floor(Math.random() * 3) + 1;
+                    let burst = 10;
                     for (let b = 0; b < burst; b++) {
                         gw.NetUtils.enqueue(harvestCmd, harvestPayload);
                     }
@@ -5348,7 +5348,7 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
                         if (res.totalAdded > 0) {
                             this.totalFruits += res.totalAdded;
                             this.totalHarvested += res.totalAdded; // إضافة الثمار للعداد الرئيسي
-                            this.log(`✅ الضربة القاضية (نقرات عشوائية): تم حصد ${res.totalAdded} ثمرة! إجمالي الثمار: ${this.totalHarvested}/${this.targetLimit}`);
+                            this.log(`✅ الضربة القاضية (10 نقرات مدمجة): تم حصد ${res.totalAdded} ثمرة! إجمالي الثمار: ${this.totalHarvested}/${this.targetLimit}`);
 
                             if (gw.GF && gw.GF.loginModel && gw.GF.loginModel.AppData && gw.GF.loginModel.AppData.storage) {
                                 let curQty = gw.GF.loginModel.AppData.storage[res.product] || 0;
