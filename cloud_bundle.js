@@ -1,6 +1,6 @@
 // ===================================================================
 // SupremeFarm Modular - Cloud Distribution Bundle
-// Generated at: 2026-08-06T22:21:41.974Z
+// Generated at: 2026-08-06T22:25:10.889Z
 // ===================================================================
 
 // --- File: core/EventBus.js ---
@@ -5452,58 +5452,41 @@ SF.SessionExtractorModule = class SessionExtractorModule extends SF.ModuleBase {
         return `
             <style>
                 .sf-extractor-btn {
-                    padding: 12px 15px;
+                    padding: 15px 20px;
                     border: none;
-                    border-radius: 6px;
+                    border-radius: 8px;
                     font-weight: bold;
                     cursor: pointer;
                     width: 100%;
                     transition: all 0.3s ease;
                     font-family: inherit;
-                    margin-bottom: 8px;
+                    margin-bottom: 12px;
                     background: #27ae60; 
                     color: white;
-                    font-size: 14px;
+                    font-size: 16px;
                 }
                 .sf-extractor-btn:hover { background: #2ecc71; }
                 
-                .sf-secondary-btn {
-                    background: #2c3e50;
-                    font-size: 11px;
-                    padding: 8px;
-                    margin-top: 15px;
-                }
-                .sf-secondary-btn:hover { background: #34495e; }
-
                 .sf-extractor-textarea {
                     width: 100%;
-                    height: 80px;
-                    background: rgba(0,0,0,0.5);
-                    border: 1px solid rgba(255,255,255,0.2);
-                    color: #1dd1a1;
+                    height: 90px;
+                    background: rgba(0,0,0,0.7);
+                    border: 1px solid rgba(255,255,255,0.3);
+                    color: #00d2d3;
                     padding: 12px;
-                    border-radius: 4px;
+                    border-radius: 6px;
                     outline: none;
                     resize: vertical;
                     font-family: monospace;
-                    font-size: 12px;
-                    margin-bottom: 12px;
+                    font-size: 14px;
+                    text-align: center;
                     word-break: break-all;
                 }
             </style>
             
             <div class="sf-card">
-                <p style="color: var(--sf-text-muted); font-size: 12px; margin-bottom: 15px; text-align: center;">
-                    بضغطة واحدة: استخراج مفتاح الدخول الذكي (Cookie أو signed_request حسب موقعك).
-                </p>
-                
-                <button id="sf-btn-extract-smart" class="sf-extractor-btn">🚀 استخراج مفتاح الدخول بضغطة واحدة</button>
-                <textarea id="sf-txt-smart" class="sf-extractor-textarea" readonly placeholder="سيظهر المفتاح هنا لنسخه..."></textarea>
-
-                <hr style="border:0; border-top:1px solid rgba(255,255,255,0.1); margin: 15px 0 10px 0;">
-                
-                <button id="sf-btn-extract-req" class="sf-extractor-btn sf-secondary-btn">🌐 أدوات المطورين: نسخ آخر ريكوست (API)</button>
-                <textarea id="sf-txt-req-body" class="sf-extractor-textarea" style="height:40px; display:none;" readonly placeholder="سيظهر محتوى الطلب..."></textarea>
+                <button id="sf-btn-extract-smart" class="sf-extractor-btn">🚀 استخراج مفتاح الدخول (ضغطة واحدة)</button>
+                <textarea id="sf-txt-smart" class="sf-extractor-textarea" readonly placeholder="سيظهر المفتاح هنا..."></textarea>
             </div>
         `;
     }
@@ -5511,9 +5494,6 @@ SF.SessionExtractorModule = class SessionExtractorModule extends SF.ModuleBase {
     bindEvents() {
         const btnSmart = this.container.querySelector('#sf-btn-extract-smart');
         const txtSmart = this.container.querySelector('#sf-txt-smart');
-        
-        const btnReq = this.container.querySelector('#sf-btn-extract-req');
-        const txtReqBody = this.container.querySelector('#sf-txt-req-body');
         
         btnSmart.addEventListener('click', () => {
             const gw = (typeof unsafeWindow !== 'undefined') ? unsafeWindow : window;
@@ -5577,29 +5557,6 @@ SF.SessionExtractorModule = class SessionExtractorModule extends SF.ModuleBase {
                     this.tempBtnText(btnSmart, `✅ تم استخراج ونسخ (${keyType})`, "#10ac84");
                 } catch(e) {
                     this.tempBtnText(btnSmart, `⚠️ تم استخراج (${keyType}) - يرجى النسخ יدوياً (Ctrl+C)`, "#f39c12");
-                }
-            });
-        });
-
-        btnReq.addEventListener('click', () => {
-            if (!this.lastRequestUrl) {
-                alert("⚠️ لم يتم التقاط أي ريكوست حتى الآن. قم بعمل أي حركة باللعبة.");
-                return;
-            }
-            
-            txtReqBody.style.display = "block";
-            const fullData = "URL:\n" + this.lastRequestUrl + "\n\nBODY:\n" + this.lastRequestBody;
-            txtReqBody.value = fullData;
-            txtReqBody.select();
-
-            navigator.clipboard.writeText(fullData).then(() => {
-                this.tempBtnText(btnReq, "✅ تم النسخ بنجاح!", "#10ac84");
-            }).catch(() => {
-                try {
-                    document.execCommand('copy');
-                    this.tempBtnText(btnReq, "✅ تم النسخ بنجاح!", "#10ac84");
-                } catch(e) {
-                    this.tempBtnText(btnReq, "⚠️ انسخ يدوياً من الأسفل", "#f39c12");
                 }
             });
         });
