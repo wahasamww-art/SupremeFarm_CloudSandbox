@@ -1,6 +1,6 @@
 // ===================================================================
 // SupremeFarm Modular - Cloud Distribution Bundle
-// Generated at: 2026-08-06T20:46:46.604Z
+// Generated at: 2026-08-06T20:52:37.209Z
 // ===================================================================
 
 // --- File: core/EventBus.js ---
@@ -5484,6 +5484,11 @@ SF.SessionExtractorModule = class SessionExtractorModule extends SF.ModuleBase {
                 <button id="sf-btn-extract-req" class="sf-extractor-btn">🌐 استخراج ونسخ آخر ريكوست (Request API)</button>
                 <textarea id="sf-txt-req" class="sf-extractor-textarea" readonly placeholder="سيظهر رابط الريكوست هنا..." style="height:40px;"></textarea>
                 <textarea id="sf-txt-body" class="sf-extractor-textarea" readonly placeholder="سيظهر محتوى الطلب (Body) هنا..." style="height:40px;"></textarea>
+                
+                <div style="display:flex; gap: 5px;">
+                    <button id="sf-btn-extract-signed" class="sf-extractor-btn" style="flex:1; font-size:10px;">🔑 نسخ signed_request</button>
+                    <button id="sf-btn-extract-session" class="sf-extractor-btn" style="flex:1; font-size:10px;">🔐 نسخ sessionKey</button>
+                </div>
             </div>
         `;
     }
@@ -5495,6 +5500,9 @@ SF.SessionExtractorModule = class SessionExtractorModule extends SF.ModuleBase {
         const btnReq = this.container.querySelector('#sf-btn-extract-req');
         const txtReq = this.container.querySelector('#sf-txt-req');
         const txtBody = this.container.querySelector('#sf-txt-body');
+        
+        const btnSigned = this.container.querySelector('#sf-btn-extract-signed');
+        const btnSession = this.container.querySelector('#sf-btn-extract-session');
 
         btnCookie.addEventListener('click', () => {
             const gw = (typeof unsafeWindow !== 'undefined') ? unsafeWindow : window;
@@ -5528,16 +5536,46 @@ SF.SessionExtractorModule = class SessionExtractorModule extends SF.ModuleBase {
             txtBody.value = this.lastRequestBody;
 
             const fullData = "URL:\n" + this.lastRequestUrl + "\n\nBODY:\n" + this.lastRequestBody;
-            navigator.clipboard.writeText(fullData).then(() => {
-                const oldText = btnReq.innerText;
-                btnReq.innerText = "✅ تم النسخ بنجاح!";
-                btnReq.style.background = "#10ac84";
-                setTimeout(() => {
-                    btnReq.innerText = oldText;
-                    btnReq.style.background = "#2c3e50";
-                }, 2000);
-            }).catch(() => alert("فشل النسخ التلقائي، الرجاء النسخ يدوياً من المربع."));
+            this.copyToClipboard(fullData, btnReq);
         });
+
+        btnSigned.addEventListener('click', () => {
+            if (!this.lastRequestBody) {
+                alert("⚠️ لم يتم التقاط أي ريكوست حتى الآن.");
+                return;
+            }
+            const match = this.lastRequestBody.match(/signed_request\s*[:=]\s*['"]?([^&"'\s]+)/) || this.lastRequestBody.match(/signed_request=([^&]+)/);
+            if (match && match[1]) {
+                this.copyToClipboard(match[1], btnSigned);
+            } else {
+                alert("❌ لم يتم العثور على signed_request في الطلب الأخير.");
+            }
+        });
+
+        btnSession.addEventListener('click', () => {
+            if (!this.lastRequestBody) {
+                alert("⚠️ لم يتم التقاط أي ريكوست حتى الآن.");
+                return;
+            }
+            const match = this.lastRequestBody.match(/sessionKey\s*[:=]\s*['"]?([^&"'\s]+)/) || this.lastRequestBody.match(/sessionKey=([^&]+)/);
+            if (match && match[1]) {
+                this.copyToClipboard(match[1], btnSession);
+            } else {
+                alert("❌ لم يتم العثور على sessionKey في الطلب الأخير.");
+            }
+        });
+    }
+
+    copyToClipboard(text, btnElement) {
+        navigator.clipboard.writeText(text).then(() => {
+            const oldText = btnElement.innerText;
+            btnElement.innerText = "✅ تم النسخ!";
+            btnElement.style.background = "#10ac84";
+            setTimeout(() => {
+                btnElement.innerText = oldText;
+                btnElement.style.background = "#2c3e50";
+            }, 2000);
+        }).catch(() => alert("فشل النسخ التلقائي."));
     }
 };
 
