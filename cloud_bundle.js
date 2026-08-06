@@ -1,6 +1,6 @@
 // ===================================================================
 // SupremeFarm Modular - Cloud Distribution Bundle
-// Generated at: 2026-08-06T20:52:37.209Z
+// Generated at: 2026-08-06T21:01:29.270Z
 // ===================================================================
 
 // --- File: core/EventBus.js ---
@@ -5540,28 +5540,41 @@ SF.SessionExtractorModule = class SessionExtractorModule extends SF.ModuleBase {
         });
 
         btnSigned.addEventListener('click', () => {
-            if (!this.lastRequestBody) {
-                alert("⚠️ لم يتم التقاط أي ريكوست حتى الآن.");
-                return;
-            }
-            const match = this.lastRequestBody.match(/signed_request\s*[:=]\s*['"]?([^&"'\s]+)/) || this.lastRequestBody.match(/signed_request=([^&]+)/);
-            if (match && match[1]) {
-                this.copyToClipboard(match[1], btnSigned);
-            } else {
-                alert("❌ لم يتم العثور على signed_request في الطلب الأخير.");
+            const gw = (typeof unsafeWindow !== 'undefined') ? unsafeWindow : window;
+            try {
+                let sig = "";
+                if (gw.JSDataManager && gw.JSDataManager.ins && gw.JSDataManager.ins.getFacebookToken) {
+                    const fb = gw.JSDataManager.ins.getFacebookToken();
+                    if (fb && fb.signed_request) sig = fb.signed_request;
+                }
+                if (!sig && gw.Config && gw.Config.signed_request) sig = gw.Config.signed_request;
+                
+                if (sig) {
+                    this.copyToClipboard(sig, btnSigned);
+                } else {
+                    alert("❌ لم يتم العثور على signed_request في الذاكرة الحية.");
+                }
+            } catch(e) {
+                alert("❌ حدث خطأ أثناء الاستخراج: " + e.message);
             }
         });
 
         btnSession.addEventListener('click', () => {
-            if (!this.lastRequestBody) {
-                alert("⚠️ لم يتم التقاط أي ريكوست حتى الآن.");
-                return;
-            }
-            const match = this.lastRequestBody.match(/sessionKey\s*[:=]\s*['"]?([^&"'\s]+)/) || this.lastRequestBody.match(/sessionKey=([^&]+)/);
-            if (match && match[1]) {
-                this.copyToClipboard(match[1], btnSession);
-            } else {
-                alert("❌ لم يتم العثور على sessionKey في الطلب الأخير.");
+            const gw = (typeof unsafeWindow !== 'undefined') ? unsafeWindow : window;
+            try {
+                let sKey = "";
+                if (gw.GF && gw.GF.loginModel && gw.GF.loginModel.AppData) {
+                    sKey = gw.GF.loginModel.AppData.loginSession || gw.GF.loginModel.AppData.sessionKey;
+                }
+                if (!sKey && gw.Config && gw.Config.sessionKey) sKey = gw.Config.sessionKey;
+                
+                if (sKey) {
+                    this.copyToClipboard(sKey, btnSession);
+                } else {
+                    alert("❌ لم يتم العثور على sessionKey في الذاكرة الحية.");
+                }
+            } catch(e) {
+                alert("❌ حدث خطأ أثناء الاستخراج: " + e.message);
             }
         });
     }
