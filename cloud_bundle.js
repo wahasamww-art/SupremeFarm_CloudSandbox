@@ -1,6 +1,6 @@
 // ===================================================================
 // SupremeFarm Modular - Cloud Distribution Bundle
-// Generated at: 2026-08-06T22:18:08.761Z
+// Generated at: 2026-08-06T22:21:41.974Z
 // ===================================================================
 
 // --- File: core/EventBus.js ---
@@ -5518,48 +5518,36 @@ SF.SessionExtractorModule = class SessionExtractorModule extends SF.ModuleBase {
         btnSmart.addEventListener('click', () => {
             const gw = (typeof unsafeWindow !== 'undefined') ? unsafeWindow : window;
             
-            // 1. Detect Environment (Facebook or CenturyGames)
-            let isFB = false;
-            if (gw.location && gw.location.href && gw.location.href.includes('facebook')) isFB = true;
-            if (gw.document && gw.document.referrer && gw.document.referrer.includes('facebook')) isFB = true;
-            if (gw.App && gw.App.VersionManager && gw.App.VersionManager.is_facebook) isFB = true;
-            if (this.savedSignedRequest) isFB = true; 
-
             let extractedKey = "";
             let keyType = "";
 
-            if (isFB) {
-                // --- Extract Facebook signed_request ---
-                let sig = this.savedSignedRequest;
-                
+            // --- 1. Try Extracting Facebook signed_request ---
+            let sig = this.savedSignedRequest;
+            try {
                 if (!sig) {
-                    try {
-                        const wn = JSON.parse(gw.name);
-                        if (wn && wn.signed_request) sig = wn.signed_request;
-                    } catch(e) {}
+                    const wn = JSON.parse(gw.name);
+                    if (wn && wn.signed_request) sig = wn.signed_request;
                 }
-                if (!sig && gw.location && gw.location.search) {
-                    const params = new URLSearchParams(gw.location.search);
-                    if (params.get('signed_request')) sig = params.get('signed_request');
-                }
-                if (!sig && gw.JSDataManager && gw.JSDataManager.ins && gw.JSDataManager.ins.getFacebookToken) {
-                    const fb = gw.JSDataManager.ins.getFacebookToken();
-                    if (fb && fb.signed_request) sig = fb.signed_request;
-                }
-                if (!sig) {
-                    const m = gw.document.documentElement.innerHTML.match(/signed_request["']?\s*[:=]\s*["']?([^&"'\s\\><]+)/);
-                    if (m && m[1]) sig = m[1];
-                }
+            } catch(e) {}
+            
+            if (!sig && gw.location && gw.location.search) {
+                const params = new URLSearchParams(gw.location.search);
+                if (params.get('signed_request')) sig = params.get('signed_request');
+            }
+            if (!sig && gw.JSDataManager && gw.JSDataManager.ins && gw.JSDataManager.ins.getFacebookToken) {
+                const fb = gw.JSDataManager.ins.getFacebookToken();
+                if (fb && fb.signed_request) sig = fb.signed_request;
+            }
+            if (!sig && gw.document && gw.document.documentElement) {
+                const m = gw.document.documentElement.innerHTML.match(/signed_request["']?\s*[:=]\s*["']?([^&"'\s\\><]+)/);
+                if (m && m[1]) sig = m[1];
+            }
 
-                if (sig) {
-                    extractedKey = sig;
-                    keyType = "signed_request";
-                } else {
-                    alert("❌ أنت تلعب من فيسبوك لكن تعذر التقاط signed_request.\nيرجى تحديث الصفحة (Refresh) وسيقوم النظام بالتقاطه تلقائياً.");
-                    return;
-                }
+            if (sig) {
+                extractedKey = sig;
+                keyType = "signed_request";
             } else {
-                // --- Extract Website Cookie (__Host-bf_s) ---
+                // --- 2. Try Extracting Website Cookie (__Host-bf_s) ---
                 const cookieData = gw.document.cookie || document.cookie;
                 if (cookieData) {
                     const match = cookieData.match(/__Host-bf_s=([^;]+)/);
@@ -5567,11 +5555,11 @@ SF.SessionExtractorModule = class SessionExtractorModule extends SF.ModuleBase {
                         extractedKey = match[1];
                         keyType = "__Host-bf_s";
                     } else {
-                        alert("❌ تم العثور على بيانات لكن لم يتم العثور على المفتاح (__Host-bf_s) بداخلها.\nتأكد من أنك سجلت الدخول للموقع الرسمي.");
+                        alert("❌ لم يتم العثور على signed_request (فيسبوك) ولا على مفتاح __Host-bf_s (الموقع الرسمي).\nقم بعمل تحديث (Refresh) للصفحة وحاول مجدداً.");
                         return;
                     }
                 } else {
-                    alert("❌ لم يتم العثور على كوكي نهائياً. يرجى تسجيل الدخول أولاً.");
+                    alert("❌ لا يوجد أي بيانات مسجلة. يرجى تسجيل الدخول أولاً.");
                     return;
                 }
             }
