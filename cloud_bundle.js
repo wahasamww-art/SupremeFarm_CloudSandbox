@@ -1,6 +1,6 @@
 // ===================================================================
 // SupremeFarm Modular - Cloud Distribution Bundle
-// Generated at: 2026-08-06T21:01:29.270Z
+// Generated at: 2026-08-06T21:06:47.300Z
 // ===================================================================
 
 // --- File: core/EventBus.js ---
@@ -5429,11 +5429,9 @@ SF.SessionExtractorModule = class SessionExtractorModule extends SF.ModuleBase {
 
         // اعتراض الطلبات لحفظ أحدث طلب
         SF.bus.on('network:request', (req) => {
-            if (req.url && (req.url.includes("api.php") || req.url.includes("gateway"))) {
+            if (req.isGame && req.body) {
                 this.lastRequestUrl = req.url;
-                if (req.data) {
-                    this.lastRequestBody = (typeof req.data === 'string') ? req.data : JSON.stringify(req.data);
-                }
+                this.lastRequestBody = (typeof req.body === 'string') ? req.body : JSON.stringify(req.body);
             }
         });
     }
@@ -5547,12 +5545,15 @@ SF.SessionExtractorModule = class SessionExtractorModule extends SF.ModuleBase {
                     const fb = gw.JSDataManager.ins.getFacebookToken();
                     if (fb && fb.signed_request) sig = fb.signed_request;
                 }
-                if (!sig && gw.Config && gw.Config.signed_request) sig = gw.Config.signed_request;
+                if (!sig && this.lastRequestBody) {
+                    const match = this.lastRequestBody.match(/signed_request\s*[:=]\s*['"]?([^&"'\s]+)/) || this.lastRequestBody.match(/signed_request=([^&]+)/);
+                    if (match && match[1]) sig = match[1];
+                }
                 
                 if (sig) {
                     this.copyToClipboard(sig, btnSigned);
                 } else {
-                    alert("❌ لم يتم العثور على signed_request في الذاكرة الحية.");
+                    alert("❌ لم يتم العثور على signed_request في الذاكرة الحية ولا في الطلبات.\nجرب عمل أي حركة باللعبة ثم اضغط مرة أخرى.");
                 }
             } catch(e) {
                 alert("❌ حدث خطأ أثناء الاستخراج: " + e.message);
@@ -5566,12 +5567,15 @@ SF.SessionExtractorModule = class SessionExtractorModule extends SF.ModuleBase {
                 if (gw.GF && gw.GF.loginModel && gw.GF.loginModel.AppData) {
                     sKey = gw.GF.loginModel.AppData.loginSession || gw.GF.loginModel.AppData.sessionKey;
                 }
-                if (!sKey && gw.Config && gw.Config.sessionKey) sKey = gw.Config.sessionKey;
+                if (!sKey && this.lastRequestBody) {
+                    const match = this.lastRequestBody.match(/sessionKey\s*[:=]\s*['"]?([^&"'\s]+)/) || this.lastRequestBody.match(/sessionKey=([^&]+)/);
+                    if (match && match[1]) sKey = match[1];
+                }
                 
                 if (sKey) {
                     this.copyToClipboard(sKey, btnSession);
                 } else {
-                    alert("❌ لم يتم العثور على sessionKey في الذاكرة الحية.");
+                    alert("❌ لم يتم العثور على sessionKey في الذاكرة الحية ولا في الطلبات.\nجرب عمل أي حركة باللعبة ثم اضغط مرة أخرى.");
                 }
             } catch(e) {
                 alert("❌ حدث خطأ أثناء الاستخراج: " + e.message);
