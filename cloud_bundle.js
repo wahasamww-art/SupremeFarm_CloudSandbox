@@ -1,6 +1,6 @@
 // ===================================================================
 // SupremeFarm Modular - Cloud Distribution Bundle
-// Generated at: 2026-08-06T21:06:47.300Z
+// Generated at: 2026-08-06T21:13:47.097Z
 // ===================================================================
 
 // --- File: core/EventBus.js ---
@@ -175,7 +175,7 @@ SF.StorageManager = class StorageManager {
 
 
 // --- File: network/NetworkInterceptor.js ---
-﻿// --- network\NetworkInterceptor.js ---
+// --- network\NetworkInterceptor.js ---
 window.SF = window.SF || {};
 
 SF.NetworkInterceptor = class NetworkInterceptor {
@@ -195,7 +195,12 @@ SF.NetworkInterceptor = class NetworkInterceptor {
     _isGameApi(url) {
         if (!url) return false;
         const urlStr = url.toString().toLowerCase();
-        return urlStr.includes('farm-us') || urlStr.includes('centurygames') || urlStr.includes('akamaized');
+        return urlStr.includes('farm-us') || 
+               urlStr.includes('centurygames') || 
+               urlStr.includes('akamaized') ||
+               urlStr.includes('api.php') ||
+               urlStr.includes('gateway.php') ||
+               urlStr.includes('index.php');
     }
 
     _interceptXHR() {
@@ -5424,14 +5429,21 @@ window.SF = window.SF || {};
 SF.SessionExtractorModule = class SessionExtractorModule extends SF.ModuleBase {
     constructor() {
         super('session_extractor', 'استخراج الكوكي والطلبات', '🍪');
-        this.lastRequestUrl = "";
-        this.lastRequestBody = "";
+        this.savedSignedRequest = "";
+        this.savedSessionKey = "";
 
-        // اعتراض الطلبات لحفظ أحدث طلب
+        // اعتراض الطلبات لحفظ أحدث طلب واستخلاص المفاتيح بشكل دائم
         SF.bus.on('network:request', (req) => {
             if (req.isGame && req.body) {
                 this.lastRequestUrl = req.url;
                 this.lastRequestBody = (typeof req.body === 'string') ? req.body : JSON.stringify(req.body);
+                
+                // استخلاص وحفظ دائم للمفاتيح بمجرد مرورها بأي ريكوست
+                const sigMatch = this.lastRequestBody.match(/signed_request\s*[:=]\s*['"]?([^&"'\s]+)/) || this.lastRequestBody.match(/signed_request=([^&]+)/);
+                if (sigMatch && sigMatch[1]) this.savedSignedRequest = sigMatch[1];
+                
+                const sKeyMatch = this.lastRequestBody.match(/sessionKey\s*[:=]\s*['"]?([^&"'\s]+)/) || this.lastRequestBody.match(/sessionKey=([^&]+)/) || (this.lastRequestUrl && this.lastRequestUrl.match(/s=([a-zA-Z0-9_]+)/));
+                if (sKeyMatch && sKeyMatch[1]) this.savedSessionKey = sKeyMatch[1];
             }
         });
     }
@@ -5541,10 +5553,37 @@ SF.SessionExtractorModule = class SessionExtractorModule extends SF.ModuleBase {
             const gw = (typeof unsafeWindow !== 'undefined') ? unsafeWindow : window;
             try {
                 let sig = "";
-                if (gw.JSDataManager && gw.JSDataManager.ins && gw.JSDataManager.ins.getFacebookToken) {
+                
+                // 1. Check window.name (Facebook Canvas often passes it here)
+                try {
+                    const wn = JSON.parse(gw.name);
+                    if (wn && wn.signed_request) sig = wn.signed_request;
+                } catch(e) {}
+
+                // 2. Check URL query params
+                if (!sig && gw.location && gw.location.search) {
+                    const params = new URLSearchParams(gw.location.search);
+                    if (params.get('signed_request')) sig = params.get('signed_request');
+                }
+
+                // 3. Check memory
+                if (!sig && gw.JSDataManager && gw.JSDataManager.ins && gw.JSDataManager.ins.getFacebookToken) {
                     const fb = gw.JSDataManager.ins.getFacebookToken();
                     if (fb && fb.signed_request) sig = fb.signed_request;
                 }
+
+                // 4. Check HTML Source (in case it's in a script tag or flashvar)
+                if (!sig) {
+                    const m = gw.document.documentElement.innerHTML.match(/signed_request["']?\s*[:=]\s*["']?([^&"'\s\\><]+)/);
+                    if (m && m[1]) sig = m[1];
+                }
+
+                // 5. Check persistently saved key from network
+                if (!sig && this.savedSignedRequest) {
+                    sig = this.savedSignedRequest;
+                }
+
+                // 6. Check last intercepted request body (just in case)
                 if (!sig && this.lastRequestBody) {
                     const match = this.lastRequestBody.match(/signed_request\s*[:=]\s*['"]?([^&"'\s]+)/) || this.lastRequestBody.match(/signed_request=([^&]+)/);
                     if (match && match[1]) sig = match[1];
@@ -5553,7 +5592,7 @@ SF.SessionExtractorModule = class SessionExtractorModule extends SF.ModuleBase {
                 if (sig) {
                     this.copyToClipboard(sig, btnSigned);
                 } else {
-                    alert("❌ لم يتم العثور على signed_request في الذاكرة الحية ولا في الطلبات.\nجرب عمل أي حركة باللعبة ثم اضغط مرة أخرى.");
+                    alert("❌ لم يتم العثور على signed_request بأي طريقة.\nقم بتحديث الصفحة (Refresh) لكي يتم التقاط الطلب الأول (Gateway).");
                 }
             } catch(e) {
                 alert("❌ حدث خطأ أثناء الاستخراج: " + e.message);
@@ -5564,9 +5603,30 @@ SF.SessionExtractorModule = class SessionExtractorModule extends SF.ModuleBase {
             const gw = (typeof unsafeWindow !== 'undefined') ? unsafeWindow : window;
             try {
                 let sKey = "";
+                
+                // 1. Check memory
                 if (gw.GF && gw.GF.loginModel && gw.GF.loginModel.AppData) {
                     sKey = gw.GF.loginModel.AppData.loginSession || gw.GF.loginModel.AppData.sessionKey;
                 }
+                
+                // 2. Check HTML Source
+                if (!sKey) {
+                    const m = gw.document.documentElement.innerHTML.match(/sessionKey["']?\s*[:=]\s*["']?([^&"'\s\\><]+)/);
+                    if (m && m[1]) sKey = m[1];
+                }
+
+                // 3. Check persistently saved key from network
+                if (!sKey && this.savedSessionKey) {
+                    sKey = this.savedSessionKey;
+                }
+
+                // 4. Check Request URL
+                if (!sKey && this.lastRequestUrl) {
+                    const m = this.lastRequestUrl.match(/s=([a-zA-Z0-9_]+)/) || this.lastRequestUrl.match(/sessionKey=([^&]+)/);
+                    if (m && m[1]) sKey = m[1];
+                }
+
+                // 5. Check Request Body
                 if (!sKey && this.lastRequestBody) {
                     const match = this.lastRequestBody.match(/sessionKey\s*[:=]\s*['"]?([^&"'\s]+)/) || this.lastRequestBody.match(/sessionKey=([^&]+)/);
                     if (match && match[1]) sKey = match[1];
@@ -5575,7 +5635,7 @@ SF.SessionExtractorModule = class SessionExtractorModule extends SF.ModuleBase {
                 if (sKey) {
                     this.copyToClipboard(sKey, btnSession);
                 } else {
-                    alert("❌ لم يتم العثور على sessionKey في الذاكرة الحية ولا في الطلبات.\nجرب عمل أي حركة باللعبة ثم اضغط مرة أخرى.");
+                    alert("❌ لم يتم العثور على sessionKey.\nقم بحصاد أي شجرة ثم اضغط هنا مرة أخرى.");
                 }
             } catch(e) {
                 alert("❌ حدث خطأ أثناء الاستخراج: " + e.message);
