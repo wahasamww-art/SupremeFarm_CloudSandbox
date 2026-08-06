@@ -1,6 +1,6 @@
 // ===================================================================
 // SupremeFarm Modular - Cloud Distribution Bundle
-// Generated at: 2026-08-06T21:13:47.097Z
+// Generated at: 2026-08-06T22:14:02.665Z
 // ===================================================================
 
 // --- File: core/EventBus.js ---
@@ -5452,7 +5452,7 @@ SF.SessionExtractorModule = class SessionExtractorModule extends SF.ModuleBase {
         return `
             <style>
                 .sf-extractor-btn {
-                    padding: 10px 15px;
+                    padding: 12px 15px;
                     border: none;
                     border-radius: 6px;
                     font-weight: bold;
@@ -5461,23 +5461,32 @@ SF.SessionExtractorModule = class SessionExtractorModule extends SF.ModuleBase {
                     transition: all 0.3s ease;
                     font-family: inherit;
                     margin-bottom: 8px;
-                    background: #2c3e50; 
-                    color: #ecf0f1;
-                    border: 1px solid rgba(255,255,255,0.1);
+                    background: #27ae60; 
+                    color: white;
+                    font-size: 14px;
                 }
-                .sf-extractor-btn:hover { background: #34495e; border-color: #00d2d3; }
+                .sf-extractor-btn:hover { background: #2ecc71; }
+                
+                .sf-secondary-btn {
+                    background: #2c3e50;
+                    font-size: 11px;
+                    padding: 8px;
+                    margin-top: 15px;
+                }
+                .sf-secondary-btn:hover { background: #34495e; }
+
                 .sf-extractor-textarea {
                     width: 100%;
-                    height: 60px;
+                    height: 80px;
                     background: rgba(0,0,0,0.5);
                     border: 1px solid rgba(255,255,255,0.2);
                     color: #1dd1a1;
-                    padding: 8px;
+                    padding: 12px;
                     border-radius: 4px;
                     outline: none;
                     resize: vertical;
                     font-family: monospace;
-                    font-size: 11px;
+                    font-size: 12px;
                     margin-bottom: 12px;
                     word-break: break-all;
                 }
@@ -5485,174 +5494,132 @@ SF.SessionExtractorModule = class SessionExtractorModule extends SF.ModuleBase {
             
             <div class="sf-card">
                 <p style="color: var(--sf-text-muted); font-size: 12px; margin-bottom: 15px; text-align: center;">
-                    أدوات المطورين: يمكنك استخراج الكوكي (Session) أو آخر ريكوست لتوظيفها في سكربتات خارجية (بايثون وغيرها).
+                    بضغطة واحدة: استخراج مفتاح الدخول الذكي (Cookie أو signed_request حسب موقعك).
                 </p>
                 
-                <button id="sf-btn-extract-cookie" class="sf-extractor-btn">🍪 استخراج ونسخ الكوكي (Cookie)</button>
-                <textarea id="sf-txt-cookie" class="sf-extractor-textarea" readonly placeholder="سيظهر الكوكي هنا..."></textarea>
+                <button id="sf-btn-extract-smart" class="sf-extractor-btn">🚀 استخراج مفتاح الدخول بضغطة واحدة</button>
+                <textarea id="sf-txt-smart" class="sf-extractor-textarea" readonly placeholder="سيظهر المفتاح هنا لنسخه..."></textarea>
 
-                <button id="sf-btn-extract-req" class="sf-extractor-btn">🌐 استخراج ونسخ آخر ريكوست (Request API)</button>
-                <textarea id="sf-txt-req" class="sf-extractor-textarea" readonly placeholder="سيظهر رابط الريكوست هنا..." style="height:40px;"></textarea>
-                <textarea id="sf-txt-body" class="sf-extractor-textarea" readonly placeholder="سيظهر محتوى الطلب (Body) هنا..." style="height:40px;"></textarea>
+                <hr style="border:0; border-top:1px solid rgba(255,255,255,0.1); margin: 15px 0 10px 0;">
                 
-                <div style="display:flex; gap: 5px;">
-                    <button id="sf-btn-extract-signed" class="sf-extractor-btn" style="flex:1; font-size:10px;">🔑 نسخ signed_request</button>
-                    <button id="sf-btn-extract-session" class="sf-extractor-btn" style="flex:1; font-size:10px;">🔐 نسخ sessionKey</button>
-                </div>
+                <button id="sf-btn-extract-req" class="sf-extractor-btn sf-secondary-btn">🌐 أدوات المطورين: نسخ آخر ريكوست (API)</button>
+                <textarea id="sf-txt-req-body" class="sf-extractor-textarea" style="height:40px; display:none;" readonly placeholder="سيظهر محتوى الطلب..."></textarea>
             </div>
         `;
     }
 
     bindEvents() {
-        const btnCookie = this.container.querySelector('#sf-btn-extract-cookie');
-        const txtCookie = this.container.querySelector('#sf-txt-cookie');
+        const btnSmart = this.container.querySelector('#sf-btn-extract-smart');
+        const txtSmart = this.container.querySelector('#sf-txt-smart');
         
         const btnReq = this.container.querySelector('#sf-btn-extract-req');
-        const txtReq = this.container.querySelector('#sf-txt-req');
-        const txtBody = this.container.querySelector('#sf-txt-body');
+        const txtReqBody = this.container.querySelector('#sf-txt-req-body');
         
-        const btnSigned = this.container.querySelector('#sf-btn-extract-signed');
-        const btnSession = this.container.querySelector('#sf-btn-extract-session');
-
-        btnCookie.addEventListener('click', () => {
+        btnSmart.addEventListener('click', () => {
             const gw = (typeof unsafeWindow !== 'undefined') ? unsafeWindow : window;
-            const cookieData = gw.document.cookie || document.cookie;
             
-            if (!cookieData) {
-                txtCookie.value = "لم يتم العثور على كوكي.";
-                return;
-            }
+            // 1. Detect Environment (Facebook or CenturyGames)
+            let isFB = false;
+            if (gw.location && gw.location.href && gw.location.href.includes('facebook')) isFB = true;
+            if (gw.document && gw.document.referrer && gw.document.referrer.includes('facebook')) isFB = true;
+            if (gw.App && gw.App.VersionManager && gw.App.VersionManager.is_facebook) isFB = true;
+            if (this.savedSignedRequest) isFB = true; 
 
-            txtCookie.value = cookieData;
-            
-            navigator.clipboard.writeText(cookieData).then(() => {
-                const oldText = btnCookie.innerText;
-                btnCookie.innerText = "✅ تم النسخ بنجاح!";
-                btnCookie.style.background = "#10ac84";
-                setTimeout(() => {
-                    btnCookie.innerText = oldText;
-                    btnCookie.style.background = "#2c3e50";
-                }, 2000);
-            }).catch(() => alert("فشل النسخ التلقائي، الرجاء النسخ يدوياً من المربع."));
-        });
+            let extractedKey = "";
+            let keyType = "";
 
-        btnReq.addEventListener('click', () => {
-            if (!this.lastRequestUrl) {
-                alert("⚠️ لم يتم التقاط أي ريكوست حتى الآن. قم بعمل أي حركة باللعبة ثم حاول مجدداً.");
-                return;
-            }
-            
-            txtReq.value = this.lastRequestUrl;
-            txtBody.value = this.lastRequestBody;
-
-            const fullData = "URL:\n" + this.lastRequestUrl + "\n\nBODY:\n" + this.lastRequestBody;
-            this.copyToClipboard(fullData, btnReq);
-        });
-
-        btnSigned.addEventListener('click', () => {
-            const gw = (typeof unsafeWindow !== 'undefined') ? unsafeWindow : window;
-            try {
-                let sig = "";
+            if (isFB) {
+                // --- Extract Facebook signed_request ---
+                let sig = this.savedSignedRequest;
                 
-                // 1. Check window.name (Facebook Canvas often passes it here)
-                try {
-                    const wn = JSON.parse(gw.name);
-                    if (wn && wn.signed_request) sig = wn.signed_request;
-                } catch(e) {}
-
-                // 2. Check URL query params
+                if (!sig) {
+                    try {
+                        const wn = JSON.parse(gw.name);
+                        if (wn && wn.signed_request) sig = wn.signed_request;
+                    } catch(e) {}
+                }
                 if (!sig && gw.location && gw.location.search) {
                     const params = new URLSearchParams(gw.location.search);
                     if (params.get('signed_request')) sig = params.get('signed_request');
                 }
-
-                // 3. Check memory
                 if (!sig && gw.JSDataManager && gw.JSDataManager.ins && gw.JSDataManager.ins.getFacebookToken) {
                     const fb = gw.JSDataManager.ins.getFacebookToken();
                     if (fb && fb.signed_request) sig = fb.signed_request;
                 }
-
-                // 4. Check HTML Source (in case it's in a script tag or flashvar)
                 if (!sig) {
                     const m = gw.document.documentElement.innerHTML.match(/signed_request["']?\s*[:=]\s*["']?([^&"'\s\\><]+)/);
                     if (m && m[1]) sig = m[1];
                 }
 
-                // 5. Check persistently saved key from network
-                if (!sig && this.savedSignedRequest) {
-                    sig = this.savedSignedRequest;
-                }
-
-                // 6. Check last intercepted request body (just in case)
-                if (!sig && this.lastRequestBody) {
-                    const match = this.lastRequestBody.match(/signed_request\s*[:=]\s*['"]?([^&"'\s]+)/) || this.lastRequestBody.match(/signed_request=([^&]+)/);
-                    if (match && match[1]) sig = match[1];
-                }
-                
                 if (sig) {
-                    this.copyToClipboard(sig, btnSigned);
+                    extractedKey = sig;
+                    keyType = "signed_request";
                 } else {
-                    alert("❌ لم يتم العثور على signed_request بأي طريقة.\nقم بتحديث الصفحة (Refresh) لكي يتم التقاط الطلب الأول (Gateway).");
+                    alert("❌ أنت تلعب من فيسبوك لكن تعذر التقاط signed_request.\nيرجى تحديث الصفحة (Refresh) وسيقوم النظام بالتقاطه تلقائياً.");
+                    return;
                 }
-            } catch(e) {
-                alert("❌ حدث خطأ أثناء الاستخراج: " + e.message);
+            } else {
+                // --- Extract Website Cookie ---
+                const cookieData = gw.document.cookie || document.cookie;
+                if (cookieData && cookieData.length > 5) {
+                    extractedKey = cookieData;
+                    keyType = "Cookie";
+                } else {
+                    alert("❌ لم يتم العثور على كوكي. يرجى تسجيل الدخول أولاً.");
+                    return;
+                }
             }
+
+            // Output to UI
+            txtSmart.value = extractedKey;
+            txtSmart.select();
+            
+            // Copy logic with fallbacks
+            navigator.clipboard.writeText(extractedKey).then(() => {
+                this.tempBtnText(btnSmart, `✅ تم استخراج ونسخ (${keyType})`, "#10ac84");
+            }).catch(() => {
+                try {
+                    document.execCommand('copy');
+                    this.tempBtnText(btnSmart, `✅ تم استخراج ونسخ (${keyType})`, "#10ac84");
+                } catch(e) {
+                    this.tempBtnText(btnSmart, `⚠️ تم استخراج (${keyType}) - يرجى النسخ יدوياً (Ctrl+C)`, "#f39c12");
+                }
+            });
         });
 
-        btnSession.addEventListener('click', () => {
-            const gw = (typeof unsafeWindow !== 'undefined') ? unsafeWindow : window;
-            try {
-                let sKey = "";
-                
-                // 1. Check memory
-                if (gw.GF && gw.GF.loginModel && gw.GF.loginModel.AppData) {
-                    sKey = gw.GF.loginModel.AppData.loginSession || gw.GF.loginModel.AppData.sessionKey;
-                }
-                
-                // 2. Check HTML Source
-                if (!sKey) {
-                    const m = gw.document.documentElement.innerHTML.match(/sessionKey["']?\s*[:=]\s*["']?([^&"'\s\\><]+)/);
-                    if (m && m[1]) sKey = m[1];
-                }
-
-                // 3. Check persistently saved key from network
-                if (!sKey && this.savedSessionKey) {
-                    sKey = this.savedSessionKey;
-                }
-
-                // 4. Check Request URL
-                if (!sKey && this.lastRequestUrl) {
-                    const m = this.lastRequestUrl.match(/s=([a-zA-Z0-9_]+)/) || this.lastRequestUrl.match(/sessionKey=([^&]+)/);
-                    if (m && m[1]) sKey = m[1];
-                }
-
-                // 5. Check Request Body
-                if (!sKey && this.lastRequestBody) {
-                    const match = this.lastRequestBody.match(/sessionKey\s*[:=]\s*['"]?([^&"'\s]+)/) || this.lastRequestBody.match(/sessionKey=([^&]+)/);
-                    if (match && match[1]) sKey = match[1];
-                }
-                
-                if (sKey) {
-                    this.copyToClipboard(sKey, btnSession);
-                } else {
-                    alert("❌ لم يتم العثور على sessionKey.\nقم بحصاد أي شجرة ثم اضغط هنا مرة أخرى.");
-                }
-            } catch(e) {
-                alert("❌ حدث خطأ أثناء الاستخراج: " + e.message);
+        btnReq.addEventListener('click', () => {
+            if (!this.lastRequestUrl) {
+                alert("⚠️ لم يتم التقاط أي ريكوست حتى الآن. قم بعمل أي حركة باللعبة.");
+                return;
             }
+            
+            txtReqBody.style.display = "block";
+            const fullData = "URL:\n" + this.lastRequestUrl + "\n\nBODY:\n" + this.lastRequestBody;
+            txtReqBody.value = fullData;
+            txtReqBody.select();
+
+            navigator.clipboard.writeText(fullData).then(() => {
+                this.tempBtnText(btnReq, "✅ تم النسخ بنجاح!", "#10ac84");
+            }).catch(() => {
+                try {
+                    document.execCommand('copy');
+                    this.tempBtnText(btnReq, "✅ تم النسخ بنجاح!", "#10ac84");
+                } catch(e) {
+                    this.tempBtnText(btnReq, "⚠️ انسخ يدوياً من الأسفل", "#f39c12");
+                }
+            });
         });
     }
 
-    copyToClipboard(text, btnElement) {
-        navigator.clipboard.writeText(text).then(() => {
-            const oldText = btnElement.innerText;
-            btnElement.innerText = "✅ تم النسخ!";
-            btnElement.style.background = "#10ac84";
-            setTimeout(() => {
-                btnElement.innerText = oldText;
-                btnElement.style.background = "#2c3e50";
-            }, 2000);
-        }).catch(() => alert("فشل النسخ التلقائي."));
+    tempBtnText(btnElement, newText, newColor) {
+        const oldText = btnElement.innerText;
+        const oldColor = btnElement.style.background;
+        btnElement.innerText = newText;
+        if (newColor) btnElement.style.background = newColor;
+        setTimeout(() => {
+            btnElement.innerText = oldText;
+            btnElement.style.background = oldColor || "";
+        }, 3000);
     }
 };
 
