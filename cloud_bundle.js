@@ -1,6 +1,6 @@
 // ===================================================================
 // SupremeFarm Modular - Cloud Distribution Bundle
-// Generated at: 2026-08-06T22:14:02.665Z
+// Generated at: 2026-08-06T22:18:08.761Z
 // ===================================================================
 
 // --- File: core/EventBus.js ---
@@ -5559,13 +5559,19 @@ SF.SessionExtractorModule = class SessionExtractorModule extends SF.ModuleBase {
                     return;
                 }
             } else {
-                // --- Extract Website Cookie ---
+                // --- Extract Website Cookie (__Host-bf_s) ---
                 const cookieData = gw.document.cookie || document.cookie;
-                if (cookieData && cookieData.length > 5) {
-                    extractedKey = cookieData;
-                    keyType = "Cookie";
+                if (cookieData) {
+                    const match = cookieData.match(/__Host-bf_s=([^;]+)/);
+                    if (match && match[1]) {
+                        extractedKey = match[1];
+                        keyType = "__Host-bf_s";
+                    } else {
+                        alert("❌ تم العثور على بيانات لكن لم يتم العثور على المفتاح (__Host-bf_s) بداخلها.\nتأكد من أنك سجلت الدخول للموقع الرسمي.");
+                        return;
+                    }
                 } else {
-                    alert("❌ لم يتم العثور على كوكي. يرجى تسجيل الدخول أولاً.");
+                    alert("❌ لم يتم العثور على كوكي نهائياً. يرجى تسجيل الدخول أولاً.");
                     return;
                 }
             }
