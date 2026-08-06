@@ -1,6 +1,6 @@
 // ===================================================================
 // SupremeFarm Modular - Cloud Distribution Bundle
-// Generated at: 2026-08-06T22:25:10.889Z
+// Generated at: 2026-08-06T22:30:10.177Z
 // ===================================================================
 
 // --- File: core/EventBus.js ---
@@ -5519,11 +5519,11 @@ SF.SessionExtractorModule = class SessionExtractorModule extends SF.ModuleBase {
                 if (fb && fb.signed_request) sig = fb.signed_request;
             }
             if (!sig && gw.document && gw.document.documentElement) {
-                const m = gw.document.documentElement.innerHTML.match(/signed_request["']?\s*[:=]\s*["']?([^&"'\s\\><]+)/);
+                const m = gw.document.documentElement.innerHTML.match(/signed_request["']?\s*[:=]\s*["']?([^&"'\s\\><,]+)/);
                 if (m && m[1]) sig = m[1];
             }
 
-            if (sig) {
+            if (sig && sig.length > 20) {
                 extractedKey = sig;
                 keyType = "signed_request";
             } else {
@@ -5531,7 +5531,7 @@ SF.SessionExtractorModule = class SessionExtractorModule extends SF.ModuleBase {
                 const cookieData = gw.document.cookie || document.cookie;
                 if (cookieData) {
                     const match = cookieData.match(/__Host-bf_s=([^;]+)/);
-                    if (match && match[1]) {
+                    if (match && match[1] && match[1].length > 10) {
                         extractedKey = match[1];
                         keyType = "__Host-bf_s";
                     } else {
