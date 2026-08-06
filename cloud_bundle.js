@@ -1,6 +1,6 @@
 // ===================================================================
 // SupremeFarm Modular - Cloud Distribution Bundle
-// Generated at: 2026-08-02T21:43:16.013Z
+// Generated at: 2026-08-06T20:46:46.604Z
 // ===================================================================
 
 // --- File: core/EventBus.js ---
@@ -5415,6 +5415,135 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
 // Register module
 if (window.SF && window.SF.modules) {
     window.SF.modules.register(new SF.AutoMegaHarvestModule());
+}
+
+
+// --- File: features/SessionExtractorModule.js ---
+window.SF = window.SF || {};
+
+SF.SessionExtractorModule = class SessionExtractorModule extends SF.ModuleBase {
+    constructor() {
+        super('session_extractor', 'استخراج الكوكي والطلبات', '🍪');
+        this.lastRequestUrl = "";
+        this.lastRequestBody = "";
+
+        // اعتراض الطلبات لحفظ أحدث طلب
+        SF.bus.on('network:request', (req) => {
+            if (req.url && (req.url.includes("api.php") || req.url.includes("gateway"))) {
+                this.lastRequestUrl = req.url;
+                if (req.data) {
+                    this.lastRequestBody = (typeof req.data === 'string') ? req.data : JSON.stringify(req.data);
+                }
+            }
+        });
+    }
+
+    render() {
+        return `
+            <style>
+                .sf-extractor-btn {
+                    padding: 10px 15px;
+                    border: none;
+                    border-radius: 6px;
+                    font-weight: bold;
+                    cursor: pointer;
+                    width: 100%;
+                    transition: all 0.3s ease;
+                    font-family: inherit;
+                    margin-bottom: 8px;
+                    background: #2c3e50; 
+                    color: #ecf0f1;
+                    border: 1px solid rgba(255,255,255,0.1);
+                }
+                .sf-extractor-btn:hover { background: #34495e; border-color: #00d2d3; }
+                .sf-extractor-textarea {
+                    width: 100%;
+                    height: 60px;
+                    background: rgba(0,0,0,0.5);
+                    border: 1px solid rgba(255,255,255,0.2);
+                    color: #1dd1a1;
+                    padding: 8px;
+                    border-radius: 4px;
+                    outline: none;
+                    resize: vertical;
+                    font-family: monospace;
+                    font-size: 11px;
+                    margin-bottom: 12px;
+                    word-break: break-all;
+                }
+            </style>
+            
+            <div class="sf-card">
+                <p style="color: var(--sf-text-muted); font-size: 12px; margin-bottom: 15px; text-align: center;">
+                    أدوات المطورين: يمكنك استخراج الكوكي (Session) أو آخر ريكوست لتوظيفها في سكربتات خارجية (بايثون وغيرها).
+                </p>
+                
+                <button id="sf-btn-extract-cookie" class="sf-extractor-btn">🍪 استخراج ونسخ الكوكي (Cookie)</button>
+                <textarea id="sf-txt-cookie" class="sf-extractor-textarea" readonly placeholder="سيظهر الكوكي هنا..."></textarea>
+
+                <button id="sf-btn-extract-req" class="sf-extractor-btn">🌐 استخراج ونسخ آخر ريكوست (Request API)</button>
+                <textarea id="sf-txt-req" class="sf-extractor-textarea" readonly placeholder="سيظهر رابط الريكوست هنا..." style="height:40px;"></textarea>
+                <textarea id="sf-txt-body" class="sf-extractor-textarea" readonly placeholder="سيظهر محتوى الطلب (Body) هنا..." style="height:40px;"></textarea>
+            </div>
+        `;
+    }
+
+    bindEvents() {
+        const btnCookie = this.container.querySelector('#sf-btn-extract-cookie');
+        const txtCookie = this.container.querySelector('#sf-txt-cookie');
+        
+        const btnReq = this.container.querySelector('#sf-btn-extract-req');
+        const txtReq = this.container.querySelector('#sf-txt-req');
+        const txtBody = this.container.querySelector('#sf-txt-body');
+
+        btnCookie.addEventListener('click', () => {
+            const gw = (typeof unsafeWindow !== 'undefined') ? unsafeWindow : window;
+            const cookieData = gw.document.cookie || document.cookie;
+            
+            if (!cookieData) {
+                txtCookie.value = "لم يتم العثور على كوكي.";
+                return;
+            }
+
+            txtCookie.value = cookieData;
+            
+            navigator.clipboard.writeText(cookieData).then(() => {
+                const oldText = btnCookie.innerText;
+                btnCookie.innerText = "✅ تم النسخ بنجاح!";
+                btnCookie.style.background = "#10ac84";
+                setTimeout(() => {
+                    btnCookie.innerText = oldText;
+                    btnCookie.style.background = "#2c3e50";
+                }, 2000);
+            }).catch(() => alert("فشل النسخ التلقائي، الرجاء النسخ يدوياً من المربع."));
+        });
+
+        btnReq.addEventListener('click', () => {
+            if (!this.lastRequestUrl) {
+                alert("⚠️ لم يتم التقاط أي ريكوست حتى الآن. قم بعمل أي حركة باللعبة ثم حاول مجدداً.");
+                return;
+            }
+            
+            txtReq.value = this.lastRequestUrl;
+            txtBody.value = this.lastRequestBody;
+
+            const fullData = "URL:\n" + this.lastRequestUrl + "\n\nBODY:\n" + this.lastRequestBody;
+            navigator.clipboard.writeText(fullData).then(() => {
+                const oldText = btnReq.innerText;
+                btnReq.innerText = "✅ تم النسخ بنجاح!";
+                btnReq.style.background = "#10ac84";
+                setTimeout(() => {
+                    btnReq.innerText = oldText;
+                    btnReq.style.background = "#2c3e50";
+                }, 2000);
+            }).catch(() => alert("فشل النسخ التلقائي، الرجاء النسخ يدوياً من المربع."));
+        });
+    }
+};
+
+// Register module
+if (window.SF && window.SF.modules) {
+    window.SF.modules.register(new SF.SessionExtractorModule());
 }
 
 
