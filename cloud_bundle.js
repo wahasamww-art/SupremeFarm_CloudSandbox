@@ -1,6 +1,6 @@
 // ===================================================================
 // SupremeFarm Modular - Cloud Distribution Bundle
-// Generated at: 2026-08-06T22:30:10.177Z
+// Generated at: 2026-07-13T08:04:20.101Z
 // ===================================================================
 
 // --- File: core/EventBus.js ---
@@ -175,7 +175,7 @@ SF.StorageManager = class StorageManager {
 
 
 // --- File: network/NetworkInterceptor.js ---
-// --- network\NetworkInterceptor.js ---
+﻿// --- network\NetworkInterceptor.js ---
 window.SF = window.SF || {};
 
 SF.NetworkInterceptor = class NetworkInterceptor {
@@ -195,12 +195,7 @@ SF.NetworkInterceptor = class NetworkInterceptor {
     _isGameApi(url) {
         if (!url) return false;
         const urlStr = url.toString().toLowerCase();
-        return urlStr.includes('farm-us') || 
-               urlStr.includes('centurygames') || 
-               urlStr.includes('akamaized') ||
-               urlStr.includes('api.php') ||
-               urlStr.includes('gateway.php') ||
-               urlStr.includes('index.php');
+        return urlStr.includes('farm-us') || urlStr.includes('centurygames') || urlStr.includes('akamaized');
     }
 
     _interceptXHR() {
@@ -950,6 +945,92 @@ SF.UIManager = class UIManager {
 
 
 
+// --- File: features/DashboardModule.js ---
+﻿// --- features\DashboardModule.js ---
+window.SF = window.SF || {};
+
+SF.DashboardModule = class DashboardModule extends SF.ModuleBase {
+    constructor() {
+        super('dashboard', 'لوحة التحكم', '📊');
+    }
+
+    init(container) {
+        super.init(container);
+        SF.bus.on('player:update', () => this.update());
+
+        // Update stats periodically
+        setInterval(() => {
+            if(this.container.classList.contains('active')) this.update();
+        }, 1000);
+    }
+
+    render() {
+        return `
+            <div class="sf-card">
+                <h3 class="sf-card-title">معلومات اللاعب</h3>
+                <div class="sf-grid">
+                    <div class="sf-stat">
+                        <div class="sf-stat-label">المعرف (SNS ID)</div>
+                        <div class="sf-stat-value" id="sf-dash-sns">جاري...</div>
+                    </div>
+                    <div class="sf-stat">
+                        <div class="sf-stat-label">المستوى</div>
+                        <div class="sf-stat-value" id="sf-dash-lvl">0</div>
+                    </div>
+                    <div class="sf-stat">
+                        <div class="sf-stat-label">العملات</div>
+                        <div class="sf-stat-value" id="sf-dash-coins">0</div>
+                    </div>
+                    <div class="sf-stat">
+                        <div class="sf-stat-label">الدنانير</div>
+                        <div class="sf-stat-value" id="sf-dash-cash">0</div>
+                    </div>
+                </div>
+            </div>
+            <div class="sf-card">
+                <h3 class="sf-card-title">حالة الشبكة</h3>
+                <div class="sf-grid">
+                    <div class="sf-stat">
+                        <div class="sf-stat-label">الطلبات الكلية</div>
+                        <div class="sf-stat-value" id="sf-dash-req">0</div>
+                    </div>
+                    <div class="sf-stat">
+                        <div class="sf-stat-label">طلبات اللعبة</div>
+                        <div class="sf-stat-value" id="sf-dash-greq">0</div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    update() {
+        if (!SF.dataExtractor || !SF.netMonitor) return;
+
+        const p = SF.dataExtractor.playerInfo;
+        const s = SF.netMonitor.getStats();
+
+        const elSns = document.getElementById('sf-dash-sns');
+        if(elSns) elSns.innerText = p.snsId;
+        const elLvl = document.getElementById('sf-dash-lvl');
+        if(elLvl) elLvl.innerText = p.level;
+        const elCoins = document.getElementById('sf-dash-coins');
+        if(elCoins) elCoins.innerText = p.coins.toLocaleString();
+        const elCash = document.getElementById('sf-dash-cash');
+        if(elCash) elCash.innerText = p.diamonds.toLocaleString();
+
+        const elReq = document.getElementById('sf-dash-req');
+        if(elReq) elReq.innerText = s.totalRequests;
+        const elGreq = document.getElementById('sf-dash-greq');
+        if(elGreq) elGreq.innerText = s.gameRequests;
+    }
+};
+
+// Register the module
+SF.modules.register(new SF.DashboardModule());
+
+
+
+
 // --- File: features/AutoFarmModule.js ---
 // --- features\AutoFarmModule.js ---
 window.SF = window.SF || {};
@@ -1578,7 +1659,7 @@ SF.AutoFarmModule = class AutoFarmModule extends SF.ModuleBase {
         });
 
         let count = 0;
-        const batchSize = 250; // زيادة الدفعة لتسريع الحصاد (سرعة البرق)
+        const batchSize = 25; // تصغير الدفعة لتفادي تهنيج الواجهة
         for (let i = 0; i < toHarvest.length; i += batchSize) {
             const batch = toHarvest.slice(i, i + batchSize);
             for (let b = 0; b < batch.length; b++) {
@@ -1630,35 +1711,10 @@ SF.AutoFarmModule = class AutoFarmModule extends SF.ModuleBase {
                         }
                     } catch (e) {}
 
-                    // إضافة تحديث لحظي للواجهة والحظيرة لتفادي الحاجة لتحديث الصفحة
-                    try {
-                        let gw = unsafeWindow;
-                        let pObj = mo.plant || mo.crop || mo;
-                        let seedId = pObj.plant_id || pObj.plantId || pObj.seed_id || pObj.configData?.id;
-                        if (seedId && seedId != 101 && gw.Config) {
-                            let c = gw.Config.Store_GetItemData(seedId);
-                            let productId = c ? (c.product_id || c.product || seedId) : seedId;
-                            
-                            if (!c && mo.configData && mo.configData.product_id) {
-                                productId = mo.configData.product_id;
-                            }
-
-                            if (productId && gw.GF && gw.GF.loginModel && gw.GF.loginModel.AppData && gw.GF.loginModel.AppData.storage) {
-                                let curQty = gw.GF.loginModel.AppData.storage[productId] || 0;
-                                gw.GF.loginModel.AppData.storage[productId] = curQty + 1;
-                            }
-
-                            if (productId && gw.GF && gw.GF.gameController && gw.Animations) {
-                                gw.GF.gameController.collectTopTip(productId, 1);
-                                // [تعديل حصاد البرق]: تم تعطيل الرسوم المتحركة flyItemTo لتفادي تهنيج المتصفح
-                            }
-                        }
-                    } catch(e) {}
-
                     count++;
                 } catch(e) {}
             }
-            await new Promise(r => setTimeout(r, 0)); // تفريغ الذاكرة فورياً بدون تأخير (0ms)
+            await new Promise(r => setTimeout(r, 60)); // راحة للمعالج
         }
         return count;
     }
@@ -1936,7 +1992,7 @@ SF.modules.register(new SF.AutoFarmModule());
 
 
 // --- File: features/ZeroGasModule.js ---
-// --- features\ZeroGasModule.js ---
+﻿// --- features\ZeroGasModule.js ---
 window.SF = window.SF || {};
 
 SF.ZeroGasModule = class ZeroGasModule extends SF.ModuleBase {
@@ -2130,13 +2186,13 @@ SF.ZeroGasModule = class ZeroGasModule extends SF.ModuleBase {
 };
 
 // Register the module
-new SF.ZeroGasModule();
+SF.modules.register(new SF.ZeroGasModule());
 
 
 
 
 // --- File: features/CropinatorModule.js ---
-// --- features\CropinatorModule.js ---
+﻿// --- features\CropinatorModule.js ---
 window.SF = window.SF || {};
 
 SF.CropinatorModule = class CropinatorModule extends SF.ModuleBase {
@@ -2511,7 +2567,7 @@ SF.CropinatorModule = class CropinatorModule extends SF.ModuleBase {
 };
 
 // Register the module
-new SF.CropinatorModule();
+SF.modules.register(new SF.CropinatorModule());
 
 
 
@@ -2792,7 +2848,7 @@ SF.MachineBuilderModule = class MachineBuilderModule extends SF.ModuleBase {
             } else {
                 selectMachine.innerHTML = '';
                 incompleteMachines.forEach((item, index) => {
-                    let rawId = item.objData.configData ? item.objData.configData.id : (item.objData.serverData ? item.objData.serverData.id : item.objData.id);
+                    let rawId = item.objData.serverData ? item.objData.serverData.id : item.objData.id;
                     let name = "آلة مجهولة";
                     try {
                     if (item.objData.configData && item.objData.configData.name) {
@@ -3124,7 +3180,7 @@ SF.MachineBuilderModule = class MachineBuilderModule extends SF.ModuleBase {
         btnStart.disabled = true;
         btnScan.disabled = true;
 
-        let rawId = targetObj.configData ? targetObj.configData.id : (targetObj.serverData ? targetObj.serverData.id : targetObj.id);
+        let rawId = targetObj.serverData ? targetObj.serverData.id : targetObj.id;
         logMsg(`[بدء الهجوم] على الآلة ID: ${rawId} | العدد المطلوب: ${totalMissing}`);
 
         const myUid = GF.loginModel.AppData.uid;
@@ -3279,8 +3335,8 @@ SF.MachineBuilderModule = class MachineBuilderModule extends SF.ModuleBase {
                 }
 
                 let batchItems = [];
-                let rawX = targetObj.grid_x !== undefined ? targetObj.grid_x : (targetObj.serverData ? targetObj.serverData.x : 0);
-                let rawY = targetObj.grid_y !== undefined ? targetObj.grid_y : (targetObj.serverData ? targetObj.serverData.y : 0);
+                let rawX = targetObj.serverData ? targetObj.serverData.x : targetObj.grid_x;
+                let rawY = targetObj.serverData ? targetObj.serverData.y : targetObj.grid_y;
 
                 if (!currentAlt.iq) currentAlt.iq = Math.floor(Math.random() * 100000) + 1000;
                 currentAlt.iq++;
@@ -3353,11 +3409,6 @@ SF.MachineBuilderModule = class MachineBuilderModule extends SF.ModuleBase {
                     // بناءً على هيكل الرد الصحيح (موضح بالصورة): النجاح يعتمد على وجود mid كرقم داخل objects_to_update
                     if (responseData.objects_to_update && responseData.objects_to_update.length > 0 && responseData.objects_to_update[0].mid) {
                         isSuccess = true;
-                    } else if (responseData.error === "no need") {
-                        limitReached = false;
-                        materialQueue = materialQueue.filter(m => m !== selectedMatId);
-                        totalMissing = materialQueue.length;
-                        logMsg(`[مادة مكتملة] المادة ${selectedMatId} اكتملت (no need).`, 'info');
                     } else if (responseData.error || responseData.retrieve_error || responseData.state !== "ok") {
                         limitReached = true;
                     } else {
@@ -3443,10 +3494,6 @@ SF.AlbumTrackerModule = class AlbumTrackerModule extends SF.ModuleBase {
         this.langDict = { en: null, tr: null };
         this.isFetchingLangs = false;
         this.imgLoadTasks = [];
-        
-        // المتغيرات الجديدة لفحص الأصدقاء
-        this.isFriendMatching = false;
-        this.friendMissingNames = [];
     }
 
     render() {
@@ -3505,21 +3552,6 @@ SF.AlbumTrackerModule = class AlbumTrackerModule extends SF.ModuleBase {
 
                 <div id="sf-album-tracker-content" class="sf-album-content">
                     <div style="position: sticky; top: 0; z-index: 100; background: var(--sf-bg); padding-bottom: 10px; margin-bottom: 10px;">
-                        
-                        <!-- صندوق فحص النواقص للصديق -->
-                        <div style="display: flex; flex-direction: column; margin-bottom: 10px; background: rgba(0,0,0,0.2); border-radius: 5px;">
-                            <div id="sf-friend-box-header" style="display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; cursor: pointer; border-bottom: 1px solid rgba(255,255,255,0.1);">
-                                <span style="color: #f1c40f; font-size: 14px; font-weight: bold;">📋 قائمة نواقص الصديق (اضغط للطي/الفتح)</span>
-                                <span id="sf-friend-box-icon" style="color: white; font-size: 14px; transition: 0.3s; display: inline-block;">▼</span>
-                            </div>
-                            <div id="sf-friend-missing-body" style="display: flex; gap: 10px; padding: 10px; transition: 0.3s;">
-                                <textarea id="sf-album-friend-missing-text" placeholder="📝 الصق هنا قائمة النواقص المنسوخة من الصديق..." style="flex: 1; padding: 10px; border-radius:5px; border:1px solid #3498db; background: rgba(0,0,0,0.5); color: white; font-size: 13px; outline: none; resize: none; min-height: 40px; max-height: 250px; overflow-y: auto; transition: height 0.2s;"></textarea>
-                                <div style="display: flex; flex-direction: column; justify-content: flex-start; width: 120px;">
-                                    <button id="sf-btn-match-friend" class="sf-btn" style="background:#2ecc71; padding: 12px 8px; font-size:13px; height: 100%;">فحص المتطابق 🔍</button>
-                                </div>
-                            </div>
-                        </div>
-
                         <input type="text" id="sf-album-search-input" placeholder="🔍 بحث عن بطاقة..." style="width: 100%; padding: 8px; border-radius:5px; border:1px solid var(--sf-border); background: rgba(0,0,0,0.5); color: white; font-size: 13px; outline: none; margin-bottom: 8px; box-sizing: border-box;" />
                         <div style="display: flex; gap: 5px;">
                             <button id="sf-btn-filter-missing" class="sf-btn" style="flex:1; background:#e74c3c; font-size:12px;">فلترة النواقص ❌</button>
@@ -3558,110 +3590,8 @@ SF.AlbumTrackerModule = class AlbumTrackerModule extends SF.ModuleBase {
             btn.onclick = () => this.openAlbumTracker(btn, contentDiv);
         }
 
-        const ta = this.container.querySelector('#sf-album-friend-missing-text');
-        if (ta) {
-            ta.oninput = () => {
-                ta.style.height = '';
-                ta.style.height = Math.min(ta.scrollHeight, 250) + 'px';
-            };
-        }
-
-        const friendHeader = this.container.querySelector('#sf-friend-box-header');
-        if (friendHeader) {
-            friendHeader.onclick = () => this.toggleFriendBox();
-        }
-
-        const matchBtn = this.container.querySelector('#sf-btn-match-friend');
-        if (matchBtn) {
-            matchBtn.onclick = () => this.matchFriendCards();
-        }
-
         unsafeWindow.triggerAlbumSmartSearch = (cardId, isAsk, pageId) => this.triggerAlbumSmartSearch(cardId, isAsk, pageId);
         unsafeWindow.copyAlbumText = (text, btnElement) => this.copyAlbumText(text, btnElement);
-    }
-
-    toggleFriendBox(forceState = null) {
-        let body = this.container.querySelector('#sf-friend-missing-body');
-        let icon = this.container.querySelector('#sf-friend-box-icon');
-        if (!body || !icon) return;
-        
-        let isHidden = body.style.display === 'none';
-        let newState = forceState !== null ? forceState : isHidden;
-        
-        if (newState) {
-            body.style.display = 'flex';
-            icon.style.transform = 'rotate(0deg)';
-        } else {
-            body.style.display = 'none';
-            icon.style.transform = 'rotate(180deg)';
-        }
-    }
-
-    matchFriendCards() {
-        if (this.isFriendMatching) {
-            this.isFriendMatching = false;
-            this.friendMissingNames = [];
-            let ta = this.container.querySelector('#sf-album-friend-missing-text');
-            if (ta) {
-                ta.value = '';
-                ta.style.height = '40px';
-            }
-            let btn = this.container.querySelector('#sf-btn-match-friend');
-            if(btn) {
-                btn.innerText = 'فحص المتطابق 🔍';
-                btn.style.background = '#2ecc71';
-            }
-            
-            this.toggleFriendBox(true);
-            this.filterAlbumCards();
-            return;
-        }
-
-        let ta = this.container.querySelector('#sf-album-friend-missing-text');
-        let text = ta ? ta.value.trim() : '';
-        
-        if (!text) {
-            alert("يرجى لصق النواقص أولاً في الحقل المخصص.");
-            return;
-        }
-
-        let lines = text.split('\n');
-        this.friendMissingNames = [];
-        lines.forEach(line => {
-            line = line.trim();
-            if (line.startsWith('- ')) {
-                let name = line.substring(2);
-                name = name.replace(/\(نادر.*\)/, '').trim();
-                if (name) this.friendMissingNames.push(name.toLowerCase());
-            } else if (!line.startsWith('[') && line.length > 0) {
-                this.friendMissingNames.push(line.toLowerCase());
-            }
-        });
-
-        if (this.friendMissingNames.length === 0) {
-            alert("لم يتم العثور على أسماء كروت في النص.");
-            return;
-        }
-
-        // إلغاء فلتر النواقص تلقائياً لتجنب التعارض الخفي وإظهار المخزون بالكامل للمطابقة
-        if (this.showingOnlyMissing) {
-            this.showingOnlyMissing = false;
-            let btnFilter = this.container.querySelector('#sf-btn-filter-missing');
-            if (btnFilter) {
-                btnFilter.style.background = '#e74c3c';
-                btnFilter.innerText = 'فلترة النواقص ❌';
-            }
-        }
-
-        this.isFriendMatching = true;
-        let btn = this.container.querySelector('#sf-btn-match-friend');
-        if(btn) {
-            btn.innerText = 'إلغاء التطابق ❌';
-            btn.style.background = '#e74c3c';
-        }
-        
-        this.toggleFriendBox(false);
-        this.filterAlbumCards();
     }
 
     fetchLanguages() {
@@ -3721,24 +3651,11 @@ SF.AlbumTrackerModule = class AlbumTrackerModule extends SF.ModuleBase {
         rows.forEach(row => {
             let text = row.getAttribute('data-search').toLowerCase();
             let isMissing = row.getAttribute('data-missing') === 'true';
-            let cardNameRaw = row.getAttribute('data-card-name');
-            let cardName = cardNameRaw ? cardNameRaw.toLowerCase() : '';
-            let count = parseInt(row.getAttribute('data-count') || '0');
             
             let matchesSearch = text.includes(query);
             let matchesFilter = this.showingOnlyMissing ? isMissing : true;
             
-            let matchesFriend = true;
-            if (this.isFriendMatching) {
-                if (count <= 1) {
-                    matchesFriend = false; // Player doesn't have duplicates to send
-                } else {
-                    let isRequested = this.friendMissingNames.some(reqName => cardName.includes(reqName) || reqName.includes(cardName));
-                    if (!isRequested) matchesFriend = false;
-                }
-            }
-            
-            row.style.display = (matchesSearch && matchesFilter && matchesFriend) ? '' : 'none';
+            row.style.display = (matchesSearch && matchesFilter) ? '' : 'none';
         });
 
         pages.forEach(page => {
@@ -3747,7 +3664,7 @@ SF.AlbumTrackerModule = class AlbumTrackerModule extends SF.ModuleBase {
             pageRows.forEach(r => { if (r.style.display !== 'none') hasVisible = true; });
             
             page.style.display = hasVisible ? '' : 'none';
-            if (query.trim() !== '' || this.showingOnlyMissing || this.isFriendMatching) {
+            if (query.trim() !== '' || this.showingOnlyMissing) {
                 page.open = hasVisible;
             }
         });
@@ -3914,7 +3831,7 @@ SF.AlbumTrackerModule = class AlbumTrackerModule extends SF.ModuleBase {
                             <summary class="sf-page-title">
                                 ${setName} (${setId}) <span style="font-size:10px; float:left;">اضغط للفتح</span>
                             </summary>
-                            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; padding: 10px;">
+                            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; padding: 10px;">
                     `;
 
                     pageData.cards.sort((a,b) => a.id - b.id).forEach(card => {
@@ -3954,11 +3871,11 @@ SF.AlbumTrackerModule = class AlbumTrackerModule extends SF.ModuleBase {
                         let countBadgeHtml = '';
                         
                         if (card.count > 0) {
-                            imgHtml = `<img id="${imgId}" src="" style="width:100%; max-width:110px; aspect-ratio:1; object-fit:contain; border-radius:5px; border:2px solid #2ecc71; background:#fff; display:block; margin: 0 auto;" />`;
-                            countBadgeHtml = `<span style="position: absolute; top: -5px; right: -5px; background: #2ecc71; border-radius: 50%; width: 20px; height: 20px; line-height: 20px; text-align: center; font-weight: bold; color: white; border: 2px solid white; z-index: 2; font-size:12px; box-shadow: 0 2px 4px rgba(0,0,0,0.3);">${card.count}</span>`;
+                            imgHtml = `<img id="${imgId}" src="" style="width:60px; height:60px; object-fit:contain; border-radius:5px; border:2px solid #2ecc71; background:#fff; display:block; margin: 0 auto;" />`;
+                            countBadgeHtml = `<span style="position: absolute; top: -5px; right: -5px; background: #2ecc71; border-radius: 50%; width: 20px; height: 20px; line-height: 20px; text-align: center; font-weight: bold; color: white; border: 2px solid white; z-index: 2; font-size:10px; box-shadow: 0 2px 4px rgba(0,0,0,0.3);">${card.count}</span>`;
                         } else {
-                            imgHtml = `<img id="${imgId}" src="" style="width:100%; max-width:110px; aspect-ratio:1; object-fit:contain; border-radius:5px; border:2px solid #e74c3c; filter: grayscale(40%) opacity(85%); background:#fff; display:block; margin: 0 auto;" title="غير مملوك" />`;
-                            countBadgeHtml = `<span style="position: absolute; top: -5px; right: -5px; background: #e74c3c; border-radius: 50%; width: 20px; height: 20px; line-height: 20px; text-align: center; font-weight: bold; color: white; border: 2px solid white; z-index: 2; font-size:11px; box-shadow: 0 2px 4px rgba(0,0,0,0.3);">❌</span>`;
+                            imgHtml = `<img id="${imgId}" src="" style="width:60px; height:60px; object-fit:contain; border-radius:5px; border:2px solid #e74c3c; filter: grayscale(40%) opacity(85%); background:#fff; display:block; margin: 0 auto;" title="غير مملوك" />`;
+                            countBadgeHtml = `<span style="position: absolute; top: -5px; right: -5px; background: #e74c3c; border-radius: 50%; width: 20px; height: 20px; line-height: 20px; text-align: center; font-weight: bold; color: white; border: 2px solid white; z-index: 2; font-size:9px; box-shadow: 0 2px 4px rgba(0,0,0,0.3);">❌</span>`;
                         }
 
                         this.imgLoadTasks.push(() => {
@@ -4005,7 +3922,7 @@ SF.AlbumTrackerModule = class AlbumTrackerModule extends SF.ModuleBase {
                         let copyIcon = card.count === 0 ? `<button style="cursor:pointer; font-size:11px; padding: 4px; margin-bottom: 4px; width: 100%; background: #3498db; color: white; border: none; border-radius: 5px; font-weight: bold; transition: 0.3s;" onclick="window.copyAlbumText('${fullCopyText.replace(/'/g, "\\'")}', this)" title="نسخ اسم الكارت">📋 نسخ</button>` : '';
 
                         tableHtml += `
-                            <div class="sf-album-card-row" data-search="${searchText.toLowerCase()}" data-missing="${isMissingStr}" data-card-name="${card.name}" data-count="${card.count}" style="background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.05); border-radius: 8px; padding: 8px; display: flex; flex-direction: column; align-items: center; justify-content: space-between; box-shadow: 0 4px 6px rgba(0,0,0,0.2);">
+                            <div class="sf-album-card-row" data-search="${searchText.toLowerCase()}" data-missing="${isMissingStr}" data-card-name="${card.name}" style="background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.05); border-radius: 8px; padding: 6px; display: flex; flex-direction: column; align-items: center; justify-content: space-between; box-shadow: 0 4px 6px rgba(0,0,0,0.2);">
                                 
                                 <div style="position: relative; width: 100%;">
                                     ${countBadgeHtml}
@@ -4280,1304 +4197,6 @@ SF.MineModule = class MineModule extends SF.ModuleBase {
 console.log('[SF-MineModule] ✅ MineModule class defined. Registering now...');
 SF.modules.register(new SF.MineModule());
 console.log('[SF-MineModule] ✅ Registration complete. Total modules:', SF.modules.getModules().length);
-
-
-// --- File: features/BattlePassModule.js ---
-window.SF = window.SF || {};
-
-SF.BattlePassModule = class BattlePassModule extends SF.ModuleBase {
-    constructor() {
-        super('battlepass', 'حاصد التذكرة', '🎫');
-        this.smartButtonInterval = setInterval(() => this.manageSmartButton(), 500);
-    }
-
-    render() {
-        return `
-            <style>
-                .sf-bp-btn {
-                    padding: 10px 15px;
-                    border: none;
-                    border-radius: 6px;
-                    font-weight: bold;
-                    cursor: pointer;
-                    width: 100%;
-                    transition: all 0.3s ease;
-                    font-family: inherit;
-                    background: linear-gradient(180deg, #ffdc3a 0%, #ff9800 100%);
-                    color: #fff;
-                    border: 1px solid #fff;
-                }
-                .sf-bp-btn:hover {
-                    opacity: 0.8;
-                }
-                .sf-bp-log {
-                    margin-top: 10px;
-                    padding: 8px;
-                    background: rgba(0,0,0,0.4);
-                    border-radius: 5px;
-                    border: 1px solid rgba(255,255,255,0.1);
-                    font-size: 11px;
-                    color: #a4b0be;
-                    text-align: right;
-                    min-height: 20px;
-                }
-            </style>
-            
-            <div class="sf-card">
-                <p style="color: var(--sf-text-muted); font-size: 13px; margin-bottom: 15px; text-align: center;">
-                    استخراج الهدايا الحقيقية من التذكرة بدون استهلاك الموارد وبدون أقفال.
-                </p>
-                
-                <button id="sf-bp-harvest-btn" class="sf-bp-btn">
-                    🎁 حصد التذكرة الذكي 🎁
-                </button>
-
-                <div id="sf-bp-status-log" class="sf-bp-log">
-                    [النظام] جاهز...
-                </div>
-            </div>
-        `;
-    }
-
-    bindEvents() {
-        const btn = this.container.querySelector('#sf-bp-harvest-btn');
-        if (btn) {
-            btn.onclick = () => {
-                this.executeSmartExploit();
-            };
-        }
-    }
-
-    logStatus(message) {
-        const logDiv = this.container.querySelector('#sf-bp-status-log');
-        if (logDiv) {
-            logDiv.innerText = message;
-        }
-        console.log(`[SF-BattlePassModule] ${message}`);
-    }
-
-    extractAndPlayVisuals(rewardStr) {
-        const gw = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
-        if (!rewardStr) return;
-
-        let visualTriggered = false;
-        try {
-            if (gw.DropEventManager && gw.DropEventManager.instance) {
-                for (let k in gw.DropEventManager.instance) {
-                    if (typeof gw.DropEventManager.instance[k] === 'function' && k.toLowerCase().includes('rewardpanel')) {
-                        gw.DropEventManager.instance[k](rewardStr);
-                        visualTriggered = true; break;
-                    }
-                }
-            }
-        } catch(e) {}
-
-        if (!visualTriggered && gw.App && gw.App.CommonTips) {
-            for (let k in gw.App.CommonTips) {
-                if (typeof gw.App.CommonTips[k] === 'function' && k.toLowerCase().includes('reward') && k.toLowerCase().includes('show')) {
-                    gw.App.CommonTips[k](rewardStr);
-                    visualTriggered = true; break;
-                }
-            }
-        }
-
-        if (!visualTriggered && gw.GF && gw.GF.loginModel) {
-            for (let k in gw.GF.loginModel) {
-                if (typeof gw.GF.loginModel[k] === 'function' && k.toLowerCase().includes('showreward')) {
-                    gw.GF.loginModel[k](rewardStr);
-                    visualTriggered = true; break;
-                }
-            }
-        }
-    }
-
-    executeSmartExploit() {
-        this.logStatus("⏳ جاري إزالة الأقفال والعرض...");
-        const gw = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
-        const model = gw.GF && gw.GF.newBattlePassModel;
-        
-        if (!model) {
-            this.logStatus("⚠️ تعذر العثور على بيانات التذكرة. يرجى فتح اللعبة بالكامل.");
-            return;
-        }
-
-        let eventId = "";
-        try {
-            if (typeof model.getEvent === 'function') eventId = model.getEvent();
-            else if (model.data && model.data.event) eventId = model.data.event;
-        } catch(e) {}
-
-        const netCore = gw.NetUtils || (gw.App && gw.App.NetUtils) || (gw.GF && gw.GF.NetUtils);
-
-        // 1. تحديد الجوائز المتبقية (45 حد أقصى)
-        let payloadList = [];
-        let exactRewardsArray = []; 
-        let allConfigRewards = typeof model.getRewardsList === 'function' ? model.getRewardsList() : [];
-
-        for (let i = 1; i <= 45; i++) {
-            let scoreRequired = i * 100;
-            let isClaimed = false;
-
-            if (typeof model.isBPClaimed === 'function') {
-                isClaimed = model.isBPClaimed(scoreRequired, 1);
-            } else if (model.data && model.data.bpReward && Array.isArray(model.data.bpReward)) {
-                isClaimed = model.data.bpReward.includes(scoreRequired + "_1");
-            }
-
-            if (!isClaimed) {
-                payloadList.push(scoreRequired + "_1");
-
-                try {
-                    let levelConfig = allConfigRewards.find(r => r.score == scoreRequired);
-                    if (levelConfig) {
-                        let rewardStr = levelConfig.reward1 || levelConfig.freeReward || levelConfig.reward;
-                        if (rewardStr) exactRewardsArray.push(rewardStr);
-                    }
-                } catch(e) {}
-            }
-        }
-
-        if (payloadList.length === 0) {
-            this.logStatus("✅ لقد قمت بحصد جميع الهدايا مسبقاً!");
-            return;
-        }
-
-        let payload = {
-            action: "getReward",
-            event: eventId,
-            list: payloadList
-        };
-
-        // 2. إرسال الطلب للسيرفر
-        if (netCore && netCore.request) {
-            netCore.request("Activity/NewBattlePass", payload, (res) => {
-                this._forceUnlockAndVisuals(model, payloadList, res, exactRewardsArray, gw);
-                this.logStatus("✅ تم حصد الجوائز بنجاح!");
-            }, gw);
-        } else {
-             // Fallback to enqueue if request is missing
-             if(gw.NetUtils && gw.NetUtils.enqueue) {
-                 gw.NetUtils.enqueue("Activity/NewBattlePass", payload);
-             }
-        }
-
-        // حماية إضافية (Fallback)
-        setTimeout(() => {
-            this._forceUnlockAndVisuals(model, payloadList, null, exactRewardsArray, gw);
-            this.logStatus("✅ تمت العملية (عبر نظام الحماية).");
-        }, 1500);
-    }
-
-    _forceUnlockAndVisuals(model, payloadList, res, exactRewardsArray, gw) {
-        if (model.data) {
-            if (!Array.isArray(model.data.bpReward)) model.data.bpReward = [];
-            payloadList.forEach(id => {
-                if (!model.data.bpReward.includes(id)) {
-                    model.data.bpReward.push(id);
-                }
-            });
-        }
-
-        try {
-            if (gw.GF.newBattlePassController && gw.GF.newBattlePassController.mainView && gw.GF.newBattlePassController.mainView.milestoneView) {
-                gw.GF.newBattlePassController.mainView.milestoneView.udpateBP();
-            }
-        } catch(e) {}
-
-        let serverRewardStr = (res && (res.reward || res.rewards || res.gifts || (res.data && res.data.reward))) || "";
-        let finalVisualStr = serverRewardStr;
-        if (!finalVisualStr && exactRewardsArray.length > 0) {
-            finalVisualStr = exactRewardsArray.join(",");
-        }
-
-        if (finalVisualStr) {
-            this.extractAndPlayVisuals(finalVisualStr);
-        }
-
-        let btn = document.getElementById('btn-bp-smart');
-        if (btn) {
-            btn.style.display = 'none';
-            btn.innerHTML = "🎁 حصد التذكرة الذكي 🎁";
-        }
-    }
-
-    manageSmartButton() {
-        const gw = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
-        let btn = document.getElementById('btn-bp-smart');
-
-        let isUIOpen = false;
-        try {
-            let mainView = gw.GF.newBattlePassController.mainView;
-            if (mainView && mainView.parent) {
-                isUIOpen = true;
-            }
-        } catch(e) {}
-
-        if (isUIOpen) {
-            let hasUnclaimed = false;
-            let model = gw.GF && gw.GF.newBattlePassModel;
-            if (model) {
-                for (let i = 1; i <= 45; i++) {
-                    let scoreRequired = i * 100;
-                    let isClaimed = false;
-                    if (typeof model.isBPClaimed === 'function') {
-                        isClaimed = model.isBPClaimed(scoreRequired, 1);
-                    } else if (model.data && model.data.bpReward && Array.isArray(model.data.bpReward)) {
-                        isClaimed = model.data.bpReward.includes(scoreRequired + "_1");
-                    }
-                    if (!isClaimed) {
-                        hasUnclaimed = true;
-                        break;
-                    }
-                }
-            }
-
-            if (hasUnclaimed) {
-                if (!btn) {
-                    btn = document.createElement("button");
-                    btn.id = "btn-bp-smart";
-                    btn.innerHTML = "🎁 حصد التذكرة الذكي 🎁";
-                    btn.style.cssText = "position:absolute; top:12%; left:50%; transform:translate(-50%, -50%); z-index:9999999; padding:12px 30px; font-size:22px; font-weight:bold; background: linear-gradient(180deg, #ffdc3a 0%, #ff9800 100%); color:#fff; border:3px solid #fff; border-radius:30px; cursor:pointer; box-shadow: 0 4px 8px rgba(0,0,0,0.5); text-shadow: 1px 1px 2px #000; font-family:Tahoma;";
-
-                    btn.onclick = () => {
-                        btn.innerHTML = "⏳ جاري إزالة الأقفال والعرض...";
-                        this.executeSmartExploit();
-                    };
-                    try { document.body.appendChild(btn); } catch(e) {}
-                }
-                btn.style.display = 'block';
-            } else {
-                if (btn) btn.style.display = 'none';
-            }
-        } else {
-            if (btn) btn.style.display = 'none';
-        }
-    }
-};
-
-new SF.BattlePassModule();
-
-
-// --- File: features/IslandPointBuyerModule.js ---
-window.SF = window.SF || {};
-
-SF.IslandPointBuyerModule = class IslandPointBuyerModule extends SF.ModuleBase {
-    constructor() {
-        super('island_buyer', 'شراء نقاط الحدث', '🏝️');
-        this.discoveredTokens = [];
-        this.isRunning = false;
-    }
-
-    render() {
-        return `
-            <style>
-                .sf-ipb-input, .sf-ipb-select {
-                    width: 100%;
-                    padding: 8px;
-                    margin-bottom: 15px;
-                    background: #222;
-                    color: #fff;
-                    border: 1px solid var(--sf-primary);
-                    border-radius: 4px;
-                    box-sizing: border-box;
-                    font-family: inherit;
-                }
-                .sf-ipb-btn {
-                    width: 100%;
-                    padding: 10px;
-                    background: var(--sf-primary);
-                    color: #000;
-                    font-weight: bold;
-                    border: none;
-                    border-radius: 4px;
-                    cursor: pointer;
-                    margin-bottom: 5px;
-                    font-family: inherit;
-                    transition: opacity 0.2s;
-                }
-                .sf-ipb-btn:hover {
-                    opacity: 0.8;
-                }
-                .sf-ipb-btn:disabled {
-                    background: #555;
-                    cursor: not-allowed;
-                }
-                .sf-ipb-refresh {
-                    padding: 8px 12px;
-                    background: #555;
-                    color: white;
-                    border: none;
-                    border-radius: 4px;
-                    cursor: pointer;
-                    margin-left: 10px;
-                    white-space: nowrap;
-                }
-                .sf-ipb-log {
-                    height: 120px;
-                    overflow-y: auto;
-                    background: #000;
-                    color: #0f0;
-                    padding: 8px;
-                    font-size: 11px;
-                    border-radius: 4px;
-                    border: 1px solid #333;
-                    margin-bottom: 15px;
-                    text-align: right;
-                }
-            </style>
-            
-            <div class="sf-card">
-                <p style="color: var(--sf-text-muted); font-size: 13px; margin-bottom: 15px; text-align: center;">
-                    وحدة دقيقة وخالية من التخمين لشراء نقاط المهام للحدث الجاري (مثل الصيف الحافل أو المتجر الغامض) بصيغة قانونية للسيرفر.
-                </p>
-                
-                <div style="display: flex; align-items: center; margin-bottom: 5px;">
-                    <label style="flex-grow: 1; font-size: 13px;">المهام الشغالة (اختر لملء الكود):</label>
-                </div>
-                
-                <div style="display: flex; margin-bottom: 15px;">
-                    <select id="sf-ipb-select" class="sf-ipb-select" style="margin-bottom: 0;"></select>
-                    <button id="sf-ipb-refresh" class="sf-ipb-refresh">🔄 تحديث</button>
-                </div>
-
-                <label style="display: block; font-size: 13px; margin-bottom: 5px;">كود العنصر (ID):</label>
-                <input type="number" id="sf-ipb-id" class="sf-ipb-input" placeholder="اختر من القائمة أو اكتب الكود">
-
-                <label style="display: block; font-size: 13px; margin-bottom: 5px;">العدد المراد شراءه:</label>
-                <input type="number" id="sf-ipb-amount" class="sf-ipb-input" value="1" min="1">
-
-                <div id="sf-ipb-log" class="sf-ipb-log"></div>
-
-                <button id="sf-ipb-buy" class="sf-ipb-btn">🚀 بدء الشراء</button>
-            </div>
-        `;
-    }
-
-    bindEvents() {
-        this.selectEl = this.container.querySelector('#sf-ipb-select');
-        this.idInput = this.container.querySelector('#sf-ipb-id');
-        this.amountInput = this.container.querySelector('#sf-ipb-amount');
-        this.logEl = this.container.querySelector('#sf-ipb-log');
-        this.btnBuy = this.container.querySelector('#sf-ipb-buy');
-        this.btnRefresh = this.container.querySelector('#sf-ipb-refresh');
-
-        this.btnRefresh.onclick = () => this.scanTokens();
-        
-        this.selectEl.onchange = () => {
-            if (this.selectEl.value) {
-                this.idInput.value = this.selectEl.value;
-            }
-        };
-
-        this.btnBuy.onclick = () => this.executePurchase();
-
-        // Initial Scan
-        this.scanTokens();
-    }
-
-    logMsg(msg) {
-        if (!this.logEl) return;
-        this.logEl.innerHTML += `<div>[${new Date().toLocaleTimeString('en-US', {hour12:false})}] ${msg}</div>`;
-        this.logEl.scrollTop = this.logEl.scrollHeight;
-        console.log(`[SF-IslandBuyer] ${msg}`);
-    }
-
-    scanTokens() {
-        this.discoveredTokens = [];
-        try {
-            const uw = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
-            const Config = uw.Config;
-            const GF = uw.GF;
-            
-            if (Config) {
-                for (let key in Config) {
-                    try {
-                        if (Config[key] && typeof Config[key] === 'object' && Config[key].use) {
-                            let useKey = Config[key].use;
-                            let activeData = Config[key][useKey];
-                            if (activeData && activeData.tokenId) {
-                                let tid = activeData.tokenId;
-                                let itemName = key; 
-                                try {
-                                    if (typeof Config.Store_GetItemData === 'function') {
-                                        let itemData = Config.Store_GetItemData(tid);
-                                        if (itemData && itemData.name) itemName = itemData.name;
-                                    }
-                                } catch(e1) {}
-                                this.discoveredTokens.push({ id: tid, name: itemName, event: key });
-                            }
-                        }
-                    } catch(err) {}
-                }
-            }
-            
-            const modelsToCheck = [
-                { name: 'الصيف الحافل', m: (GF && GF.BusySummerController) ? GF.BusySummerController.model : null },
-                { name: 'المتجر الغامض', m: (GF && GF.mysteryShopkeeperController) ? GF.mysteryShopkeeperController.selfModel : null },
-                { name: 'تصريح المعركة', m: (GF && GF.bpContoller) ? GF.bpContoller.bpModel : null }
-            ];
-            
-            for (let i = 0; i < modelsToCheck.length; i++) {
-                try {
-                    let entry = modelsToCheck[i];
-                    let m = entry.m;
-                    if (m && m.activeCfg && m.activeCfg.tokenId) {
-                        let tid = m.activeCfg.tokenId;
-                        if (!this.discoveredTokens.find(t => t.id == tid)) {
-                            let itemName = entry.name;
-                            try {
-                                if (Config && typeof Config.Store_GetItemData === 'function') {
-                                    let itemData = Config.Store_GetItemData(tid);
-                                    if (itemData && itemData.name) itemName = itemData.name;
-                                }
-                            } catch(e2) {}
-                            this.discoveredTokens.push({ id: tid, name: itemName, event: 'Model' });
-                        }
-                    }
-                } catch(err) {}
-            }
-        } catch(e) {
-            console.warn("[SF-IslandBuyer] Auto-Read Failed:", e);
-        }
-        
-        this.updateDropdown();
-        this.logMsg(`🟢 تم فحص الذاكرة. وُجدت ${this.discoveredTokens.length} مهام.`);
-    }
-
-    updateDropdown() {
-        if (!this.selectEl) return;
-        this.selectEl.innerHTML = '';
-        
-        const defOpt = document.createElement('option');
-        defOpt.value = '';
-        defOpt.innerText = this.discoveredTokens.length > 0 ? '--- اختر المهمة من هنا ---' : 'لم يتم اكتشاف مهام';
-        this.selectEl.appendChild(defOpt);
-        
-        this.discoveredTokens.forEach(t => {
-            const opt = document.createElement('option');
-            opt.value = t.id;
-            opt.innerText = `[${t.id}] ${t.name}`;
-            this.selectEl.appendChild(opt);
-        });
-        
-        if (this.discoveredTokens.length === 1) {
-            this.selectEl.value = this.discoveredTokens[0].id;
-            if (this.idInput) this.idInput.value = this.discoveredTokens[0].id;
-        }
-    }
-
-    async executePurchase() {
-        if (this.isRunning) return;
-        
-        const targetId = parseInt(this.idInput.value);
-        const amount = parseInt(this.amountInput.value);
-        
-        if (isNaN(targetId) || isNaN(amount) || amount <= 0) {
-            this.logMsg('❌ بيانات غير صالحة! الرجاء إدخال كود العنصر.');
-            return;
-        }
-
-        this.isRunning = true;
-        this.btnBuy.disabled = true;
-        this.btnBuy.innerText = '⏳ جاري التنفيذ...';
-        
-        let dynamicNeedResponse = "spend_rp.save_data"; 
-        let selectedTokenObj = this.discoveredTokens.find(t => t.id === targetId);
-        
-        if (selectedTokenObj && selectedTokenObj.event && selectedTokenObj.event !== 'Model') {
-            dynamicNeedResponse = "/Activity/" + selectedTokenObj.event;
-        } else if (selectedTokenObj && selectedTokenObj.event === 'Model') {
-            if (selectedTokenObj.name === 'الصيف الحافل') dynamicNeedResponse = "/Activity/BusySummer";
-            else if (selectedTokenObj.name === 'المتجر الغامض') dynamicNeedResponse = "/Activity/MysteryShopkeeper.save_data";
-            else if (selectedTokenObj.name === 'تصريح المعركة') dynamicNeedResponse = "/Activity/BattlePass"; 
-        }
-
-        this.logMsg(`بدء محاولة شراء ${amount} وحدة من [${targetId}]`);
-        this.logMsg(`[DEBUG] مسار السيرفر: ${dynamicNeedResponse}`);
-
-        const uw = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
-        let successCount = 0;
-
-        for (let i = 0; i < amount; i++) {
-            // Check if user navigated away from tab
-            if (document.getElementById('sf-content') && document.getElementById('sf-content').style.display === 'none') {
-                break;
-            }
-
-            try {
-                const payload = {
-                    id: targetId,
-                    type: "automation",
-                    is_gift: false,
-                    needResponse: dynamicNeedResponse,
-                    cur_sceneid: (uw.GF && uw.GF.loginModel && uw.GF.loginModel.AppData) ? (uw.GF.loginModel.AppData.cur_sceneid || 1) : 1
-                };
-
-                this.logMsg(`إرسال الدفعة ${i + 1} / ${amount}...`);
-                
-                if (uw.NetUtils && uw.NetUtils.enqueue) {
-                    uw.NetUtils.enqueue("spend_rp", payload);
-                } else {
-                    this.logMsg(`❌ تعذر العثور على محرك الشبكة.`);
-                    break;
-                }
-                
-                successCount++;
-
-                const jitter = Math.floor(Math.random() * 500) + 300; 
-                await new Promise(r => setTimeout(r, jitter));
-                
-            } catch (error) {
-                this.logMsg(`❌ خطأ: ${error.message}`);
-                break;
-            }
-        }
-
-        this.logMsg(`✅ اكتمل. تم إرسال ${successCount} طلبات.`);
-        this.isRunning = false;
-        this.btnBuy.disabled = false;
-        this.btnBuy.innerText = '🚀 بدء الشراء';
-    }
-};
-
-SF.modules.register(new SF.IslandPointBuyerModule());
-
-
-// --- File: features/AutoMegaHarvestModule.js ---
-window.SF = window.SF || {};
-
-SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
-    constructor() {
-        super('autoharvest_pro', 'الحصاد السريع', '🚜');
-        this.isRunning = false;
-        this.blacklist = JSON.parse(localStorage.getItem('sf_mega_harvest_blacklist') || '{}');
-        this.clearBlacklistIfNeeded();
-        
-        // Settings
-        this.JitterMin = 50;
-        this.JitterMax = 150;
-        this.totalHarvested = 0;
-        this.targetLimit = 0;
-        
-        // HUD Overlay element
-        this.hudElement = null;
-        this.allItems = [];
-
-        this.interceptorInited = false;
-        this.activeCallback = null;
-    }
-
-    clearBlacklistIfNeeded() {
-        let lastCleared = localStorage.getItem('sf_mega_harvest_last_clear');
-        let now = new Date();
-        let targetClearTime = new Date();
-        targetClearTime.setHours(7, 0, 0, 0);
-
-        if (now < targetClearTime) {
-            targetClearTime.setDate(targetClearTime.getDate() - 1);
-        }
-
-        if (!lastCleared || new Date(parseInt(lastCleared)) < targetClearTime) {
-            this.blacklist = {};
-            this.saveBlacklist();
-            localStorage.setItem('sf_mega_harvest_last_clear', Date.now().toString());
-            console.log("[AutoMegaHarvest] تم تصفير القائمة السوداء تلقائياً (تجاوزت الساعة 7 صباحاً).");
-        }
-    }
-
-    saveBlacklist() {
-        localStorage.setItem('sf_mega_harvest_blacklist', JSON.stringify(this.blacklist));
-    }
-
-    getStore() {
-        const gw = (typeof unsafeWindow !== 'undefined') ? unsafeWindow : window;
-        if (gw.Config && gw.Config.Store) return gw.Config.Store;
-        if (gw.GF && gw.GF.Config && gw.GF.Config.Store) return gw.GF.Config.Store;
-        return null;
-    }
-
-    getHarvestableItems() {
-        const store = this.getStore();
-        const items = [];
-        if (!store) {
-            this.log("⚠️ المتجر غير محمل بعد. لا يمكن استخراج المحاصيل.");
-            return items;
-        }
-
-        for (let key in store) {
-            const item = store[key];
-            if (item && (item.type === "seeds" || item.type === "trees")) {
-                items.push({ id: item.id, name: item.name || `Item ${item.id}`, type: item.type });
-            }
-        }
-        return items;
-    }
-
-    initInterceptor() {
-        if (this.interceptorInited) return;
-        this.interceptorInited = true;
-        const gw = (typeof unsafeWindow !== 'undefined') ? unsafeWindow : window;
-        
-        if (!gw.App || !gw.App.MessageCenter) return;
-
-        const origDispatch = gw.App.MessageCenter.dispatch;
-        const self = this;
-
-        gw.App.MessageCenter.dispatch = function(event, ...args) {
-            try {
-                if (event === "HTTP_SUCCESS") {
-                    const data = args[1];
-                    if (data && data.objects_to_update) {
-                        const updates = Array.isArray(data.objects_to_update) ? data.objects_to_update : Object.values(data.objects_to_update);
-                        
-                        let found = false;
-                        let product = null;
-                        let msg = null;
-                        let totalAdded = 0;
-                        let usedUpFound = false;
-
-                        for (let obj of updates) {
-                            if (obj && obj.needResponse && obj.needResponse.data) {
-                                const ch = obj.needResponse.channel;
-                                if (ch === "friend_collect" || ch === "friend_collect_trees" || ch === "friend_fertilize" || ch === "friend_water") {
-                                    found = true;
-                                    const rData = obj.needResponse.data;
-                                    
-                                    if (rData.msg === "ok" && rData.product) {
-                                        product = rData.product;
-                                        totalAdded += (rData.product_num || 1);
-                                        msg = "ok";
-                                    } else if (rData.msg === "used up") {
-                                        usedUpFound = true;
-                                    } else if (!msg) {
-                                        msg = rData.msg || rData.error;
-                                    }
-                                }
-                            }
-                        }
-
-                        if (found && self.activeCallback) {
-                            if (usedUpFound) msg = "used up";
-                            self.activeCallback({ product, msg, totalAdded });
-                            self.activeCallback = null;
-                        }
-                    }
-                }
-            } catch (e) {
-                console.error("Interceptor Error", e);
-            }
-            return origDispatch.apply(this, arguments);
-        };
-    }
-
-    render() {
-        return `
-            <style>
-                .sf-harvest-btn {
-                    padding: 10px 15px;
-                    border: none;
-                    border-radius: 6px;
-                    font-weight: bold;
-                    cursor: pointer;
-                    width: 100%;
-                    transition: all 0.3s ease;
-                    font-family: inherit;
-                    margin-bottom: 8px;
-                }
-                .sf-harvest-btn:hover {
-                    opacity: 0.8;
-                }
-                .sf-harvest-btn-start { background: #00d2d3; color: #222f3e; }
-                .sf-harvest-btn-stop { background: #ff6b6b; color: white; display: none; }
-                .sf-harvest-btn-clear { background: #576574; color: white; margin-top: 10px; }
-                
-                .sf-harvest-input-group {
-                    display: flex;
-                    align-items: center;
-                    margin-bottom: 10px;
-                    background: rgba(0,0,0,0.3);
-                    border-radius: 6px;
-                    padding: 8px;
-                    border: 1px solid rgba(255,255,255,0.05);
-                }
-                .sf-harvest-input-group label {
-                    flex: 1;
-                    font-size: 13px;
-                    color: #c8d6e5;
-                }
-                .sf-harvest-input-group input, .sf-harvest-input-group select {
-                    background: rgba(0,0,0,0.5);
-                    border: 1px solid rgba(255,255,255,0.2);
-                    color: #10ac84;
-                    padding: 5px;
-                    border-radius: 4px;
-                    outline: none;
-                }
-                .sf-harvest-input-group input[type="text"] {
-                    width: 100%;
-                    color: #fff;
-                    margin-bottom: 5px;
-                }
-                .sf-harvest-input-group select {
-                    width: 100%;
-                    color: #fff;
-                    margin-bottom: 10px;
-                }
-            </style>
-            
-            <div class="sf-card">
-                <p style="color: var(--sf-text-muted); font-size: 12px; margin-bottom: 15px; text-align: center;">
-                    ابحث عن المحصول واختره من القائمة لتفعيل الحصاد السريع له.
-                </p>
-                
-                <div style="background: rgba(0,0,0,0.3); padding: 8px; border-radius: 6px; margin-bottom: 10px;">
-                    <input type="text" id="sf-harvest-search" placeholder="🔍 ابحث عن اسم أو كود المحصول/الشجرة..." style="width: 100%; padding: 5px; background: rgba(0,0,0,0.5); border: 1px solid #00d2d3; color: #fff; border-radius: 4px; outline: none; margin-bottom: 5px;">
-                    <select id="sf-harvest-results" size="8" style="width: 100%; padding: 5px; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.2); color: #fff; border-radius: 4px; outline: none;"></select>
-                </div>
-
-                <div class="sf-harvest-input-group">
-                    <label>الوضع:</label>
-                    <select id="sf-harvest-mode" style="width: 140px; margin-bottom: 0;">
-                        <option value="harvest">حصاد (تجميع ثمار)</option>
-                        <option value="fertilize">تسميد / ساقية (مساعدة)</option>
-                    </select>
-                </div>
-
-                <div class="sf-harvest-input-group">
-                    <label>العدد المطلوب:</label>
-                    <input type="number" id="sf-harvest-target" placeholder="عدد الثمار..." min="1" style="width: 140px; text-align: center; font-weight: bold;">
-                </div>
-
-                <button id="sf-harvest-btn-start" class="sf-harvest-btn sf-harvest-btn-start">🚀 بدء الحصاد الصاروخي</button>
-                <button id="sf-harvest-btn-stop" class="sf-harvest-btn sf-harvest-btn-stop">🛑 إيقاف الحصاد فوراً</button>
-                <button id="sf-harvest-btn-clear" class="sf-harvest-btn sf-harvest-btn-clear">🗑️ مسح القائمة السوداء (${Object.keys(this.blacklist).length})</button>
-            </div>
-        `;
-    }
-
-    bindEvents() {
-        const searchInput = this.container.querySelector('#sf-harvest-search');
-        const resultsSelect = this.container.querySelector('#sf-harvest-results');
-        const btnStart = this.container.querySelector('#sf-harvest-btn-start');
-        const btnStop = this.container.querySelector('#sf-harvest-btn-stop');
-        const btnClear = this.container.querySelector('#sf-harvest-btn-clear');
-        const inputTarget = this.container.querySelector('#sf-harvest-target');
-        const modeSelect = this.container.querySelector('#sf-harvest-mode');
-
-        this.btnStart = btnStart;
-        this.btnStop = btnStop;
-        this.btnClear = btnClear;
-        this.inputTarget = inputTarget;
-        this.resultsSelect = resultsSelect;
-
-        const lazyLoadData = () => {
-            if (this.allItems.length === 0) {
-                this.allItems = this.getHarvestableItems();
-                if (this.allItems.length > 0) {
-                    this.log(`تم تحميل ${this.allItems.length} محصول بنجاح.`);
-                }
-            }
-        };
-
-        modeSelect.addEventListener('change', () => {
-            if (modeSelect.value === 'harvest') {
-                inputTarget.placeholder = "عدد الثمار...";
-            } else {
-                inputTarget.placeholder = "عدد الجيران...";
-            }
-        });
-
-        searchInput.addEventListener("focus", lazyLoadData);
-
-        searchInput.addEventListener("input", (e) => {
-            const query = e.target.value.trim().toLowerCase();
-            resultsSelect.innerHTML = "";
-            if (!query) {
-                resultsSelect.size = 8;
-                return;
-            }
-
-            const filtered = this.allItems.filter(item => item.name.toLowerCase().includes(query) || String(item.id).includes(query));
-            
-            filtered.slice(0, 50).forEach(item => {
-                const opt = document.createElement("option");
-                opt.value = JSON.stringify(item);
-                opt.innerText = `[${item.id}] ${item.name} (${item.type === 'trees' ? 'شجرة' : 'محصول'})`;
-                resultsSelect.appendChild(opt);
-            });
-            resultsSelect.size = Math.min(8, Math.max(2, filtered.length));
-        });
-
-        resultsSelect.addEventListener("change", (e) => {
-            const selectedOpt = resultsSelect.options[resultsSelect.selectedIndex];
-            if (selectedOpt) {
-                const item = JSON.parse(selectedOpt.value);
-                searchInput.value = item.name;
-                resultsSelect.innerHTML = "";
-                resultsSelect.appendChild(selectedOpt);
-                resultsSelect.size = 2; // Shrink to look neat
-            }
-        });
-
-        btnStart.addEventListener('click', () => {
-            const selectedOpt = resultsSelect.options[resultsSelect.selectedIndex];
-            if (!selectedOpt) {
-                alert("⚠️ الرجاء البحث وتحديد المحصول من القائمة أولاً.");
-                return;
-            }
-
-            let limit = parseInt(inputTarget.value);
-            if (isNaN(limit) || limit <= 0) {
-                alert("⚠️ الرجاء إدخال عدد صحيح صالح.");
-                return;
-            }
-
-            const item = JSON.parse(selectedOpt.value);
-            this.currentMode = modeSelect.value;
-            this.targetLimit = limit;
-            this.startHarvest(item.id, item.type);
-        });
-
-        btnStop.addEventListener('click', () => {
-            this.log("🛑 جاري الإيقاف الفوري...");
-            this.stopHarvest();
-        });
-
-        btnClear.addEventListener('click', () => {
-            this.blacklist = {};
-            this.saveBlacklist();
-            btnClear.textContent = `🗑️ مسح القائمة السوداء (0)`;
-            alert("✅ تم مسح القائمة السوداء بنجاح!");
-        });
-    }
-
-    update() {
-        if (this.btnClear) {
-            this.btnClear.textContent = `🗑️ مسح القائمة السوداء (${Object.keys(this.blacklist).length})`;
-        }
-    }
-
-    log(msg) {
-        console.log(`[AutoMegaHarvest] ${msg}`);
-    }
-
-    sleep(ms) {
-        return new Promise(resolve => setTimeout(resolve, ms));
-    }
-
-    randomJitter() {
-        return Math.floor(Math.random() * (this.JitterMax - this.JitterMin + 1)) + this.JitterMin;
-    }
-
-    showProgressOverlay(current, target, stats = { total: 0, depleted: 0, active: 0 }) {
-        if (!this.hudElement) {
-            this.hudElement = document.createElement('div');
-            this.hudElement.id = 'sf-harvest-hud';
-            Object.assign(this.hudElement.style, {
-                position: 'fixed',
-                bottom: '80px',
-                left: '50%',
-                transform: 'translateX(-50%)',
-                background: 'rgba(15, 23, 42, 0.9)',
-                backdropFilter: 'blur(12px)',
-                color: '#fff',
-                padding: '15px 30px',
-                borderRadius: '16px',
-                fontFamily: 'Tajawal, sans-serif',
-                zIndex: '9999',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                gap: '10px',
-                boxShadow: '0 10px 30px rgba(0,0,0,0.6)',
-                border: '1px solid rgba(0, 210, 211, 0.5)',
-                pointerEvents: 'none',
-                minWidth: '320px'
-            });
-            document.body.appendChild(this.hudElement);
-        }
-
-        const actionText = (this.currentMode === "fertilize") ? "تم مساعدة (جيران):" : "تم حصد (ثمار):";
-
-        this.hudElement.innerHTML = `
-            <div style="font-size: 22px; font-weight: bold; margin-bottom: 5px;">
-                <span style="color: #00d2d3;">${actionText}</span> 
-                <span style="color: #feca57; font-size: 28px;">${current}</span> / <span style="color: #c8d6e5;">${target}</span>
-            </div>
-            <div style="display: flex; gap: 20px; font-size: 14px; font-weight: bold; background: rgba(0,0,0,0.4); padding: 8px 15px; border-radius: 8px; flex-direction: row-reverse;">
-                <div style="text-align: center;">
-                    <div style="color: #a4b0be; font-size: 11px;">كل الجيران</div>
-                    <div style="color: #48dbfb;">${stats.total}</div>
-                </div>
-                <div style="text-align: center; border-left: 1px solid rgba(255,255,255,0.1); padding-left: 15px;">
-                    <div style="color: #a4b0be; font-size: 11px;">مستنفد (محظور)</div>
-                    <div style="color: #ff6b6b;">${stats.depleted}</div>
-                </div>
-                <div style="text-align: center; border-left: 1px solid rgba(255,255,255,0.1); padding-left: 15px;">
-                    <div style="color: #a4b0be; font-size: 11px;">جاهز (نشط)</div>
-                    <div style="color: #1dd1a1;">${stats.active}</div>
-                </div>
-            </div>
-        `;
-    }
-
-    hideProgressOverlay() {
-        if (this.hudElement && this.hudElement.parentNode) {
-            this.hudElement.parentNode.removeChild(this.hudElement);
-            this.hudElement = null;
-        }
-    }
-
-    async startHarvest(itemId, itemType) {
-        const gw = (typeof unsafeWindow !== 'undefined') ? unsafeWindow : window;
-        if (!gw.GF || !gw.GF.loginModel) {
-            this.log("⚠️ اللعبة لم تحمل بالكامل.");
-            return;
-        }
-
-        this.initInterceptor();
-        this.isRunning = true;
-        this.totalHarvested = 0; // Number of items (fruits or neighbors depending on mode)
-        this.totalFruits = 0;    // Number of total fruits collected (for logging)
-        
-        if(this.btnStart) this.btnStart.style.display = 'none';
-        if(this.btnStop) this.btnStop.style.display = 'block';
-
-        const isFertilize = (this.currentMode === "fertilize");
-        const modeName = isFertilize ? "التسميد/الساقية" : "الحصاد";
-        const targetName = isFertilize ? "جار" : "ثمرة";
-
-        this.log(`🔥 انطلاق وضع [${modeName}] لمحصول [${itemId}]! الهدف: ${this.targetLimit} ${targetName}`);
-
-        const harvestCmd = (itemType === "trees") ? "friend_collect_trees" : "friend_collect";
-        const fertCmd = (itemType === "trees") ? "friend_water.save_data" : "friend_fertilize.save_data";
-        
-        let friendsList = [];
-        if (gw.GF.friendsModel && gw.GF.friendsModel.allNeighbors) {
-            friendsList = gw.GF.friendsModel.allNeighbors.filter(n => !n.isNpc && !n.isSelf);
-        }
-
-        if (friendsList.length === 0) {
-            this.log("❌ لا يوجد جيران متاحين.");
-            this.stopHarvest();
-            return;
-        }
-
-        const updateStatsUI = () => {
-            const total = friendsList.length;
-            let depletedCount = 0;
-            friendsList.forEach(f => {
-                if (this.blacklist[f.uid]) depletedCount++;
-            });
-            const active = total - depletedCount;
-            this.showProgressOverlay(this.totalHarvested, this.targetLimit, { total, depleted: depletedCount, active });
-        };
-
-        updateStatsUI();
-
-        for (let i = 0; i < friendsList.length; i++) {
-            if (!this.isRunning || this.totalHarvested >= this.targetLimit) break;
-
-            let neighbor = friendsList[i];
-            const friendId = neighbor.uid;
-
-            if (this.blacklist[friendId]) continue;
-
-            let neighborHasEnergy = true;
-            let attempts = 0;
-
-            while (this.isRunning && neighborHasEnergy && this.totalHarvested < this.targetLimit && attempts < 100) {
-                attempts++;
-                
-                if (this.currentMode === "fertilize") {
-                    const payloadToUse = { friend_id: friendId, plant_x: 0, plant_y: 0, plant_id: itemId };
-                    
-                    let burst = 10;
-                    for (let b = 0; b < burst; b++) {
-                        gw.NetUtils.enqueue(fertCmd, payloadToUse);
-                    }
-                    if (gw.NetUtils.flush) gw.NetUtils.flush();
-                    
-                    await this.sleep(1000); // إعطاء السيرفر ثانية لمعالجة الطلبات
-                    
-                    this.log(`⛔ الجار [${friendId}] تم توجيه 10 نقرات تسميد مدمجة له بنجاح.`);
-                    this.blacklist[friendId] = true;
-                    this.saveBlacklist();
-                    
-                    this.totalHarvested += 1;
-                    this.log(`💧 تم استكمال مساعدة الجار [${friendId}] بالكامل. الجيران المكتملين: (${this.totalHarvested}/${this.targetLimit})`);
-                    
-                    this.update();
-                    updateStatsUI();
-                    
-                    break; // الانتقال للجار التالي
-                }
-
-                if (this.currentMode === "harvest") {
-                    let harvestPayload;
-                    if (itemType === "trees") {
-                        harvestPayload = { 
-                            friend_id: friendId, 
-                            friendName: neighbor.name || "", 
-                            itemid: itemId, 
-                            cur_sceneid: 1, 
-                            id: itemId, 
-                            achievement_add: "social_1825_9758" 
-                        };
-                    } else {
-                        harvestPayload = { friend_id: friendId, itemid: itemId };
-                    }
-                    
-                    let harvestPromise = new Promise((resolve) => {
-                        this.activeCallback = resolve;
-                        setTimeout(() => {
-                            if (this.activeCallback === resolve) {
-                                this.activeCallback = null;
-                                resolve(null); // Timeout
-                            }
-                        }, 5000);
-                    });
-
-                    let burst = 10;
-                    for (let b = 0; b < burst; b++) {
-                        gw.NetUtils.enqueue(harvestCmd, harvestPayload);
-                    }
-                    if (gw.NetUtils.flush) gw.NetUtils.flush();
-
-                    const res = await harvestPromise;
-
-                    if (!res) {
-                        this.log(`⚠️ مهلة الاتصال انتهت مع الجار [${friendId}].`);
-                        neighborHasEnergy = false;
-                    } else {
-                        if (res.totalAdded > 0) {
-                            this.totalFruits += res.totalAdded;
-                            this.totalHarvested += res.totalAdded; // إضافة الثمار للعداد الرئيسي
-                            this.log(`✅ الضربة القاضية (10 نقرات مدمجة): تم حصد ${res.totalAdded} ثمرة! إجمالي الثمار: ${this.totalHarvested}/${this.targetLimit}`);
-
-                            if (gw.GF && gw.GF.loginModel && gw.GF.loginModel.AppData && gw.GF.loginModel.AppData.storage) {
-                                let curQty = gw.GF.loginModel.AppData.storage[res.product] || 0;
-                                gw.GF.loginModel.AppData.storage[res.product] = curQty + res.totalAdded;
-                            }
-
-                            try {
-                                if (gw.GF && gw.GF.gameController && gw.Animations) {
-                                    gw.GF.gameController.collectTopTip(res.product, res.totalAdded);
-                                    let startRect = gw.egret.Rectangle.create();
-                                    startRect.x = window.innerWidth / 2;
-                                    startRect.y = window.innerHeight / 2;
-                                    startRect.width = 75;
-                                    startRect.height = 75;
-                                    let endPoint = gw.egret.Point.create(100, window.innerHeight - 100); 
-                                    if (gw.GF.gameController.operArea && gw.GF.gameController.operArea.btnWarehouse) {
-                                        gw.GF.gameController.operArea.btnWarehouse.localToGlobal(0, 0, endPoint);
-                                    }
-                                    gw.Animations.flyItemTo(res.product, startRect, endPoint);
-                                }
-                            } catch(e) {}
-                        }
-                        
-                        if (res.msg === "used up") {
-                            this.log(`⛔ استنفدت طاقة الجار [${friendId}]. إضافته للقائمة السوداء.`);
-                            this.blacklist[friendId] = true;
-                            this.saveBlacklist();
-                            neighborHasEnergy = false;
-                        } else {
-                            if (res.totalAdded === 0) {
-                                this.log(`⚠️ نقرة فارغة للجار [${friendId}]. مستمرون بالضرب حتى نفاذ طاقته...`);
-                            }
-                            await this.sleep(this.randomJitter());
-                        }
-                    }
-
-                    this.update(); 
-                    updateStatsUI();
-                }
-            }
-        }
-
-        if (this.totalHarvested >= this.targetLimit) {
-            this.log(`✅ تمت المهمة بنجاح! تم حصد ${this.totalHarvested} ثمرة.`);
-            setTimeout(() => this.hideProgressOverlay(), 3000); 
-        } else {
-            this.hideProgressOverlay(); 
-        }
-
-        this.stopHarvest();
-    }
-
-    stopHarvest() {
-        this.isRunning = false; 
-        if(this.btnStart) this.btnStart.style.display = 'block';
-        if(this.btnStop) this.btnStop.style.display = 'none';
-        if (this.totalHarvested < this.targetLimit) {
-            this.hideProgressOverlay();
-            this.log("🛑 تم إيقاف الحصاد يدوياً.");
-        }
-    }
-};
-
-// Register module
-if (window.SF && window.SF.modules) {
-    window.SF.modules.register(new SF.AutoMegaHarvestModule());
-}
-
-
-// --- File: features/SessionExtractorModule.js ---
-window.SF = window.SF || {};
-
-SF.SessionExtractorModule = class SessionExtractorModule extends SF.ModuleBase {
-    constructor() {
-        super('session_extractor', 'استخراج الكوكي والطلبات', '🍪');
-        this.savedSignedRequest = "";
-        this.savedSessionKey = "";
-
-        // اعتراض الطلبات لحفظ أحدث طلب واستخلاص المفاتيح بشكل دائم
-        SF.bus.on('network:request', (req) => {
-            if (req.isGame && req.body) {
-                this.lastRequestUrl = req.url;
-                this.lastRequestBody = (typeof req.body === 'string') ? req.body : JSON.stringify(req.body);
-                
-                // استخلاص وحفظ دائم للمفاتيح بمجرد مرورها بأي ريكوست
-                const sigMatch = this.lastRequestBody.match(/signed_request\s*[:=]\s*['"]?([^&"'\s]+)/) || this.lastRequestBody.match(/signed_request=([^&]+)/);
-                if (sigMatch && sigMatch[1]) this.savedSignedRequest = sigMatch[1];
-                
-                const sKeyMatch = this.lastRequestBody.match(/sessionKey\s*[:=]\s*['"]?([^&"'\s]+)/) || this.lastRequestBody.match(/sessionKey=([^&]+)/) || (this.lastRequestUrl && this.lastRequestUrl.match(/s=([a-zA-Z0-9_]+)/));
-                if (sKeyMatch && sKeyMatch[1]) this.savedSessionKey = sKeyMatch[1];
-            }
-        });
-    }
-
-    render() {
-        return `
-            <style>
-                .sf-extractor-btn {
-                    padding: 15px 20px;
-                    border: none;
-                    border-radius: 8px;
-                    font-weight: bold;
-                    cursor: pointer;
-                    width: 100%;
-                    transition: all 0.3s ease;
-                    font-family: inherit;
-                    margin-bottom: 12px;
-                    background: #27ae60; 
-                    color: white;
-                    font-size: 16px;
-                }
-                .sf-extractor-btn:hover { background: #2ecc71; }
-                
-                .sf-extractor-textarea {
-                    width: 100%;
-                    height: 90px;
-                    background: rgba(0,0,0,0.7);
-                    border: 1px solid rgba(255,255,255,0.3);
-                    color: #00d2d3;
-                    padding: 12px;
-                    border-radius: 6px;
-                    outline: none;
-                    resize: vertical;
-                    font-family: monospace;
-                    font-size: 14px;
-                    text-align: center;
-                    word-break: break-all;
-                }
-            </style>
-            
-            <div class="sf-card">
-                <button id="sf-btn-extract-smart" class="sf-extractor-btn">🚀 استخراج مفتاح الدخول (ضغطة واحدة)</button>
-                <textarea id="sf-txt-smart" class="sf-extractor-textarea" readonly placeholder="سيظهر المفتاح هنا..."></textarea>
-            </div>
-        `;
-    }
-
-    bindEvents() {
-        const btnSmart = this.container.querySelector('#sf-btn-extract-smart');
-        const txtSmart = this.container.querySelector('#sf-txt-smart');
-        
-        btnSmart.addEventListener('click', () => {
-            const gw = (typeof unsafeWindow !== 'undefined') ? unsafeWindow : window;
-            
-            let extractedKey = "";
-            let keyType = "";
-
-            // --- 1. Try Extracting Facebook signed_request ---
-            let sig = this.savedSignedRequest;
-            try {
-                if (!sig) {
-                    const wn = JSON.parse(gw.name);
-                    if (wn && wn.signed_request) sig = wn.signed_request;
-                }
-            } catch(e) {}
-            
-            if (!sig && gw.location && gw.location.search) {
-                const params = new URLSearchParams(gw.location.search);
-                if (params.get('signed_request')) sig = params.get('signed_request');
-            }
-            if (!sig && gw.JSDataManager && gw.JSDataManager.ins && gw.JSDataManager.ins.getFacebookToken) {
-                const fb = gw.JSDataManager.ins.getFacebookToken();
-                if (fb && fb.signed_request) sig = fb.signed_request;
-            }
-            if (!sig && gw.document && gw.document.documentElement) {
-                const m = gw.document.documentElement.innerHTML.match(/signed_request["']?\s*[:=]\s*["']?([^&"'\s\\><,]+)/);
-                if (m && m[1]) sig = m[1];
-            }
-
-            if (sig && sig.length > 20) {
-                extractedKey = sig;
-                keyType = "signed_request";
-            } else {
-                // --- 2. Try Extracting Website Cookie (__Host-bf_s) ---
-                const cookieData = gw.document.cookie || document.cookie;
-                if (cookieData) {
-                    const match = cookieData.match(/__Host-bf_s=([^;]+)/);
-                    if (match && match[1] && match[1].length > 10) {
-                        extractedKey = match[1];
-                        keyType = "__Host-bf_s";
-                    } else {
-                        alert("❌ لم يتم العثور على signed_request (فيسبوك) ولا على مفتاح __Host-bf_s (الموقع الرسمي).\nقم بعمل تحديث (Refresh) للصفحة وحاول مجدداً.");
-                        return;
-                    }
-                } else {
-                    alert("❌ لا يوجد أي بيانات مسجلة. يرجى تسجيل الدخول أولاً.");
-                    return;
-                }
-            }
-
-            // Output to UI
-            txtSmart.value = extractedKey;
-            txtSmart.select();
-            
-            // Copy logic with fallbacks
-            navigator.clipboard.writeText(extractedKey).then(() => {
-                this.tempBtnText(btnSmart, `✅ تم استخراج ونسخ (${keyType})`, "#10ac84");
-            }).catch(() => {
-                try {
-                    document.execCommand('copy');
-                    this.tempBtnText(btnSmart, `✅ تم استخراج ونسخ (${keyType})`, "#10ac84");
-                } catch(e) {
-                    this.tempBtnText(btnSmart, `⚠️ تم استخراج (${keyType}) - يرجى النسخ יدوياً (Ctrl+C)`, "#f39c12");
-                }
-            });
-        });
-    }
-
-    tempBtnText(btnElement, newText, newColor) {
-        const oldText = btnElement.innerText;
-        const oldColor = btnElement.style.background;
-        btnElement.innerText = newText;
-        if (newColor) btnElement.style.background = newColor;
-        setTimeout(() => {
-            btnElement.innerText = oldText;
-            btnElement.style.background = oldColor || "";
-        }, 3000);
-    }
-};
-
-// Register module
-if (window.SF && window.SF.modules) {
-    window.SF.modules.register(new SF.SessionExtractorModule());
-}
 
 
 // --- System Initialization ---
