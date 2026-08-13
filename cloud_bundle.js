@@ -4349,9 +4349,17 @@ SF.BattlePassModule = class BattlePassModule extends SF.ModuleBase {
     }
 
     logStatus(message) {
-        const logDiv = this.container.querySelector('#sf-bp-status-log');
-        if (logDiv) {
-            logDiv.innerText = message;
+        if (this.container) {
+            const logDiv = this.container.querySelector('#sf-bp-status-log');
+            if (logDiv) {
+                logDiv.innerText = message;
+            }
+        } else {
+            // Fallback for floating button text if container doesn't exist
+            let btn = document.getElementById('btn-bp-smart');
+            if (btn && message.includes("⏳")) {
+                btn.innerHTML = message;
+            }
         }
         console.log(`[SF-BattlePassModule] ${message}`);
     }
