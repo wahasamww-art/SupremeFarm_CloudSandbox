@@ -4370,30 +4370,35 @@ SF.BattlePassModule = class BattlePassModule extends SF.ModuleBase {
 
         let visualTriggered = false;
         try {
-            if (gw.DropEventManager && gw.DropEventManager.instance) {
-                for (let k in gw.DropEventManager.instance) {
-                    if (typeof gw.DropEventManager.instance[k] === 'function' && k.toLowerCase().includes('rewardpanel')) {
-                        gw.DropEventManager.instance[k](rewardStr);
-                        visualTriggered = true; break;
+            // محاولة استخدام TipView (الطريقة الأكثر نجاحاً واستقراراً للعبة)
+            if (gw.TipView && typeof gw.TipView.show === 'function') {
+                let rewardsArray = [];
+                let items = rewardStr.toString().split(',');
+                items.forEach(item => {
+                    let parts = item.split('_');
+                    if (parts.length >= 2) {
+                        rewardsArray.push({ type: parseInt(parts[0]), num: parseInt(parts[1]) });
+                    } else if (parts.length === 1) {
+                        rewardsArray.push({ type: parseInt(parts[0]), num: 1 });
                     }
+                });
+                
+                if (rewardsArray.length > 0) {
+                    gw.TipView.show(rewardsArray);
+                    visualTriggered = true;
+                    console.log("[SF-BattlePass] تم تفعيل الرسوميات بنجاح عبر TipView:", rewardsArray);
                 }
             }
-        } catch(e) {}
+        } catch(e) {
+            console.error("[SF-BattlePass] خطأ أثناء تشغيل TipView:", e);
+        }
 
+        // الطريقة الاحتياطية (Fallback)
         if (!visualTriggered && gw.App && gw.App.CommonTips) {
             for (let k in gw.App.CommonTips) {
                 if (typeof gw.App.CommonTips[k] === 'function' && k.toLowerCase().includes('reward') && k.toLowerCase().includes('show')) {
                     gw.App.CommonTips[k](rewardStr);
-                    visualTriggered = true; break;
-                }
-            }
-        }
-
-        if (!visualTriggered && gw.GF && gw.GF.loginModel) {
-            for (let k in gw.GF.loginModel) {
-                if (typeof gw.GF.loginModel[k] === 'function' && k.toLowerCase().includes('showreward')) {
-                    gw.GF.loginModel[k](rewardStr);
-                    visualTriggered = true; break;
+                    break;
                 }
             }
         }
