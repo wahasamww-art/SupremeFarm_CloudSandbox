@@ -1,6 +1,6 @@
 // ===================================================================
 // SupremeFarm Modular - Cloud Distribution Bundle
-// Generated at: 2026-08-22T04:50:16.818Z
+// Generated at: 2026-08-22T05:10:00.428Z
 // ===================================================================
 
 // --- File: core/EventBus.js ---
@@ -1584,6 +1584,18 @@ SF.AutoFarmModule = class AutoFarmModule extends SF.ModuleBase {
             for (let b = 0; b < batch.length; b++) {
                 let mo = batch[b];
                 try {
+                    let preCalcProductId = null;
+                    try {
+                        let gw = unsafeWindow;
+                        let pObj = mo.plant || mo.crop || mo;
+                        let seedId = pObj.plant_id || pObj.plantId || pObj.seed_id || pObj.configData?.id;
+                        if (seedId && seedId != 101 && gw.Config) {
+                            let c = gw.Config.Store_GetItemData(seedId);
+                            preCalcProductId = c ? (c.product_id || c.product || seedId) : seedId;
+                            if (!c && pObj.configData && pObj.configData.product_id) preCalcProductId = pObj.configData.product_id;
+                        }
+                    } catch(e) {}
+
                     if (typeof gc._collectMapObject === 'function') gc._collectMapObject(mo);
                     else if (typeof gc.collectMapObject === 'function') gc.collectMapObject(mo);
                     else if (typeof mo.harvest === 'function') mo.harvest();
@@ -1633,23 +1645,13 @@ SF.AutoFarmModule = class AutoFarmModule extends SF.ModuleBase {
                     // إضافة تحديث لحظي للواجهة والحظيرة لتفادي الحاجة لتحديث الصفحة
                     try {
                         let gw = unsafeWindow;
-                        let pObj = mo.plant || mo.crop || mo;
-                        let seedId = pObj.plant_id || pObj.plantId || pObj.seed_id || pObj.configData?.id;
-                        if (seedId && seedId != 101 && gw.Config) {
-                            let c = gw.Config.Store_GetItemData(seedId);
-                            let productId = c ? (c.product_id || c.product || seedId) : seedId;
-                            
-                            if (!c && mo.configData && mo.configData.product_id) {
-                                productId = mo.configData.product_id;
+                        if (preCalcProductId && preCalcProductId != 101) {
+                            if (gw.GF && gw.GF.loginModel && gw.GF.loginModel.AppData && gw.GF.loginModel.AppData.storage) {
+                                let curQty = gw.GF.loginModel.AppData.storage[preCalcProductId] || 0;
+                                gw.GF.loginModel.AppData.storage[preCalcProductId] = curQty + 1;
                             }
-
-                            if (productId && gw.GF && gw.GF.loginModel && gw.GF.loginModel.AppData && gw.GF.loginModel.AppData.storage) {
-                                let curQty = gw.GF.loginModel.AppData.storage[productId] || 0;
-                                gw.GF.loginModel.AppData.storage[productId] = curQty + 1;
-                            }
-
-                            if (productId && gw.GF && gw.GF.gameController && gw.Animations) {
-                                gw.GF.gameController.collectTopTip(productId, 1);
+                            if (gw.GF && gw.GF.gameController && gw.Animations) {
+                                gw.GF.gameController.collectTopTip(preCalcProductId, 1);
                                 // [تعديل حصاد البرق]: تم تعطيل الرسوم المتحركة flyItemTo لتفادي تهنيج المتصفح
                             }
                         }
@@ -2309,6 +2311,17 @@ SF.CropinatorModule = class CropinatorModule extends SF.ModuleBase {
 
                 ripeTargets.forEach(target => {
                     try {
+                        let preCalcProductId = null;
+                        try {
+                            let pObj = target.plant || target.crop || target;
+                            let seedId = pObj.plant_id || pObj.plantId || pObj.seed_id || (pObj.configData ? pObj.configData.id : null);
+                            if (seedId && seedId != 101 && gw.Config) {
+                                let c = gw.Config.Store_GetItemData(seedId);
+                                preCalcProductId = c ? (c.product_id || c.product || seedId) : seedId;
+                                if (!c && target.configData && target.configData.product_id) preCalcProductId = target.configData.product_id;
+                            }
+                        } catch(e) {}
+
                         if (typeof gc._collectMapObject === 'function') gc._collectMapObject(target);
                         else if (typeof gc.collectMapObject === 'function') gc.collectMapObject(target);
                         else if (typeof target.harvest === 'function') target.harvest();
@@ -2345,23 +2358,13 @@ SF.CropinatorModule = class CropinatorModule extends SF.ModuleBase {
                         }
 
                         try {
-                            let pObj = target.plant || target.crop || target;
-                            let seedId = pObj.plant_id || pObj.plantId || pObj.seed_id || (pObj.configData ? pObj.configData.id : null);
-                            if (seedId && seedId != 101 && gw.Config) {
-                                let c = gw.Config.Store_GetItemData(seedId);
-                                let productId = c ? (c.product_id || c.product || seedId) : seedId;
-                                
-                                if (!c && target.configData && target.configData.product_id) {
-                                    productId = target.configData.product_id;
+                            if (preCalcProductId && preCalcProductId != 101) {
+                                if (gw.GF && gw.GF.loginModel && gw.GF.loginModel.AppData && gw.GF.loginModel.AppData.storage) {
+                                    let curQty = gw.GF.loginModel.AppData.storage[preCalcProductId] || 0;
+                                    gw.GF.loginModel.AppData.storage[preCalcProductId] = curQty + 1;
                                 }
-
-                                if (productId && gw.GF && gw.GF.loginModel && gw.GF.loginModel.AppData && gw.GF.loginModel.AppData.storage) {
-                                    let curQty = gw.GF.loginModel.AppData.storage[productId] || 0;
-                                    gw.GF.loginModel.AppData.storage[productId] = curQty + 1;
-                                }
-
-                                if (productId && gw.GF && gw.GF.gameController && gw.Animations) {
-                                    gw.GF.gameController.collectTopTip(productId, 1);
+                                if (gw.GF && gw.GF.gameController && gw.Animations) {
+                                    gw.GF.gameController.collectTopTip(preCalcProductId, 1);
                                 }
                             }
                         } catch(e) {}
