@@ -1,6 +1,6 @@
 // ===================================================================
 // SupremeFarm Modular - Cloud Distribution Bundle
-// Generated at: 2026-08-22T11:37:41.723Z
+// Generated at: 2026-08-22T11:43:01.149Z
 // ===================================================================
 
 // --- File: core/EventBus.js ---
@@ -5229,6 +5229,9 @@ SF.StoreRevealModule = class StoreRevealModule extends SF.ModuleBase {
                         // Delete expiration timers so they don't get filtered out or show ugly "9999 days" texts
                         if (item.hasOwnProperty('limit_config')) delete item.limit_config;
                         if (item.hasOwnProperty('time_limit')) delete item.time_limit;
+                        if (item.hasOwnProperty('buyable')) delete item.buyable;
+                        if (item.hasOwnProperty('not_in_shop')) delete item.not_in_shop;
+                        if (item.hasOwnProperty('is_hide')) delete item.is_hide;
 
                         // Inject missing voucher items into the store
                         if (item.new_cash3) {
