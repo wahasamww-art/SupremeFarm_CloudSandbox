@@ -1,6 +1,6 @@
 // ===================================================================
 // SupremeFarm Modular - Cloud Distribution Bundle
-// Generated at: 2026-08-22T07:44:24.068Z
+// Generated at: 2026-08-22T09:30:28.634Z
 // ===================================================================
 
 // --- File: core/EventBus.js ---
@@ -5014,6 +5014,234 @@ SF.IslandPointBuyerModule = class IslandPointBuyerModule extends SF.ModuleBase {
 };
 
 SF.modules.register(new SF.IslandPointBuyerModule());
+
+
+// --- File: features/StoreFlipFixModule.js ---
+// --- features\StoreFlipFixModule.js ---
+window.SF = window.SF || {};
+
+SF.StoreFlipFixModule = class StoreFlipFixModule extends SF.ModuleBase {
+    constructor() {
+        super('storeflipfix', 'إصلاح متجر اللعبة (البطاقات)', '🛒');
+        this.isActive = false;
+        this.injectStoreFlipFix();
+    }
+
+    render() {
+        return `
+            <div class="sf-card">
+                <p style="color: var(--sf-text-muted); font-size: 13px; margin-bottom: 15px; text-align: center;">
+                    إصلاح مشكلة عدم قلب بطاقات متجر اللعبة.
+                </p>
+                <div style="display:flex; flex-direction:column; gap:10px; align-items:center;">
+                    <div style="font-size:14px; color:#2ecc71; font-weight:bold;">
+                        ✅ تم تفعيل إصلاح المتجر
+                    </div>
+                    <div style="font-size:11px; color:#aaa; text-align:center; padding: 10px; background: rgba(0,0,0,0.3); border-radius: 6px;">
+                        تم تجاوز متطلبات الإنجازات (Achievements) للسماح بقلب بطاقات البذور والأشجار
+                        دائماً لرؤية الكمية المتوفرة في الحظيرة، كما طلب المستخدم.
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    bindEvents() {}
+
+    injectStoreFlipFix() {
+        if (this.isActive) return;
+        this.isActive = true;
+
+        const fnStr = function() {
+            function sysLog(msg) {
+                console.log('[SF-StoreFlip] ' + msg);
+            }
+
+            function injectFix() {
+                let ShopItemCls;
+                try {
+                    ShopItemCls = window.ShopItem || (window.egret && window.egret.getDefinitionByName('ShopItem'));
+                } catch(e) {}
+
+                if (!ShopItemCls || !ShopItemCls.prototype) {
+                    setTimeout(injectFix, 2000);
+                    return;
+                }
+
+                if (ShopItemCls.prototype._sf_hooked_achieve) return;
+
+                const origUpdateAchieveData = ShopItemCls.prototype.updateAchieveData;
+                ShopItemCls.prototype.updateAchieveData = function() {
+                    // Call the original first to populate default stuff
+                    try {
+                        if (typeof origUpdateAchieveData === 'function') {
+                            origUpdateAchieveData.call(this);
+                        }
+                    } catch(e) {}
+
+                    // Now, FORCE the card to be flip-able for seeds and trees
+                    if (this.itemData && (this.itemData.type === 'seeds' || this.itemData.type === 'trees' || (window.Config_Store$Type && (this.itemData.type === window.Config_Store$Type.Seeds || this.itemData.type === window.Config_Store$Type.Trees)))) {
+                        
+                        this.isCanOverturn = true;
+                        if (this.rectTurnOver) {
+                            this.rectTurnOver.visible = true;
+                        }
+
+                        // Determine the correct product id (the crop or tree fruit)
+                        let productId = this.itemData.product;
+                        if (!productId) productId = this.itemData.id;
+
+                        // Fetch inventory quantity
+                        let qty = 0;
+                        if (this.loginModel && typeof this.loginModel.getStorageQtyById === 'function') {
+                            qty = this.loginModel.getStorageQtyById(productId);
+                        } else if (window.GF && window.GF.loginModel && typeof window.GF.loginModel.getStorageQtyById === 'function') {
+                            qty = window.GF.loginModel.getStorageQtyById(productId);
+                        }
+
+                        // Update the text fields on the back of the card
+                        if (this.lblOwnNum) {
+                            this.lblOwnNum.text = String(qty);
+                        }
+                        
+                        // If there is no achievement configured, hide the progress
+                        var achAid = window.Config && window.Config.Achievement_FilterAidObj ? window.Config.Achievement_FilterAidObj : {};
+                        var hasAchieve = achAid[this.itemData.product];
+                        if (!hasAchieve) {
+                            if (this.lblAchiProgress) this.lblAchiProgress.text = "-";
+                            if (this.imgAchiProgress) this.imgAchiProgress.source = "";
+                        }
+
+                        // Add Tip for the invisible click area
+                        if (window.App && window.App.TipsManager && window.TipsConst && window.Language && this.rectTurnOver) {
+                             window.App.TipsManager.add(this.rectTurnOver, window.TipsConst.NORMAL, window.Language.GetString("click_to_turnover") || "انقر للقلب");
+                        }
+                    }
+                };
+                ShopItemCls.prototype._sf_hooked_achieve = true;
+                sysLog('تم تفعيل رقعة متجر اللعبة (Store Card Flip Fix) بنجاح.');
+            }
+
+            injectFix();
+        };
+
+        const script = document.createElement('script');
+        script.textContent = '(' + fnStr + ')();';
+        (document.head || document.documentElement).appendChild(script);
+        script.remove();
+        console.log('[SupremeFarm Modular] Injected Store Flip Fix Protocol');
+    }
+};
+
+// Register the module
+new SF.StoreFlipFixModule();
+
+
+// --- File: features/StoreRevealModule.js ---
+// --- features\StoreRevealModule.js ---
+window.SF = window.SF || {};
+
+SF.StoreRevealModule = class StoreRevealModule extends SF.ModuleBase {
+    constructor() {
+        super('storereveal', 'كشف المتاجر (إظهار المخفي)', '🏪');
+        this.isActive = false;
+        this.injectStoreReveal();
+    }
+
+    render() {
+        return `
+            <div class="sf-card">
+                <p style="color: var(--sf-text-muted); font-size: 13px; margin-bottom: 15px; text-align: center;">
+                    إظهار كافة العناصر المخفية في المتاجر (المتجر العادي، متجر الغموض، إلخ).
+                </p>
+                <div style="display:flex; flex-direction:column; gap:10px; align-items:center;">
+                    <div style="font-size:14px; color:#2ecc71; font-weight:bold;">
+                        ✅ تم تفعيل كشف المتجر الشامل
+                    </div>
+                    <div style="font-size:11px; color:#aaa; text-align:center; padding: 10px; background: rgba(0,0,0,0.3); border-radius: 6px;">
+                        تم إزالة قيود الإخفاء عن جميع العناصر في المتاجر.
+                        الآن ستظهر لك جميع البذور والأشجار والمعدات التي كانت مخفية أو محذوفة من اللعبة.
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    bindEvents() {}
+
+    injectStoreReveal() {
+        if (this.isActive) return;
+        this.isActive = true;
+
+        const fnStr = function() {
+            function sysLog(msg) {
+                console.log('[SF-StoreReveal] ' + msg);
+            }
+
+            function injectReveal() {
+                if (!window.Config || !window.Config.Store) {
+                    setTimeout(injectReveal, 2000);
+                    return;
+                }
+
+                if (window.Config._sf_store_revealed) return;
+
+                let count = 0;
+                for (let key in window.Config.Store) {
+                    let item = window.Config.Store[key];
+                    let modified = false;
+
+                    if (item.hasOwnProperty('not_in_shop')) {
+                        if (item.not_in_shop === 0) {
+                            delete item.not_in_shop;
+                            modified = true;
+                        }
+                    }
+                    
+                    if (item.buyable !== 1 && item.buyable !== true) {
+                        item.buyable = 1;
+                        modified = true;
+                    }
+
+                    if (item.hasOwnProperty('hide_in_shop')) {
+                        delete item.hide_in_shop;
+                        modified = true;
+                    }
+
+                    if (modified) count++;
+                }
+
+                window.Config._sf_store_revealed = true;
+                sysLog('تم كشف ' + count + ' عنصر مخفي في المتاجر بنجاح.');
+
+                // Force reset Store Models so they rebuild with the revealed items
+                if (window.GF) {
+                    if (window.GF.shopModel) {
+                        window.GF.shopModel._storeArr = null;
+                        window.GF.shopModel._storeValidList = null;
+                        window.GF.shopModel._storeValidIds = null;
+                        window.GF.shopModel._specialItemList = null;
+                        window.GF.shopModel._habitatList = null;
+                    }
+                    if (window.GF.silverShopController && window.GF.silverShopController.model) {
+                        window.GF.silverShopController.model.isInit = false;
+                    }
+                }
+            }
+
+            injectReveal();
+        };
+
+        const script = document.createElement('script');
+        script.textContent = '(' + fnStr + ')();';
+        (document.head || document.documentElement).appendChild(script);
+        script.remove();
+        console.log('[SupremeFarm Modular] Injected Store Reveal Protocol');
+    }
+};
+
+// Register the module
+new SF.StoreRevealModule();
 
 
 // --- File: features/AutoMegaHarvestModule.js ---
