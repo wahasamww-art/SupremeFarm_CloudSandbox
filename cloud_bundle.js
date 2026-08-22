@@ -1,6 +1,6 @@
 // ===================================================================
 // SupremeFarm Modular - Cloud Distribution Bundle
-// Generated at: 2026-08-22T11:29:57.251Z
+// Generated at: 2026-08-22T11:37:41.723Z
 // ===================================================================
 
 // --- File: core/EventBus.js ---
@@ -5290,12 +5290,12 @@ SF.StoreRevealModule = class StoreRevealModule extends SF.ModuleBase {
                                     var o = window.Config.Store_GetItemData(id);
                                     if (!o) return;
                                     switch (o.type) {
-                                        case 14:
-                                        case 15: e[1].push(o); break;
-                                        case 2: e[2].push(o); break;
-                                        case 3: e[3].push(o); break;
-                                        case 5: e[4].push(o); break;
-                                        case 10: e[5].push(o); break;
+                                        case "special_events":
+                                        case "automation": e[1].push(o); break;
+                                        case "trees": e[2].push(o); break;
+                                        case "animals": e[3].push(o); break;
+                                        case "gear": e[4].push(o); break;
+                                        case "materials": e[5].push(o); break;
                                         default: e[6].push(o);
                                     }
                                 }, this);
