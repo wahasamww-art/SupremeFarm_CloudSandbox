@@ -1,6 +1,6 @@
 // ===================================================================
 // SupremeFarm Modular - Cloud Distribution Bundle
-// Generated at: 2026-08-22T07:40:09.653Z
+// Generated at: 2026-08-22T07:44:24.068Z
 // ===================================================================
 
 // --- File: core/EventBus.js ---
@@ -2030,9 +2030,8 @@ SF.ZeroGasModule = class ZeroGasModule extends SF.ModuleBase {
                         if (typeof window[cls].prototype.getOPUseNum !== 'undefined') {
                             window[cls].prototype.getOPUseNum = function() { return 0; };
                         }
-                            // Removed init hook because it crashes the Store UI card flip by applying automation to dummy objects
-                            console.log("✅ [SF-ZeroGas] " + cls + " (init hook removed for Store stability)");
-                        }
+                        // Removed init hook because it crashes the Store UI card flip by applying automation to dummy objects
+                        console.log("✅ [SF-ZeroGas] " + cls + " (init hook removed for Store stability)");
                     }
                 });
 
