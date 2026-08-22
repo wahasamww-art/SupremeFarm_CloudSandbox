@@ -1,6 +1,6 @@
 // ===================================================================
 // SupremeFarm Modular - Cloud Distribution Bundle
-// Generated at: 2026-08-22T06:16:14.005Z
+// Generated at: 2026-08-22T06:29:24.014Z
 // ===================================================================
 
 // --- File: core/EventBus.js ---
@@ -3593,6 +3593,7 @@ SF.AlbumTrackerModule = class AlbumTrackerModule extends SF.ModuleBase {
                         <div style="display: flex; gap: 5px;">
                             <button id="sf-btn-filter-missing" class="sf-btn" style="flex:1; background:#e74c3c; font-size:12px;">فلترة النواقص ❌</button>
                             <button id="sf-btn-copy-missing" class="sf-btn" style="flex:1; background:#3498db; font-size:12px;">نسخ النواقص 📋</button>
+                            <button id="sf-btn-send-multi" class="sf-btn" style="flex:1; background:#f39c12; font-size:12px; display:none;">إرسال المحدد 🎁 (0)</button>
                         </div>
                     </div>
                     
@@ -3645,8 +3646,101 @@ SF.AlbumTrackerModule = class AlbumTrackerModule extends SF.ModuleBase {
             matchBtn.onclick = () => this.matchFriendCards();
         }
 
+        const multiSendBtn = this.container.querySelector('#sf-btn-send-multi');
+        if (multiSendBtn) {
+            multiSendBtn.onclick = () => this.triggerMultiSend();
+        }
+
+        this.container.addEventListener('change', (e) => {
+            if (e.target && e.target.classList.contains('sf-album-multi-send-cb')) {
+                this.updateMultiSendBtn();
+            }
+        });
+
         unsafeWindow.triggerAlbumSmartSearch = (cardId, isAsk, pageId) => this.triggerAlbumSmartSearch(cardId, isAsk, pageId);
         unsafeWindow.copyAlbumText = (text, btnElement) => this.copyAlbumText(text, btnElement);
+    }
+
+    updateMultiSendBtn() {
+        let checked = this.container.querySelectorAll('.sf-album-multi-send-cb:checked');
+        let btn = this.container.querySelector('#sf-btn-send-multi');
+        if (btn) {
+            if (checked.length > 0) {
+                btn.style.display = 'block';
+                btn.innerText = `إرسال المحدد 🎁 (${checked.length})`;
+            } else {
+                btn.style.display = 'none';
+            }
+        }
+    }
+
+    triggerMultiSend() {
+        let checked = this.container.querySelectorAll('.sf-album-multi-send-cb:checked');
+        if (checked.length === 0) return;
+        
+        this.multiSendQueue = [];
+        checked.forEach(cb => {
+            this.multiSendQueue.push({
+                cardId: parseInt(cb.getAttribute('data-card-id')),
+                setId: parseInt(cb.getAttribute('data-set-id'))
+            });
+        });
+        
+        // Hook send card if not hooked
+        if (!this.sendCardHooked) {
+            this.sendCardHooked = true;
+            let albumModel = unsafeWindow.GF.albumModel;
+            if (albumModel && typeof albumModel.callServerSendCard === 'function') {
+                const origSendCard = albumModel.callServerSendCard;
+                const self = this;
+                albumModel.callServerSendCard = function(cardId, neighbor, cb, ctx) {
+                    let res = origSendCard.apply(this, arguments);
+                    
+                    if (self.isMultiSendingAuto) return res; // Prevent double trigger from our own automated calls
+
+                    if (self.multiSendQueue && self.multiSendQueue.length > 0) {
+                        self.multiSendQueue = self.multiSendQueue.filter(c => c.cardId != cardId);
+                        if (self.multiSendQueue.length > 0) {
+                            self.isMultiSendingAuto = true;
+                            self.processMultiSendQueue(neighbor);
+                        } else {
+                            alert("تم إرسال جميع الكروت المحددة بنجاح! 🚀");
+                        }
+                    }
+                    return res;
+                };
+            }
+        }
+
+        let first = this.multiSendQueue[0];
+        this.triggerAlbumSmartSearch(first.cardId, false, first.setId);
+    }
+
+    processMultiSendQueue(neighbor) {
+        if (!this.multiSendQueue || this.multiSendQueue.length === 0) {
+            this.isMultiSendingAuto = false;
+            return;
+        }
+        
+        let albumModel = unsafeWindow.GF.albumModel;
+        if (!albumModel) {
+            this.isMultiSendingAuto = false;
+            return;
+        }
+
+        let nextItem = this.multiSendQueue.shift();
+        
+        setTimeout(() => {
+            albumModel.isSendMessage = false; // Bypass the lock
+            albumModel.callServerSendCard(nextItem.cardId, neighbor, null, null);
+            
+            if (this.multiSendQueue.length > 0) {
+                this.processMultiSendQueue(neighbor);
+            } else {
+                this.isMultiSendingAuto = false;
+                setTimeout(() => alert("تم إرسال جميع الكروت المحددة بنجاح! 🚀"), 1000);
+            }
+        }, 600); // Wait 600ms between each send
     }
 
     toggleFriendBox(forceState = null) {
@@ -4021,10 +4115,14 @@ SF.AlbumTrackerModule = class AlbumTrackerModule extends SF.ModuleBase {
                         let imgId = "sf-album-card-img-" + card.id;
                         let imgHtml = '';
                         let countBadgeHtml = '';
+                        let checkboxHtml = '';
                         
                         if (card.count > 0) {
                             imgHtml = `<img id="${imgId}" src="" style="width:100%; max-width:110px; aspect-ratio:1; object-fit:contain; border-radius:5px; border:2px solid #2ecc71; background:#fff; display:block; margin: 0 auto;" />`;
                             countBadgeHtml = `<span style="position: absolute; top: -5px; right: -5px; background: #2ecc71; border-radius: 50%; width: 20px; height: 20px; line-height: 20px; text-align: center; font-weight: bold; color: white; border: 2px solid white; z-index: 2; font-size:12px; box-shadow: 0 2px 4px rgba(0,0,0,0.3);">${card.count}</span>`;
+                            if (card.count > 1) {
+                                checkboxHtml = `<input type="checkbox" class="sf-album-multi-send-cb" data-card-id="${card.id}" data-set-id="${setId}" style="position: absolute; top: 5px; left: 5px; z-index: 3; width: 16px; height: 16px; cursor: pointer;">`;
+                            }
                         } else {
                             imgHtml = `<img id="${imgId}" src="" style="width:100%; max-width:110px; aspect-ratio:1; object-fit:contain; border-radius:5px; border:2px solid #e74c3c; filter: grayscale(40%) opacity(85%); background:#fff; display:block; margin: 0 auto;" title="غير مملوك" />`;
                             countBadgeHtml = `<span style="position: absolute; top: -5px; right: -5px; background: #e74c3c; border-radius: 50%; width: 20px; height: 20px; line-height: 20px; text-align: center; font-weight: bold; color: white; border: 2px solid white; z-index: 2; font-size:11px; box-shadow: 0 2px 4px rgba(0,0,0,0.3);">❌</span>`;
@@ -4077,6 +4175,7 @@ SF.AlbumTrackerModule = class AlbumTrackerModule extends SF.ModuleBase {
                             <div class="sf-album-card-row" data-search="${searchText.toLowerCase()}" data-missing="${isMissingStr}" data-card-name="${card.name}" data-count="${card.count}" style="background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.05); border-radius: 8px; padding: 8px; display: flex; flex-direction: column; align-items: center; justify-content: space-between; box-shadow: 0 4px 6px rgba(0,0,0,0.2);">
                                 
                                 <div style="position: relative; width: 100%;">
+                                    ${checkboxHtml}
                                     ${countBadgeHtml}
                                     ${imgHtml}
                                 </div>
