@@ -1,6 +1,6 @@
 // ===================================================================
 // SupremeFarm Modular - Cloud Distribution Bundle
-// Generated at: 2026-08-22T10:59:16.460Z
+// Generated at: 2026-08-22T11:04:22.179Z
 // ===================================================================
 
 // --- File: core/EventBus.js ---
@@ -5264,16 +5264,33 @@ SF.StoreRevealModule = class StoreRevealModule extends SF.ModuleBase {
                     ShipOrderShopItemCls.prototype.updateInfo = function() {
                         origUpdateInfo.call(this);
                         
-                        // Force display of limit text
-                        this.lblUnlock.visible = true;
-                        
+                        let limitText = "";
                         if (this.itemData.shiporder_buyonce) {
-                            this.lblUnlock.text = "شراء مرة واحدة فقط";
+                            limitText = "شراء مرة واحدة فقط";
                         } else if (this.itemData.shiporder_buylimit) {
                             var limit = this.model.hasLimitQty(this.itemData.id);
-                            this.lblUnlock.text = "المتبقي للمزرعة: " + Math.max(0, limit);
+                            limitText = "المتبقي للمزرعة: " + Math.max(0, limit);
                         } else {
-                            this.lblUnlock.text = "الكمية: غير محدود ∞";
+                            limitText = "الكمية: غير محدود ∞";
+                        }
+
+                        // If point_level is locking the item, preserve its original message
+                        var t = this.dataModel && this.dataModel.AppData ? this.dataModel.AppData.order_points : 0;
+                        if (this.itemData.hasOwnProperty("point_level") && this.itemData.point_level > t) {
+                            this.lblUnlock.text = this.lblUnlock.text + " | " + limitText;
+                            this.lblUnlock.visible = true;
+                            return;
+                        }
+
+                        // Prevent overlap with Time Limit label (lblTime)
+                        if (this.lblTime && this.lblTime.visible) {
+                            // Append our text to the time text
+                            this.lblTime.text = this.lblTime.text + " | " + limitText;
+                            this.lblUnlock.visible = false;
+                        } else {
+                            // Safe to use lblUnlock
+                            this.lblUnlock.text = limitText;
+                            this.lblUnlock.visible = true;
                         }
                     };
                 }
