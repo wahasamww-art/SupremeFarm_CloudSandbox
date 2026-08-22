@@ -1,6 +1,6 @@
 // ===================================================================
 // SupremeFarm Modular - Cloud Distribution Bundle
-// Generated at: 2026-08-22T06:29:24.014Z
+// Generated at: 2026-08-22T07:16:39.993Z
 // ===================================================================
 
 // --- File: core/EventBus.js ---
@@ -353,7 +353,7 @@ SF.dataExtractor = new SF.GameDataExtractor();
 
 
 // --- File: ui/Styles.js ---
-﻿// --- ui\Styles.js ---
+// --- ui\Styles.js ---
 window.SF = window.SF || {};
 
 SF.Styles = `
@@ -452,8 +452,8 @@ SF.Styles = `
         top: 60px;
         left: 50%;
         transform: translateX(-50%);
-        width: 600px;
-        max-height: 80vh;
+        width: 750px;
+        max-height: 85vh;
         background: var(--sf-bg);
         border: 2px solid var(--sf-primary);
         border-radius: 12px;
@@ -2022,13 +2022,24 @@ SF.ZeroGasModule = class ZeroGasModule extends SF.ModuleBase {
                 }
 
                 const targetClasses = ['MapObject1', 'Machine', 'Animal', 'TreeWall', 'SaltPond', 'Plant', 'Soil', 'FertilizerObject', 'HitBirdModel', 'GooseController', 'AnimalWorkShopModel', 'RefreshmentShopController', 'DollShopController', 'FishController', 'GameController'];
-                targetClasses.forEach(className => {
-                    if (window[className] && window[className].prototype) {
-                        if (typeof window[className].prototype.getNeedOp !== 'undefined') {
-                            window[className].prototype.getNeedOp = function() { return 0; };
+                targetClasses.forEach(cls => {
+                    if (window[cls] && window[cls].prototype) {
+                        if (typeof window[cls].prototype.getNeedOp !== 'undefined') {
+                            window[cls].prototype.getNeedOp = function() { return 0; };
                         }
-                        if (typeof window[className].prototype.getOPUseNum !== 'undefined') {
-                            window[className].prototype.getOPUseNum = function() { return 0; };
+                        if (typeof window[cls].prototype.getOPUseNum !== 'undefined') {
+                            window[cls].prototype.getOPUseNum = function() { return 0; };
+                        }
+                        if (!window[cls].prototype._orig_init) {
+                            window[cls].prototype._orig_init = window[cls].prototype.init || window[cls].prototype.initialize || function(){};
+                            window[cls].prototype.init = function() {
+                                // Only set automatic=1 on real map objects to prevent store dummy objects from crashing UI
+                                if (this.serverData || this.id || this.map_x !== undefined) {
+                                    this.automatic = 1;
+                                }
+                                return this._orig_init.apply(this, arguments);
+                            };
+                            console.log("✅ [SF-ZeroGas] " + cls + ".automatic hooked for local persistence.");
                         }
                     }
                 });
@@ -2487,28 +2498,30 @@ SF.CropinatorModule = class CropinatorModule extends SF.ModuleBase {
                         if (typeof originalDirtyData === 'function') {
                             try { originalDirtyData.apply(this, arguments); } catch(e) {}
                         }
-                        if (!this.AppData || !this.AppData.map) return;
-                        let t = this.AppData.map;
-                        let e = {};
-                        let i = [];
-                        let keys = Object.keys(t);
-                        for (let k = 0; k < keys.length; k++) {
-                            let n = t[keys[k]];
-                            if (n && typeof n === 'object') {
-                                e[n.id + "_" + n.map_x + "_" + n.map_y] = 1;
-                                if (n.uid) e[n.uid + "_" + n.map_x + "_" + n.map_y] = 1;
-                            }
-                        }
-                        for (let k = 0; k < keys.length; k++) {
-                            let n = t[keys[k]];
-                            if (n && typeof n === 'object' && n.greenhouse_id) {
-                                let r = n.greenhouse_id + "_" + n.greenhouse_x + "_" + n.greenhouse_y;
-                                if (!e[r]) {
-                                    i.push(n.id + "_" + n.map_x + "_" + n.map_y + ":" + r);
-                                    n.greenhouse_id = 0; n.greenhouse_x = 0; n.greenhouse_y = 0;
+                        try {
+                            if (!this || !this.AppData || !this.AppData.map) return;
+                            let t = this.AppData.map;
+                            let e = {};
+                            let i = [];
+                            let keys = Object.keys(t);
+                            for (let k = 0; k < keys.length; k++) {
+                                let n = t[keys[k]];
+                                if (n && typeof n === 'object') {
+                                    e[n.id + "_" + n.map_x + "_" + n.map_y] = 1;
+                                    if (n.uid) e[n.uid + "_" + n.map_x + "_" + n.map_y] = 1;
                                 }
                             }
-                        }
+                            for (let k = 0; k < keys.length; k++) {
+                                let n = t[keys[k]];
+                                if (n && typeof n === 'object' && n.greenhouse_id) {
+                                    let r = n.greenhouse_id + "_" + n.greenhouse_x + "_" + n.greenhouse_y;
+                                    if (!e[r]) {
+                                        i.push(n.id + "_" + n.map_x + "_" + n.map_y + ":" + r);
+                                        n.greenhouse_id = 0; n.greenhouse_x = 0; n.greenhouse_y = 0;
+                                    }
+                                }
+                            }
+                        } catch(e) {}
                     };
                     gw.GF.loginModel._hookedDirtyData = true;
                     sysLog("تم تفعيل رقعة حماية انهيار الخريطة (DirtyData Bypass).");
@@ -3524,12 +3537,15 @@ SF.AlbumTrackerModule = class AlbumTrackerModule extends SF.ModuleBase {
                 .sf-album-content {
                     flex: 1;
                     padding: 10px 0;
-                    max-height: 400px;
+                    max-height: 60vh;
                     overflow-y: auto;
                     margin-top: 15px;
                     border-top: 1px solid rgba(255,255,255,0.1);
                     display: none; /* مخفي في البداية */
                 }
+                .sf-album-content::-webkit-scrollbar { width: 8px; }
+                .sf-album-content::-webkit-scrollbar-thumb { background: var(--sf-primary); border-radius: 4px; }
+                .sf-album-content::-webkit-scrollbar-track { background: rgba(0,0,0,0.3); }
                 .sf-page-container {
                     background: rgba(0,0,0,0.3);
                     margin-bottom: 10px;
@@ -4077,7 +4093,7 @@ SF.AlbumTrackerModule = class AlbumTrackerModule extends SF.ModuleBase {
                             <summary class="sf-page-title">
                                 ${setName} (${setId}) <span style="font-size:10px; float:left;">اضغط للفتح</span>
                             </summary>
-                            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; padding: 10px;">
+                            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; padding: 10px;">
                     `;
 
                     pageData.cards.sort((a,b) => a.id - b.id).forEach(card => {
@@ -4171,8 +4187,10 @@ SF.AlbumTrackerModule = class AlbumTrackerModule extends SF.ModuleBase {
                         
                         let copyIcon = card.count === 0 ? `<button style="cursor:pointer; font-size:11px; padding: 4px; margin-bottom: 4px; width: 100%; background: #3498db; color: white; border: none; border-radius: 5px; font-weight: bold; transition: 0.3s;" onclick="window.copyAlbumText('${fullCopyText.replace(/'/g, "\\'")}', this)" title="نسخ اسم الكارت">📋 نسخ</button>` : '';
 
+                        let bgStyle = card.special == 1 ? 'background: linear-gradient(135deg, rgba(255, 215, 0, 0.2), rgba(0, 0, 0, 0.4)); border: 1px solid rgba(255, 215, 0, 0.6);' : 'background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.05);';
+
                         tableHtml += `
-                            <div class="sf-album-card-row" data-search="${searchText.toLowerCase()}" data-missing="${isMissingStr}" data-card-name="${card.name}" data-count="${card.count}" style="background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.05); border-radius: 8px; padding: 8px; display: flex; flex-direction: column; align-items: center; justify-content: space-between; box-shadow: 0 4px 6px rgba(0,0,0,0.2);">
+                            <div class="sf-album-card-row" data-search="${searchText.toLowerCase()}" data-missing="${isMissingStr}" data-card-name="${card.name}" data-count="${card.count}" style="${bgStyle} border-radius: 8px; padding: 8px; display: flex; flex-direction: column; align-items: center; justify-content: space-between; box-shadow: 0 4px 6px rgba(0,0,0,0.2);">
                                 
                                 <div style="position: relative; width: 100%;">
                                     ${checkboxHtml}
