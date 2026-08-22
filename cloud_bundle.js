@@ -1,8 +1,31 @@
+// ==UserScript==
+// @name         حصاد مظبوط المدمج
+// @namespace    https://supreme-farm.local
+// @version      2.1.0
+// @description  نظام المزرعة الذكي - معمارية التوسعة اللانهائية
+// @author       Supreme Farm Team
+// @match        *://*.centurygames.com/*
+// @match        *://*.apps.fbsbx.com/*
+// @match        *://apps.facebook.com/familyfarm*
+// @match        *://*.familyfarm.com/*
+// @match        *://ff-us.centurygames.com/*
+// @match        *://farmbot-vip.online/*
+// @match        *://*.farmbot-vip.online/*
+// @require      https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js
+// @grant        unsafeWindow
+// @grant        GM_xmlhttpRequest
+// @grant        GM_setValue
+// @grant        GM_getValue
+// @run-at       document-end
+// ==/UserScript==
 
 // ===================================================================
 // SupremeFarm Modular - Cloud Distribution Bundle
-// Generated at: 2026-08-22T13:48:56.916Z
+// Generated at: 2026-08-22T13:54:10.631Z
 // ===================================================================
+
+var SF = window.SF || {};
+window.SF = SF;
 
 // --- File: core/EventBus.js ---
 ﻿// --- core\EventBus.js ---
