@@ -21,7 +21,7 @@
 
 // ===================================================================
 // SupremeFarm Modular - Cloud Distribution Bundle
-// Generated at: 2026-08-22T14:05:32.373Z
+// Generated at: 2026-08-22T14:09:30.880Z
 // ===================================================================
 
 var SF = window.SF || {};
@@ -3786,6 +3786,7 @@ SF.AlbumTrackerModule = class AlbumTrackerModule extends SF.ModuleBase {
                         let remainingForThisType = pkg.num - j - 1;
                         status.innerText = `📦 جاري فتح النوع (${i+1}/${packages.length}) | متبقي: ${remainingForThisType} | الإجمالي: (${openedCount}/${total})`;
                         
+                        albumModel.isSendMessage = false; // تجاوز قفل اللعبة لضمان عدم تجاهل أي طلب
                         if (isFlame) albumModel.callServerUseItemFlame(pkg.id, 1);
                         else albumModel.callServerUseItem(pkg.id, 1);
                         
