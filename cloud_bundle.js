@@ -1,6 +1,6 @@
 // ===================================================================
 // SupremeFarm Modular - Cloud Distribution Bundle
-// Generated at: 2026-08-22T11:43:01.149Z
+// Generated at: 2026-08-22T11:49:07.356Z
 // ===================================================================
 
 // --- File: core/EventBus.js ---
@@ -5234,7 +5234,7 @@ SF.StoreRevealModule = class StoreRevealModule extends SF.ModuleBase {
                         if (item.hasOwnProperty('is_hide')) delete item.is_hide;
 
                         // Inject missing voucher items into the store
-                        if (item.new_cash3) {
+                        if (item.new_cash1 || item.new_cash2 || item.new_cash3) {
                             if (window.Config.StoreShipOrder.indexOf(item.id) === -1) {
                                 window.Config.StoreShipOrder.push(item.id);
                                 injectedCount++;
