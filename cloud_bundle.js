@@ -21,7 +21,7 @@
 
 // ===================================================================
 // SupremeFarm Modular - Cloud Distribution Bundle
-// Generated at: 2026-08-22T13:54:10.631Z
+// Generated at: 2026-08-22T14:05:32.373Z
 // ===================================================================
 
 var SF = window.SF || {};
@@ -3719,12 +3719,11 @@ SF.AlbumTrackerModule = class AlbumTrackerModule extends SF.ModuleBase {
                             if (packages && packages.length > 0) {
                                 packages.forEach(p => total += p.num);
                             }
-                            
                             if (total > 0) {
                                 self.showInGamePopup(total);
                             }
                         }
-                    }, 800); // Wait for AMF response and UI load
+                    }, 800);
                 };
             }
         }, 1000);
@@ -3736,12 +3735,12 @@ SF.AlbumTrackerModule = class AlbumTrackerModule extends SF.ModuleBase {
         let div = document.createElement('div');
         div.id = 'sf-ingame-pkg-popup';
         div.style.cssText = `
-            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            position: absolute; top: 10%; left: 50%; transform: translateX(-50%);
             background: linear-gradient(135deg, rgba(142, 68, 173, 0.95), rgba(41, 128, 185, 0.95));
             border: 3px solid #f1c40f; border-radius: 15px; padding: 20px;
             z-index: 999999; text-align: center; color: white;
             box-shadow: 0 10px 25px rgba(0,0,0,0.8); font-family: Tahoma, sans-serif;
-            width: 300px; backdrop-filter: blur(5px);
+            width: 350px; backdrop-filter: blur(5px);
         `;
         div.innerHTML = `
             <h3 style="margin-top:0; color: #f1c40f; text-shadow: 1px 1px 2px #000;">🎁 حزم الألبوم المكدسة</h3>
@@ -3784,10 +3783,19 @@ SF.AlbumTrackerModule = class AlbumTrackerModule extends SF.ModuleBase {
                     
                     for (let j = 0; j < pkg.num; j++) {
                         openedCount++;
-                        status.innerText = `جاري الدك... (${openedCount}/${total}) 💥`;
+                        let remainingForThisType = pkg.num - j - 1;
+                        status.innerText = `📦 جاري فتح النوع (${i+1}/${packages.length}) | متبقي: ${remainingForThisType} | الإجمالي: (${openedCount}/${total})`;
+                        
                         if (isFlame) albumModel.callServerUseItemFlame(pkg.id, 1);
                         else albumModel.callServerUseItem(pkg.id, 1);
-                        await new Promise(r => setTimeout(r, 500 + Math.random() * 300));
+                        
+                        // انتظار إرسال الطلب والاستجابة لتحديث الواجهة (Jitter)
+                        await new Promise(r => setTimeout(r, 600 + Math.random() * 300));
+                        
+                        // تحديث واجهة الألبوم الأصلية لتقليل العدد واختفاء الحزمة تدريجياً
+                        if (unsafeWindow.GF.albumController) {
+                            unsafeWindow.GF.albumController.updateWarePanel1View();
+                        }
                     }
                 }
                 status.innerText = 'تم مسح الحزم بنجاح! مبروك ✔️';
@@ -3805,6 +3813,7 @@ SF.AlbumTrackerModule = class AlbumTrackerModule extends SF.ModuleBase {
             }
         };
     }
+
 
     updateMultiSendBtn() {
         let checked = this.container.querySelectorAll('.sf-album-multi-send-cb:checked');
