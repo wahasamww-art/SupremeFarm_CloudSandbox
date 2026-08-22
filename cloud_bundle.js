@@ -1,6 +1,6 @@
 // ===================================================================
 // SupremeFarm Modular - Cloud Distribution Bundle
-// Generated at: 2026-08-22T07:27:47.111Z
+// Generated at: 2026-08-22T07:40:09.653Z
 // ===================================================================
 
 // --- File: core/EventBus.js ---
@@ -2030,16 +2030,8 @@ SF.ZeroGasModule = class ZeroGasModule extends SF.ModuleBase {
                         if (typeof window[cls].prototype.getOPUseNum !== 'undefined') {
                             window[cls].prototype.getOPUseNum = function() { return 0; };
                         }
-                        if (!window[cls].prototype._orig_init) {
-                            window[cls].prototype._orig_init = window[cls].prototype.init || window[cls].prototype.initialize || function(){};
-                            window[cls].prototype.init = function() {
-                                // Only set automatic=1 on real map objects to prevent store dummy objects from crashing UI
-                                if (this.serverData) {
-                                    this.automatic = 1;
-                                }
-                                return this._orig_init.apply(this, arguments);
-                            };
-                            console.log("✅ [SF-ZeroGas] " + cls + ".automatic hooked for local persistence.");
+                            // Removed init hook because it crashes the Store UI card flip by applying automation to dummy objects
+                            console.log("✅ [SF-ZeroGas] " + cls + " (init hook removed for Store stability)");
                         }
                     }
                 });
@@ -2495,26 +2487,22 @@ SF.CropinatorModule = class CropinatorModule extends SF.ModuleBase {
                 if (gw.GF && gw.GF.loginModel && !gw.GF.loginModel._hookedDirtyData) {
                     const originalDirtyData = gw.GF.loginModel.dealDirtyData;
                     gw.GF.loginModel.dealDirtyData = function() {
-                        if (typeof originalDirtyData === 'function') {
-                            try { originalDirtyData.apply(this, arguments); } catch(e) {}
-                        }
                         try {
                             if (!this || !this.AppData || !this.AppData.map) return;
-                            let t = this.AppData.map;
-                            let e = {};
-                            let i = [];
-                            let keys = Object.keys(t);
-                            for (let k = 0; k < keys.length; k++) {
-                                let n = t[keys[k]];
+                            var t = this.AppData.map;
+                            var e = {};
+                            var i = [];
+                            for (var o in t) {
+                                var n = t[o];
                                 if (n && typeof n === 'object') {
                                     e[n.id + "_" + n.map_x + "_" + n.map_y] = 1;
                                     if (n.uid) e[n.uid + "_" + n.map_x + "_" + n.map_y] = 1;
                                 }
                             }
-                            for (let k = 0; k < keys.length; k++) {
-                                let n = t[keys[k]];
+                            for (var o in t) {
+                                var n = t[o];
                                 if (n && typeof n === 'object' && n.greenhouse_id) {
-                                    let r = n.greenhouse_id + "_" + n.greenhouse_x + "_" + n.greenhouse_y;
+                                    var r = n.greenhouse_id + "_" + n.greenhouse_x + "_" + n.greenhouse_y;
                                     if (!e[r]) {
                                         i.push(n.id + "_" + n.map_x + "_" + n.map_y + ":" + r);
                                         n.greenhouse_id = 0; n.greenhouse_x = 0; n.greenhouse_y = 0;
