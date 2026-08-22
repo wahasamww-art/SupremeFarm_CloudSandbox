@@ -21,7 +21,7 @@
 
 // ===================================================================
 // SupremeFarm Modular - Cloud Distribution Bundle
-// Generated at: 2026-08-22T14:55:45.849Z
+// Generated at: 2026-08-22T15:03:36.245Z
 // ===================================================================
 
 var SF = window.SF || {};
@@ -6316,6 +6316,37 @@ SF.MonopolyModule = class MonopolyModule extends SF.ModuleBase {
         super('monopoly', 'بنك الحظ', '🎲');
         this.isRunning = false;
         this.autoPlayTimeout = null;
+        this.currentDice = 0;
+        
+        // Hook to auto-detect when Monopoly window is opened
+        this._setupAutoDetect();
+    }
+
+    _setupAutoDetect() {
+        let checkInterval = setInterval(() => {
+            let gw = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
+            if (gw.App && gw.App.MessageCenter && gw.NetUtils && gw.NetUtils.netManager) {
+                clearInterval(checkInterval);
+                const originalRequest = gw.NetUtils.netManager.request;
+                const self = this;
+                gw.NetUtils.netManager.request = async function(action, args) {
+                    if (action && action.toString().includes("Monopoly") && args && args.action === "loadData") {
+                        // Game is loading monopoly data
+                        const res = await originalRequest.apply(this, arguments);
+                        if (res && res.data) {
+                            self.currentDice = res.data.counter || 0;
+                            self.logStatus(`تم فتح الفعالية! لديك الآن ${self.currentDice} نرد.`);
+                            // Optional: switch to this tab if UI supports it
+                            if (typeof window.SF_SwitchToTab === 'function') {
+                                window.SF_SwitchToTab('monopoly');
+                            }
+                        }
+                        return res;
+                    }
+                    return originalRequest.apply(this, arguments);
+                };
+            }
+        }, 2000);
     }
 
     render() {
@@ -6329,16 +6360,19 @@ SF.MonopolyModule = class MonopolyModule extends SF.ModuleBase {
                     cursor: pointer;
                     width: 100%;
                     transition: all 0.3s ease;
+                    margin-bottom: 10px;
+                }
+                .sf-monopoly-btn-primary {
+                    background: linear-gradient(135deg, #3498db, #2980b9);
+                    color: white;
                 }
                 .sf-monopoly-btn-start {
                     background: linear-gradient(135deg, #2ecc71, #27ae60);
                     color: white;
-                    box-shadow: 0 4px 15px rgba(46, 204, 113, 0.3);
                 }
                 .sf-monopoly-btn-stop {
                     background: linear-gradient(135deg, #e74c3c, #c0392b);
                     color: white;
-                    box-shadow: 0 4px 15px rgba(231, 76, 60, 0.3);
                 }
                 .sf-monopoly-log {
                     margin-top: 10px;
@@ -6351,15 +6385,39 @@ SF.MonopolyModule = class MonopolyModule extends SF.ModuleBase {
                     text-align: right;
                     min-height: 20px;
                 }
+                .sf-flex-row {
+                    display: flex;
+                    gap: 10px;
+                    margin-bottom: 10px;
+                }
+                .sf-input-number {
+                    flex: 1;
+                    padding: 8px;
+                    border-radius: 4px;
+                    border: 1px solid #ccc;
+                    background: #fff;
+                    color: #333;
+                }
             </style>
             
             <div class="sf-card">
                 <p style="color: var(--sf-text-muted); font-size: 13px; margin-bottom: 15px; text-align: center;">
-                    رمي النرد تلقائياً واستلام الجوائز في فعالية بنك الحظ (Monopoly).
+                    النظام سيقرأ بياناتك تلقائياً عند فتح فعالية بنك الحظ باللعبة.
                 </p>
                 
+                <button id="sf-monopoly-check-btn" class="sf-monopoly-btn sf-monopoly-btn-primary">
+                    🔄 قراءة البيانات الآن (يدوي)
+                </button>
+
+                <div class="sf-flex-row">
+                    <input type="number" id="sf-monopoly-exchange-qty" class="sf-input-number" placeholder="عدد النرد المطلوب..." min="1">
+                    <button id="sf-monopoly-exchange-btn" class="sf-monopoly-btn sf-monopoly-btn-primary" style="flex:1; margin-bottom:0;">
+                        💱 تبديل بنرد
+                    </button>
+                </div>
+
                 <button id="sf-monopoly-toggle-btn" class="sf-monopoly-btn sf-monopoly-btn-start">
-                    ▶️ تشغيل الرمي التلقائي
+                    ▶️ تشغيل الرمي التلقائي (لعب الكل)
                 </button>
 
                 <div id="sf-monopoly-status-log" class="sf-monopoly-log">
@@ -6370,13 +6428,23 @@ SF.MonopolyModule = class MonopolyModule extends SF.ModuleBase {
     }
 
     bindEvents() {
+        const checkBtn = this.container.querySelector('#sf-monopoly-check-btn');
+        if (checkBtn) {
+            checkBtn.onclick = () => this.checkStatus();
+        }
+
+        const exchangeBtn = this.container.querySelector('#sf-monopoly-exchange-btn');
+        if (exchangeBtn) {
+            exchangeBtn.onclick = () => this.exchangeCoins();
+        }
+
         const toggleBtn = this.container.querySelector('#sf-monopoly-toggle-btn');
         if (toggleBtn) {
             toggleBtn.onclick = () => {
                 if (this.isRunning) {
                     this.stopAutoPlay();
                 } else {
-                    this.startAutoPlay();
+                    this.startAutoPlayCheck();
                 }
             };
         }
@@ -6397,10 +6465,79 @@ SF.MonopolyModule = class MonopolyModule extends SF.ModuleBase {
                 btn.innerText = "⏸️ إيقاف الرمي التلقائي";
                 btn.className = "sf-monopoly-btn sf-monopoly-btn-stop";
             } else {
-                btn.innerText = "▶️ تشغيل الرمي التلقائي";
+                btn.innerText = "▶️ تشغيل الرمي التلقائي (لعب الكل)";
                 btn.className = "sf-monopoly-btn sf-monopoly-btn-start";
             }
         }
+    }
+
+    async checkStatus() {
+        try {
+            let gw = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
+            if (!gw.NetUtils || !gw.NetUtils.netManager) return this.logStatus("⏳ اللعبة لم تحمل بعد!");
+            
+            this.logStatus("🔄 جاري قراءة البيانات...");
+            let res = await gw.NetUtils.netManager.request("Activity/Monopoly", { action: "loadData" });
+            if (res && res.status) {
+                this.currentDice = res.data.counter || 0;
+                this.logStatus(`✅ لديك حالياً: ${this.currentDice} نرد.`);
+            }
+        } catch (err) {
+            this.logStatus("❌ خطأ في القراءة: " + err.message);
+        }
+    }
+
+    async exchangeCoins() {
+        const qtyInput = this.container.querySelector('#sf-monopoly-exchange-qty');
+        let qty = parseInt(qtyInput.value);
+        if (isNaN(qty) || qty <= 0) {
+            return this.logStatus("⚠️ يرجى إدخال عدد صحيح للتبديل!");
+        }
+
+        try {
+            let gw = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
+            this.logStatus(`🔄 جاري تبديل عملات للحصول على ${qty} نرد...`);
+            let res = await gw.NetUtils.netManager.request("Activity/Monopoly", { action: "exchange", index: 1, qty: qty });
+            if (res && res.status) {
+                this.logStatus(`✅ تم التبديل بنجاح!`);
+                await this.checkStatus(); // تحديث الرصيد
+            } else {
+                this.logStatus("❌ فشل التبديل، ربما لا تملك عملات كافية.");
+            }
+        } catch (err) {
+            this.logStatus("❌ خطأ التبديل: " + err.message);
+        }
+    }
+
+    async startAutoPlayCheck() {
+        let gw = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
+        if (!gw.NetUtils || !gw.NetUtils.netManager) return this.logStatus("⏳ اللعبة لم تحمل بعد!");
+
+        this.logStatus("🔄 جاري التحقق من النرد قبل اللعب...");
+        let res = await gw.NetUtils.netManager.request("Activity/Monopoly", { action: "loadData" });
+        if (res && res.status) {
+            this.currentDice = res.data.counter || 0;
+            if (this.currentDice <= 0) {
+                let wantExchange = confirm("⚠️ لا يوجد لديك نرد حالياً!\n\nيمكنك تبديل العملات بالنرد من خلال المربع في الأسفل والضغط على (تبديل بنرد).");
+                this.logStatus("⚠️ تم الإيقاف: لا يوجد نرد.");
+                return;
+            } else {
+                let proceed = confirm(`✅ تم قراءة البيانات!\n\nلديك حالياً: ${this.currentDice} نرد.\nهل توافق على لعبهم جميعاً الآن بشكل تلقائي؟`);
+                if (proceed) {
+                    this.startAutoPlay();
+                } else {
+                    this.logStatus("⏹️ تم الإلغاء.");
+                }
+            }
+        }
+    }
+
+    startAutoPlay() {
+        if (this.isRunning) return;
+        this.isRunning = true;
+        this.updateUIButtonState();
+        this.logStatus("▶️ بدء رمي النرد...");
+        this.executePlay();
     }
 
     async executePlay() {
@@ -6408,14 +6545,6 @@ SF.MonopolyModule = class MonopolyModule extends SF.ModuleBase {
 
         try {
             let gw = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
-
-            if (!gw.NetUtils || !gw.NetUtils.netManager) {
-                this.logStatus("⏳ في انتظار تحميل كلاسات اللعبة...");
-                this._scheduleRetry();
-                return;
-            }
-
-            // إرسال طلب رمي النرد
             let response = await gw.NetUtils.netManager.request("Activity/Monopoly", { action: "play" });
             
             if (response && response.status) {
@@ -6425,13 +6554,14 @@ SF.MonopolyModule = class MonopolyModule extends SF.ModuleBase {
                 
                 let rewardMsg = "";
                 if (reward && Object.keys(reward).length > 0) {
-                    rewardMsg = " 🎁 تم استلام جائزة!";
+                    rewardMsg = " 🎁 جائزة!";
                 }
                 
-                this.logStatus(`🎲 تم الرمي (الرقم ${points}) -> الموقع ${pos}${rewardMsg}`);
+                this.currentDice--;
+                this.logStatus(`🎲 رُمي (${points}) -> موقع ${pos}${rewardMsg} | متبقي: ${this.currentDice}`);
                 this._scheduleNextPlay();
             } else {
-                this.logStatus("⚠️ توقف: ربما نفد النرد أو انتهت الفعالية.");
+                this.logStatus("⚠️ توقف: نفد النرد أو انتهت الفعالية.");
                 this.stopAutoPlay(true);
             }
 
@@ -6445,22 +6575,8 @@ SF.MonopolyModule = class MonopolyModule extends SF.ModuleBase {
     _scheduleNextPlay() {
         if (!this.isRunning) return;
         let jitter = Math.floor(Math.random() * 800) + 700;
-        // التأخير بين الرميات (2 إلى 3 ثانية لمحاكاة السلوك البشري وأمان الشبكة)
         let nextRunDelay = 1500 + jitter; 
         this.autoPlayTimeout = setTimeout(() => this.executePlay(), nextRunDelay);
-    }
-
-    _scheduleRetry() {
-        if (!this.isRunning) return;
-        this.autoPlayTimeout = setTimeout(() => this.executePlay(), 2000);
-    }
-
-    startAutoPlay() {
-        if (this.isRunning) return;
-        this.isRunning = true;
-        this.updateUIButtonState();
-        this.logStatus("▶️ بدء رمي النرد...");
-        this.executePlay();
     }
 
     stopAutoPlay(preserveMessage = false) {
