@@ -1,6 +1,6 @@
 // ===================================================================
 // SupremeFarm Modular - Cloud Distribution Bundle
-// Generated at: 2026-08-22T07:16:39.993Z
+// Generated at: 2026-08-22T07:27:47.111Z
 // ===================================================================
 
 // --- File: core/EventBus.js ---
@@ -2034,7 +2034,7 @@ SF.ZeroGasModule = class ZeroGasModule extends SF.ModuleBase {
                             window[cls].prototype._orig_init = window[cls].prototype.init || window[cls].prototype.initialize || function(){};
                             window[cls].prototype.init = function() {
                                 // Only set automatic=1 on real map objects to prevent store dummy objects from crashing UI
-                                if (this.serverData || this.id || this.map_x !== undefined) {
+                                if (this.serverData) {
                                     this.automatic = 1;
                                 }
                                 return this._orig_init.apply(this, arguments);
