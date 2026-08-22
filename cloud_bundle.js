@@ -1,6 +1,6 @@
 // ===================================================================
 // SupremeFarm Modular - Cloud Distribution Bundle
-// Generated at: 2026-08-22T09:38:29.475Z
+// Generated at: 2026-08-22T10:44:16.785Z
 // ===================================================================
 
 // --- File: core/EventBus.js ---
@@ -5179,13 +5179,14 @@ SF.StoreRevealModule = class StoreRevealModule extends SF.ModuleBase {
             }
 
             function injectReveal() {
-                let ShopModelCls, SilverShopModelCls;
+                let ShopModelCls, SilverShopModelCls, ShipOrderModelCls;
                 try {
                     ShopModelCls = window.egret && window.egret.getDefinitionByName('ShopModel');
                     SilverShopModelCls = window.egret && window.egret.getDefinitionByName('SilverShopModel');
+                    ShipOrderModelCls = window.egret && window.egret.getDefinitionByName('ShipOrderModel');
                 } catch(e) {}
 
-                if (!ShopModelCls || !ShopModelCls.prototype || !SilverShopModelCls || !SilverShopModelCls.prototype) {
+                if (!ShopModelCls || !ShopModelCls.prototype || !SilverShopModelCls || !SilverShopModelCls.prototype || !ShipOrderModelCls || !ShipOrderModelCls.prototype) {
                     setTimeout(injectReveal, 2000);
                     return;
                 }
@@ -5208,7 +5209,12 @@ SF.StoreRevealModule = class StoreRevealModule extends SF.ModuleBase {
                     return this.isCanBuy(t);
                 };
 
-                // 3. Hook SilverShopModel.prototype.chargeData (متجر الغموض / القسائم)
+                // 3. Hook ShopModel.prototype.getLimitTime (لإظهار العناصر منتهية الصلاحية)
+                ShopModelCls.prototype.getLimitTime = function(t) {
+                    return 999999999; 
+                };
+
+                // 4. Hook SilverShopModel.prototype.chargeData (متجر الغموض / القسائم)
                 const origChargeData = SilverShopModelCls.prototype.chargeData;
                 SilverShopModelCls.prototype.chargeData = function(t) {
                     // Temporarily force buyable to true just for the duration of this function
@@ -5230,6 +5236,14 @@ SF.StoreRevealModule = class StoreRevealModule extends SF.ModuleBase {
                         t.buyable = originalBuyable;
                     }
                     return result;
+                };
+
+                // 5. Hook ShipOrderModel.prototype (متجر قسائم السيارة / الشحن)
+                ShipOrderModelCls.prototype.hasBuyOnce = function(t) {
+                    return false; // تجاهل شرط الشراء لمرة واحدة
+                };
+                ShipOrderModelCls.prototype.hasLimitQty = function(t) {
+                    return 999; // إعطاء رصيد وهمي كبير لتجاوز حد الشراء
                 };
 
                 ShopModelCls.prototype._sf_hooked_reveal = true;
