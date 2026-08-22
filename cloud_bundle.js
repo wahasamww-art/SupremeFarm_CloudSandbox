@@ -21,7 +21,7 @@
 
 // ===================================================================
 // SupremeFarm Modular - Cloud Distribution Bundle
-// Generated at: 2026-08-22T15:34:20.703Z
+// Generated at: 2026-08-22T16:18:42.583Z
 // ===================================================================
 
 var SF = window.SF || {};
@@ -6332,25 +6332,30 @@ if (window.SF && window.SF.modules) {
             if (gw.App && gw.App.MessageCenter && gw.NetUtils && gw.NetUtils.netManager) {
                 clearInterval(checkInterval);
                 const originalRequest = gw.NetUtils.netManager.request;
-                gw.NetUtils.netManager.request = async function(action, args) {
-                    if (action && action.toString().includes("Monopoly")) {
-                        
-                        // 1. عند فتح الفعالية (loadData)
-                        if (args && args.action === "loadData") {
-                            const res = await originalRequest.apply(this, arguments);
-                            if (res && res.data) {
-                                currentDice = res.data.counter || 0;
-                                currentRound = res.data.round || 0;
-                                
-                                // محاولة قراءة العملات بدقة
-                                currentCoins = detectCoinsAccurately(gw);
-                                
-                                showTopBarUI(currentDice, currentCoins, currentRound);
+                gw.NetUtils.netManager.request = function(cmd, act, data, callback, errCallback, retryCount) {
+                    if (cmd === "Activity/Monopoly") {
+                        let originalCallback = callback;
+                        callback = function(res) {
+                            if (res && res.status && res.data) {
+                                if (act === "loadData") {
+                                    currentDice = res.data.counter || res.data.dice || 0;
+                                    currentRound = res.data.round || 0;
+                                    currentCoins = detectCoinsAccurately(gw);
+                                    showTopBarUI(currentDice, currentCoins, currentRound);
+                                } else if (act === "play" || act === "exchange" || act === "buyDice") {
+                                    // Update after a short delay to allow bag to update
+                                    setTimeout(() => {
+                                        currentCoins = detectCoinsAccurately(gw);
+                                        // Update dice from response if possible, else rely on loadData
+                                        if (res.data.counter !== undefined) currentDice = res.data.counter;
+                                        showTopBarUI(currentDice, currentCoins, currentRound);
+                                    }, 500);
+                                }
                             }
-                            return res;
-                        }
+                            if (originalCallback) originalCallback(res);
+                        };
                     }
-                    return originalRequest.apply(this, arguments);
+                    return originalRequest.call(this, cmd, act, data, callback, errCallback, retryCount);
                 };
             }
         }, 1000);
@@ -6365,8 +6370,8 @@ if (window.SF && window.SF.modules) {
             if (gw.App && gw.App.ControllerManager) {
                 let bag = gw.App.ControllerManager.getControllerModel("Bag");
                 if (bag) {
-                    // آيدي عملة التبديل لبنك الحظ (من السجلات: 224989)
-                    let possibleTokenIDs = ["224989", "224988", "224990"];
+                    // آيدي عملة التبديل لبنك الحظ (من السجلات: 224989, 250395)
+                    let possibleTokenIDs = ["250395", "224989", "224988", "224990"];
                     for (let id of possibleTokenIDs) {
                         let count = bag.getItemCount(id);
                         if (count && count > 0) {
