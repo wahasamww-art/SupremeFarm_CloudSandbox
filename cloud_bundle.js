@@ -1,6 +1,6 @@
 // ===================================================================
 // SupremeFarm Modular - Cloud Distribution Bundle
-// Generated at: 2026-08-22T12:05:05.208Z
+// Generated at: 2026-08-22T12:27:30.192Z
 // ===================================================================
 
 // --- File: core/EventBus.js ---
@@ -5179,6 +5179,12 @@ SF.StoreRevealModule = class StoreRevealModule extends SF.ModuleBase {
             }
 
             function injectReveal() {
+                // التأكد من أن اللعبة قد قامت بتحميل مصفوفة المتجر الأساسية بالكامل قبل التدخل لتفادي الـ Overwrite
+                if (!window.Config || !window.Config.isInit || !window.Config.StoreShipOrder || window.Config.StoreShipOrder.length < 10) {
+                    setTimeout(injectReveal, 2000);
+                    return;
+                }
+
                 let ShopModelCls, SilverShopModelCls, ShipOrderModelCls, ShipOrderShopItemCls;
                 try {
                     ShopModelCls = window.egret && window.egret.getDefinitionByName('ShopModel');
@@ -5233,9 +5239,15 @@ SF.StoreRevealModule = class StoreRevealModule extends SF.ModuleBase {
                         if (item.hasOwnProperty('not_in_shop')) delete item.not_in_shop;
                         if (item.hasOwnProperty('is_hide')) delete item.is_hide;
 
+                        // توحيد العملات: تحويل قسائم السيارة (voucher) إلى قسائم عادية (new_cash) لكي تفهمها واجهة المتجر
+                        if (item.voucher1 && !item.new_cash1) item.new_cash1 = item.voucher1;
+                        if (item.voucher2 && !item.new_cash2) item.new_cash2 = item.voucher2;
+                        if (item.voucher3 && !item.new_cash3) item.new_cash3 = item.voucher3;
+                        if (item.voucher4 && !item.new_cash4) item.new_cash4 = item.voucher4;
+                        if (item.voucher5 && !item.new_cash5) item.new_cash5 = item.voucher5;
+
                         // Inject missing voucher items into the store (شامل قسائم السيارة والقسائم الأخرى)
-                        if (item.new_cash1 || item.new_cash2 || item.new_cash3 || item.new_cash4 || item.new_cash5 ||
-                            item.voucher1 || item.voucher2 || item.voucher3 || item.voucher4 || item.voucher5) {
+                        if (item.new_cash1 || item.new_cash2 || item.new_cash3 || item.new_cash4 || item.new_cash5) {
                             if (window.Config.StoreShipOrder.indexOf(item.id) === -1) {
                                 window.Config.StoreShipOrder.push(item.id);
                                 injectedCount++;
