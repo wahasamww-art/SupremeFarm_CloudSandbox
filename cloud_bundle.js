@@ -1,6 +1,6 @@
 // ===================================================================
 // SupremeFarm Modular - Cloud Distribution Bundle
-// Generated at: 2026-08-22T05:10:00.428Z
+// Generated at: 2026-08-22T06:16:14.005Z
 // ===================================================================
 
 // --- File: core/EventBus.js ---
@@ -1585,6 +1585,7 @@ SF.AutoFarmModule = class AutoFarmModule extends SF.ModuleBase {
                 let mo = batch[b];
                 try {
                     let preCalcProductId = null;
+                    let preCalcIsWaterCrop = false;
                     try {
                         let gw = unsafeWindow;
                         let pObj = mo.plant || mo.crop || mo;
@@ -1592,7 +1593,11 @@ SF.AutoFarmModule = class AutoFarmModule extends SF.ModuleBase {
                         if (seedId && seedId != 101 && gw.Config) {
                             let c = gw.Config.Store_GetItemData(seedId);
                             preCalcProductId = c ? (c.product_id || c.product || seedId) : seedId;
-                            if (!c && pObj.configData && pObj.configData.product_id) preCalcProductId = pObj.configData.product_id;
+                            if (c && (c.water_ranch === true || c.water_ranch === 1)) preCalcIsWaterCrop = true;
+                            if (!c && pObj.configData) {
+                                if (pObj.configData.product_id) preCalcProductId = pObj.configData.product_id;
+                                if (pObj.configData.water_ranch === true || pObj.configData.water_ranch === 1) preCalcIsWaterCrop = true;
+                            }
                         }
                     } catch(e) {}
 
@@ -1646,9 +1651,24 @@ SF.AutoFarmModule = class AutoFarmModule extends SF.ModuleBase {
                     try {
                         let gw = unsafeWindow;
                         if (preCalcProductId && preCalcProductId != 101) {
-                            if (gw.GF && gw.GF.loginModel && gw.GF.loginModel.AppData && gw.GF.loginModel.AppData.storage) {
-                                let curQty = gw.GF.loginModel.AppData.storage[preCalcProductId] || 0;
-                                gw.GF.loginModel.AppData.storage[preCalcProductId] = curQty + 1;
+                            if (gw.GF && gw.GF.loginModel && gw.GF.loginModel.AppData) {
+                                if (preCalcIsWaterCrop && gw.GF.loginModel.AppData.drier && gw.GF.loginModel.AppData.drier.crops) {
+                                    let cropsArr = gw.GF.loginModel.AppData.drier.crops;
+                                    let found = false;
+                                    for (let i = 0; i < cropsArr.length; i++) {
+                                        if (cropsArr[i].id == preCalcProductId) {
+                                            cropsArr[i].qty = (cropsArr[i].qty || 0) + 1;
+                                            found = true;
+                                            break;
+                                        }
+                                    }
+                                    if (!found) {
+                                        cropsArr.push({ id: preCalcProductId, qty: 1 });
+                                    }
+                                } else if (gw.GF.loginModel.AppData.storage) {
+                                    let curQty = gw.GF.loginModel.AppData.storage[preCalcProductId] || 0;
+                                    gw.GF.loginModel.AppData.storage[preCalcProductId] = curQty + 1;
+                                }
                             }
                             if (gw.GF && gw.GF.gameController && gw.Animations) {
                                 gw.GF.gameController.collectTopTip(preCalcProductId, 1);
@@ -2312,13 +2332,18 @@ SF.CropinatorModule = class CropinatorModule extends SF.ModuleBase {
                 ripeTargets.forEach(target => {
                     try {
                         let preCalcProductId = null;
+                        let preCalcIsWaterCrop = false;
                         try {
                             let pObj = target.plant || target.crop || target;
                             let seedId = pObj.plant_id || pObj.plantId || pObj.seed_id || (pObj.configData ? pObj.configData.id : null);
                             if (seedId && seedId != 101 && gw.Config) {
                                 let c = gw.Config.Store_GetItemData(seedId);
                                 preCalcProductId = c ? (c.product_id || c.product || seedId) : seedId;
-                                if (!c && target.configData && target.configData.product_id) preCalcProductId = target.configData.product_id;
+                                if (c && (c.water_ranch === true || c.water_ranch === 1)) preCalcIsWaterCrop = true;
+                                if (!c && target.configData) {
+                                    if (target.configData.product_id) preCalcProductId = target.configData.product_id;
+                                    if (target.configData.water_ranch === true || target.configData.water_ranch === 1) preCalcIsWaterCrop = true;
+                                }
                             }
                         } catch(e) {}
 
@@ -2359,9 +2384,24 @@ SF.CropinatorModule = class CropinatorModule extends SF.ModuleBase {
 
                         try {
                             if (preCalcProductId && preCalcProductId != 101) {
-                                if (gw.GF && gw.GF.loginModel && gw.GF.loginModel.AppData && gw.GF.loginModel.AppData.storage) {
-                                    let curQty = gw.GF.loginModel.AppData.storage[preCalcProductId] || 0;
-                                    gw.GF.loginModel.AppData.storage[preCalcProductId] = curQty + 1;
+                                if (gw.GF && gw.GF.loginModel && gw.GF.loginModel.AppData) {
+                                    if (preCalcIsWaterCrop && gw.GF.loginModel.AppData.drier && gw.GF.loginModel.AppData.drier.crops) {
+                                        let cropsArr = gw.GF.loginModel.AppData.drier.crops;
+                                        let found = false;
+                                        for (let i = 0; i < cropsArr.length; i++) {
+                                            if (cropsArr[i].id == preCalcProductId) {
+                                                cropsArr[i].qty = (cropsArr[i].qty || 0) + 1;
+                                                found = true;
+                                                break;
+                                            }
+                                        }
+                                        if (!found) {
+                                            cropsArr.push({ id: preCalcProductId, qty: 1 });
+                                        }
+                                    } else if (gw.GF.loginModel.AppData.storage) {
+                                        let curQty = gw.GF.loginModel.AppData.storage[preCalcProductId] || 0;
+                                        gw.GF.loginModel.AppData.storage[preCalcProductId] = curQty + 1;
+                                    }
                                 }
                                 if (gw.GF && gw.GF.gameController && gw.Animations) {
                                     gw.GF.gameController.collectTopTip(preCalcProductId, 1);
