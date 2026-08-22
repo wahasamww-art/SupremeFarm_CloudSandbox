@@ -1,6 +1,6 @@
 // ===================================================================
 // SupremeFarm Modular - Cloud Distribution Bundle
-// Generated at: 2026-08-22T09:30:28.634Z
+// Generated at: 2026-08-22T09:38:29.475Z
 // ===================================================================
 
 // --- File: core/EventBus.js ---
@@ -5179,40 +5179,61 @@ SF.StoreRevealModule = class StoreRevealModule extends SF.ModuleBase {
             }
 
             function injectReveal() {
-                if (!window.Config || !window.Config.Store) {
+                let ShopModelCls, SilverShopModelCls;
+                try {
+                    ShopModelCls = window.egret && window.egret.getDefinitionByName('ShopModel');
+                    SilverShopModelCls = window.egret && window.egret.getDefinitionByName('SilverShopModel');
+                } catch(e) {}
+
+                if (!ShopModelCls || !ShopModelCls.prototype || !SilverShopModelCls || !SilverShopModelCls.prototype) {
                     setTimeout(injectReveal, 2000);
                     return;
                 }
 
-                if (window.Config._sf_store_revealed) return;
+                if (ShopModelCls.prototype._sf_hooked_reveal) return;
 
-                let count = 0;
-                for (let key in window.Config.Store) {
-                    let item = window.Config.Store[key];
-                    let modified = false;
+                // 1. Hook ShopModel.prototype.isCanBuy
+                const origIsCanBuy = ShopModelCls.prototype.isCanBuy;
+                ShopModelCls.prototype.isCanBuy = function(t) {
+                    // Always return true to bypass not_in_shop, buyable=0, and ActivityUnlock restrictions
+                    return true;
+                };
 
-                    if (item.hasOwnProperty('not_in_shop')) {
-                        if (item.not_in_shop === 0) {
-                            delete item.not_in_shop;
-                            modified = true;
-                        }
+                // 2. Hook ShopModel.prototype.isAlwaysOnline
+                const origIsAlwaysOnline = ShopModelCls.prototype.isAlwaysOnline;
+                ShopModelCls.prototype.isAlwaysOnline = function(t) {
+                    // Ignore time_limit restrictions
+                    const itemData = window.Config && window.Config.Store_GetItemData ? window.Config.Store_GetItemData(t) : null;
+                    if (!itemData) return false;
+                    return this.isCanBuy(t);
+                };
+
+                // 3. Hook SilverShopModel.prototype.chargeData (متجر الغموض / القسائم)
+                const origChargeData = SilverShopModelCls.prototype.chargeData;
+                SilverShopModelCls.prototype.chargeData = function(t) {
+                    // Temporarily force buyable to true just for the duration of this function
+                    // to bypass the internal check: t.hasOwnProperty("buyable") && !t.buyable
+                    let originalBuyable = t.buyable;
+                    let hasBuyable = t.hasOwnProperty("buyable");
+                    
+                    if (hasBuyable && !t.buyable) {
+                        t.buyable = 1;
                     }
                     
-                    if (item.buyable !== 1 && item.buyable !== true) {
-                        item.buyable = 1;
-                        modified = true;
+                    let result;
+                    try {
+                        result = origChargeData.call(this, t);
+                    } catch(e) {}
+                    
+                    // Restore to avoid side effects
+                    if (hasBuyable) {
+                        t.buyable = originalBuyable;
                     }
+                    return result;
+                };
 
-                    if (item.hasOwnProperty('hide_in_shop')) {
-                        delete item.hide_in_shop;
-                        modified = true;
-                    }
-
-                    if (modified) count++;
-                }
-
-                window.Config._sf_store_revealed = true;
-                sysLog('تم كشف ' + count + ' عنصر مخفي في المتاجر بنجاح.');
+                ShopModelCls.prototype._sf_hooked_reveal = true;
+                sysLog('تم حقن رقعة المتجر الجراحية (Store Hooks) بنجاح.');
 
                 // Force reset Store Models so they rebuild with the revealed items
                 if (window.GF) {
