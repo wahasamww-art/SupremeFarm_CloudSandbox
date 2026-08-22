@@ -21,7 +21,7 @@
 
 // ===================================================================
 // SupremeFarm Modular - Cloud Distribution Bundle
-// Generated at: 2026-08-22T13:46:35.065Z
+// Generated at: 2026-08-22T13:48:56.916Z
 // ===================================================================
 
 // --- File: core/EventBus.js ---
@@ -3781,7 +3781,7 @@ SF.AlbumTrackerModule = class AlbumTrackerModule extends SF.ModuleBase {
                     
                     for (let j = 0; j < pkg.num; j++) {
                         openedCount++;
-                        status.innerText = \`جاري الدك... (${openedCount}/${total}) 💥\`;
+                        status.innerText = `جاري الدك... (${openedCount}/${total}) 💥`;
                         if (isFlame) albumModel.callServerUseItemFlame(pkg.id, 1);
                         else albumModel.callServerUseItem(pkg.id, 1);
                         await new Promise(r => setTimeout(r, 500 + Math.random() * 300));
