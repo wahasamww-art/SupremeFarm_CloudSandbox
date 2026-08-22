@@ -1,6 +1,27 @@
+// ==UserScript==
+// @name         حصاد مظبوط المدمج
+// @namespace    https://supreme-farm.local
+// @version      2.1.0
+// @description  نظام المزرعة الذكي - معمارية التوسعة اللانهائية
+// @author       Supreme Farm Team
+// @match        *://*.centurygames.com/*
+// @match        *://*.apps.fbsbx.com/*
+// @match        *://apps.facebook.com/familyfarm*
+// @match        *://*.familyfarm.com/*
+// @match        *://ff-us.centurygames.com/*
+// @match        *://farmbot-vip.online/*
+// @match        *://*.farmbot-vip.online/*
+// @require      https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js
+// @grant        unsafeWindow
+// @grant        GM_xmlhttpRequest
+// @grant        GM_setValue
+// @grant        GM_getValue
+// @run-at       document-end
+// ==/UserScript==
+
 // ===================================================================
 // SupremeFarm Modular - Cloud Distribution Bundle
-// Generated at: 2026-08-22T12:27:30.192Z
+// Generated at: 2026-08-22T13:46:35.065Z
 // ===================================================================
 
 // --- File: core/EventBus.js ---
@@ -3573,6 +3594,9 @@ SF.AlbumTrackerModule = class AlbumTrackerModule extends SF.ModuleBase {
                     <button class="sf-btn" id="sf-album-tracker-btn" style="flex: 1; background: #27ae60; color: white; border: 2px solid #2ecc71; font-weight: bold;">
                         استخراج الألبوم 📚
                     </button>
+                    <button class="sf-btn" id="sf-album-open-pkgs-btn" style="flex: 1; background: #8e44ad; color: white; border: 2px solid #9b59b6; font-weight: bold;">
+                        فتح حزم التخزين 🎁
+                    </button>
                 </div>
 
                 <div id="sf-album-tracker-content" class="sf-album-content">
@@ -3631,6 +3655,11 @@ SF.AlbumTrackerModule = class AlbumTrackerModule extends SF.ModuleBase {
             btn.onclick = () => this.openAlbumTracker(btn, contentDiv);
         }
 
+        const openPkgsBtn = this.container.querySelector('#sf-album-open-pkgs-btn');
+        if (openPkgsBtn) {
+            openPkgsBtn.onclick = () => this.openAllPackages(openPkgsBtn);
+        }
+
         const ta = this.container.querySelector('#sf-album-friend-missing-text');
         if (ta) {
             ta.oninput = () => {
@@ -3662,6 +3691,116 @@ SF.AlbumTrackerModule = class AlbumTrackerModule extends SF.ModuleBase {
 
         unsafeWindow.triggerAlbumSmartSearch = (cardId, isAsk, pageId) => this.triggerAlbumSmartSearch(cardId, isAsk, pageId);
         unsafeWindow.copyAlbumText = (text, btnElement) => this.copyAlbumText(text, btnElement);
+
+        this.hookAlbumView();
+    }
+
+    hookAlbumView() {
+        if (this.isWareHooked) return;
+        this.isWareHooked = true;
+        
+        let self = this;
+        let tryHook = setInterval(() => {
+            if (unsafeWindow.AlbumWareView && unsafeWindow.AlbumWareView.prototype.open) {
+                clearInterval(tryHook);
+                
+                let origWareOpen = unsafeWindow.AlbumWareView.prototype.open;
+                unsafeWindow.AlbumWareView.prototype.open = function() {
+                    origWareOpen.apply(this, arguments);
+                    
+                    setTimeout(() => {
+                        let albumModel = unsafeWindow.GF.albumModel;
+                        if (albumModel) {
+                            let packages = albumModel.getPackageList();
+                            let total = 0;
+                            if (packages && packages.length > 0) {
+                                packages.forEach(p => total += p.num);
+                            }
+                            
+                            if (total > 0) {
+                                self.showInGamePopup(total);
+                            }
+                        }
+                    }, 800); // Wait for AMF response and UI load
+                };
+            }
+        }, 1000);
+    }
+
+    showInGamePopup(total) {
+        if (document.getElementById('sf-ingame-pkg-popup')) return;
+        
+        let div = document.createElement('div');
+        div.id = 'sf-ingame-pkg-popup';
+        div.style.cssText = `
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            background: linear-gradient(135deg, rgba(142, 68, 173, 0.95), rgba(41, 128, 185, 0.95));
+            border: 3px solid #f1c40f; border-radius: 15px; padding: 20px;
+            z-index: 999999; text-align: center; color: white;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.8); font-family: Tahoma, sans-serif;
+            width: 300px; backdrop-filter: blur(5px);
+        `;
+        div.innerHTML = `
+            <h3 style="margin-top:0; color: #f1c40f; text-shadow: 1px 1px 2px #000;">🎁 حزم الألبوم المكدسة</h3>
+            <p style="font-size:14px; margin-bottom: 20px; line-height: 1.5; text-shadow: 1px 1px 1px #000;">
+                الرادار التقط <b>${total}</b> حزمة جديدة أو مكدسة.<br>
+                بدل ما تفتحهم واحدة واحدة وتوجع إيدك.. تحب أفتحهم لك بضربة واحدة؟ 😎
+            </p>
+            <div style="display:flex; gap:10px; justify-content:center;">
+                <button id="sf-ig-yes" style="background:#2ecc71; color:white; border:2px solid #27ae60; padding:10px 15px; border-radius:8px; cursor:pointer; font-weight:bold; flex:1; font-size:13px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); transition: 0.2s;">دوس يا وحش 🚀</button>
+                <button id="sf-ig-no" style="background:#e74c3c; color:white; border:2px solid #c0392b; padding:10px 15px; border-radius:8px; cursor:pointer; font-weight:bold; flex:1; font-size:13px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); transition: 0.2s;">لا شكراً ❌</button>
+            </div>
+            <div id="sf-ig-status" style="margin-top: 15px; font-size:13px; font-weight:bold; color:#f1c40f; text-shadow: 1px 1px 1px #000; min-height:18px;"></div>
+        `;
+        document.body.appendChild(div);
+        
+        let btnYes = document.getElementById('sf-ig-yes');
+        let btnNo = document.getElementById('sf-ig-no');
+        
+        btnYes.onmouseover = () => btnYes.style.transform = 'scale(1.05)';
+        btnYes.onmouseout = () => btnYes.style.transform = 'scale(1)';
+        btnNo.onmouseover = () => btnNo.style.transform = 'scale(1.05)';
+        btnNo.onmouseout = () => btnNo.style.transform = 'scale(1)';
+
+        btnNo.onclick = () => { div.remove(); };
+        btnYes.onclick = async (e) => {
+            let status = document.getElementById('sf-ig-status');
+            btnYes.disabled = true;
+            btnNo.disabled = true;
+            btnYes.style.opacity = '0.5';
+            btnNo.style.opacity = '0.5';
+            
+            try {
+                let albumModel = unsafeWindow.GF.albumModel;
+                let packages = albumModel.getPackageList();
+                let openedCount = 0;
+                
+                for (let i = 0; i < packages.length; i++) {
+                    let pkg = packages[i];
+                    let isFlame = !!(albumModel.flameCardPackageCfg && albumModel.flameCardPackageCfg[pkg.id]);
+                    
+                    for (let j = 0; j < pkg.num; j++) {
+                        openedCount++;
+                        status.innerText = \`جاري الدك... (${openedCount}/${total}) 💥\`;
+                        if (isFlame) albumModel.callServerUseItemFlame(pkg.id, 1);
+                        else albumModel.callServerUseItem(pkg.id, 1);
+                        await new Promise(r => setTimeout(r, 500 + Math.random() * 300));
+                    }
+                }
+                status.innerText = 'تم مسح الحزم بنجاح! مبروك ✔️';
+                status.style.color = '#2ecc71';
+                
+                if (unsafeWindow.GF.albumController) {
+                    unsafeWindow.GF.albumController.updateWarePanel1View();
+                    unsafeWindow.GF.albumController.updateWarePanel3View();
+                }
+                setTimeout(() => div.remove(), 2500);
+            } catch(err) {
+                status.innerText = 'حدث خطأ غير متوقع!';
+                status.style.color = '#e74c3c';
+                setTimeout(() => div.remove(), 2500);
+            }
+        };
     }
 
     updateMultiSendBtn() {
@@ -4235,6 +4374,74 @@ SF.AlbumTrackerModule = class AlbumTrackerModule extends SF.ModuleBase {
                 btn.disabled = false;
                 btn.style.background = '#27ae60';
             }
+        }
+    }
+
+    async openAllPackages(btn) {
+        try {
+            const albumModel = unsafeWindow.GF.albumModel;
+            if (!albumModel) {
+                alert('الرجاء فتح اللعبة وفتح الألبوم أولاً لتهيئة البيانات.');
+                return;
+            }
+
+            let packages = albumModel.getPackageList();
+            if (!packages || packages.length === 0) {
+                alert("لا توجد حزم متاحة في التخزين حالياً.");
+                return;
+            }
+
+            let totalPackages = 0;
+            packages.forEach(pkg => { totalPackages += pkg.num; });
+
+            let confirmOpen = confirm(`تم العثور على ${totalPackages} حزمة في التخزين.\nهل تريد فتحها جميعاً بضربة واحدة الآن؟`);
+            if (!confirmOpen) return;
+
+            btn.disabled = true;
+            let originalText = btn.innerText;
+            let openedCount = 0;
+
+            for (let i = 0; i < packages.length; i++) {
+                let pkg = packages[i];
+                let isFlame = !!(albumModel.flameCardPackageCfg && albumModel.flameCardPackageCfg[pkg.id]);
+
+                for (let j = 0; j < pkg.num; j++) {
+                    openedCount++;
+                    btn.innerText = `جاري الفتح (${openedCount}/${totalPackages})...`;
+
+                    if (isFlame) {
+                        albumModel.callServerUseItemFlame(pkg.id, 1);
+                    } else {
+                        albumModel.callServerUseItem(pkg.id, 1);
+                    }
+
+                    // تأخير عشوائي بين 500 و 800 ملي ثانية لمحاكاة اللاعب الطبيعي
+                    let delay = 500 + Math.random() * 300;
+                    await new Promise(r => setTimeout(r, delay));
+                }
+            }
+
+            btn.innerText = 'تم الفتح بنجاح ✔️';
+            btn.style.background = '#2ecc71';
+            
+            // تحديث واجهة الألبوم في اللعبة إذا أمكن
+            if (unsafeWindow.GF.albumController) {
+                unsafeWindow.GF.albumController.updateWarePanel1View();
+                unsafeWindow.GF.albumController.updateWarePanel3View();
+            }
+
+            setTimeout(() => {
+                btn.disabled = false;
+                btn.innerText = originalText;
+                btn.style.background = '#8e44ad';
+            }, 3000);
+
+        } catch(e) {
+            console.error('Open Packages Error:', e);
+            alert('حدث خطأ أثناء فتح الحزم: ' + e.message);
+            btn.disabled = false;
+            btn.innerText = 'فتح حزم التخزين 🎁';
+            btn.style.background = '#8e44ad';
         }
     }
 };
