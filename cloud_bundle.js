@@ -21,7 +21,7 @@
 
 // ===================================================================
 // SupremeFarm Modular - Cloud Distribution Bundle
-// Generated at: 2026-08-22T15:15:16.606Z
+// Generated at: 2026-08-22T15:34:20.703Z
 // ===================================================================
 
 var SF = window.SF || {};
@@ -6311,17 +6311,17 @@ if (window.SF && window.SF.modules) {
 // --- File: features/MonopolySmartHelper.js ---
 // ==========================================
 // 🎲 Monopoly Smart Helper (Invisible Feature)
-// يظهر فقط داخل الفعالية، لا يضاف لقائمة السكربت الرئيسية
+// يظهر فقط كشريط علوي داخل الفعالية، قراءة دقيقة وتبديل دقيق
 // ==========================================
 (function() {
     'use strict';
 
-    let monopolyUI = null;
+    let topBarUI = null;
     let isPlaying = false;
     let currentDice = 0;
+    let currentCoins = 0;
     let currentRound = 0;
     let playTimeout = null;
-    let stopAtRound10 = true; // اختياري اللعب حتى مستوى 10
 
     // ==========================================
     // 1. نظام كشف الفعالية (Auto-Detect)
@@ -6341,7 +6341,11 @@ if (window.SF && window.SF.modules) {
                             if (res && res.data) {
                                 currentDice = res.data.counter || 0;
                                 currentRound = res.data.round || 0;
-                                showMonopolyUI(currentDice, currentRound);
+                                
+                                // محاولة قراءة العملات بدقة
+                                currentCoins = detectCoinsAccurately(gw);
+                                
+                                showTopBarUI(currentDice, currentCoins, currentRound);
                             }
                             return res;
                         }
@@ -6353,171 +6357,190 @@ if (window.SF && window.SF.modules) {
     }
 
     // ==========================================
-    // 2. الواجهة الاحترافية العائمة (Smart UI)
+    // 2. قراءة العملات بدقة (Accurate Coin Reading)
     // ==========================================
-    function showMonopolyUI(dice, round) {
-        if (monopolyUI) {
-            updateUIData(dice, round);
-            monopolyUI.style.display = 'block';
+    function detectCoinsAccurately(gw) {
+        let coinCount = 0;
+        try {
+            if (gw.App && gw.App.ControllerManager) {
+                let bag = gw.App.ControllerManager.getControllerModel("Bag");
+                if (bag) {
+                    // آيدي عملة التبديل لبنك الحظ (من السجلات: 224989)
+                    let possibleTokenIDs = ["224989", "224988", "224990"];
+                    for (let id of possibleTokenIDs) {
+                        let count = bag.getItemCount(id);
+                        if (count && count > 0) {
+                            coinCount = count;
+                            break;
+                        }
+                    }
+                }
+            }
+        } catch (e) {
+            console.warn("[Monopoly] Error reading coins", e);
+        }
+        return coinCount;
+    }
+
+    // ==========================================
+    // 3. تصميم الشريط العلوي الاحترافي
+    // ==========================================
+    function showTopBarUI(dice, coins, round) {
+        if (topBarUI) {
+            updateUIData(dice, coins, round);
+            topBarUI.style.display = 'flex';
             return;
         }
 
-        monopolyUI = document.createElement('div');
-        monopolyUI.id = 'sf-smart-monopoly-ui';
+        topBarUI = document.createElement('div');
+        topBarUI.id = 'sf-monopoly-topbar';
         
-        monopolyUI.innerHTML = `
+        topBarUI.innerHTML = `
             <style>
-                #sf-smart-monopoly-ui {
-                    position: fixed;
-                    bottom: 20px;
-                    right: 20px;
-                    width: 320px;
-                    background: rgba(15, 23, 42, 0.95);
-                    border: 1px solid rgba(255, 255, 255, 0.1);
-                    border-radius: 12px;
-                    padding: 15px;
+                #sf-monopoly-topbar {
+                    position: absolute;
+                    top: 0;
+                    left: 0;
+                    width: 100%;
+                    height: 55px;
+                    background: linear-gradient(180deg, rgba(15, 23, 42, 0.95) 0%, rgba(15, 23, 42, 0.8) 100%);
+                    border-bottom: 2px solid #38bdf8;
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
                     color: #fff;
                     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-                    box-shadow: 0 10px 25px rgba(0,0,0,0.5);
-                    z-index: 999999;
+                    z-index: 9999999; /* لضمان ظهوره فوق الكانفاس */
                     direction: rtl;
-                    backdrop-filter: blur(10px);
+                    box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+                    backdrop-filter: blur(5px);
                     transition: all 0.3s ease;
                 }
-                .sf-m-header {
+                .sf-tb-group {
                     display: flex;
-                    justify-content: space-between;
                     align-items: center;
-                    border-bottom: 1px solid rgba(255,255,255,0.1);
-                    padding-bottom: 10px;
-                    margin-bottom: 15px;
+                    margin: 0 15px;
+                    background: rgba(0,0,0,0.4);
+                    padding: 5px 15px;
+                    border-radius: 20px;
+                    border: 1px solid rgba(255,255,255,0.1);
                 }
-                .sf-m-title {
-                    font-size: 15px;
+                .sf-tb-label {
+                    font-size: 13px;
+                    color: #94a3b8;
+                    margin-left: 8px;
+                }
+                .sf-tb-value {
+                    font-size: 16px;
                     font-weight: bold;
+                    color: #fbbf24;
+                }
+                .sf-tb-dice-val {
                     color: #38bdf8;
                 }
-                .sf-m-close {
-                    cursor: pointer;
-                    color: #ef4444;
-                    font-weight: bold;
-                    background: none;
+                .sf-tb-btn {
+                    padding: 6px 15px;
                     border: none;
-                    font-size: 16px;
-                }
-                .sf-m-stats {
-                    display: flex;
-                    justify-content: space-around;
-                    background: rgba(0,0,0,0.3);
-                    border-radius: 8px;
-                    padding: 10px;
-                    margin-bottom: 15px;
-                    text-align: center;
-                }
-                .sf-m-stat-box span {
-                    display: block;
-                    font-size: 11px;
-                    color: #94a3b8;
-                }
-                .sf-m-stat-box strong {
-                    font-size: 16px;
-                    color: #fff;
-                }
-                .sf-m-btn {
-                    width: 100%;
-                    padding: 10px;
-                    border: none;
-                    border-radius: 6px;
+                    border-radius: 20px;
                     font-weight: bold;
                     cursor: pointer;
-                    margin-bottom: 8px;
+                    margin: 0 5px;
+                    font-size: 13px;
                     transition: all 0.2s;
                 }
-                .sf-btn-exchange {
+                .sf-tb-btn-exchange {
                     background: linear-gradient(135deg, #f59e0b, #d97706);
                     color: white;
                 }
-                .sf-btn-exchange:hover { opacity: 0.9; }
+                .sf-tb-btn-exchange:hover { opacity: 0.9; transform: scale(1.05); }
                 
-                .sf-btn-play {
+                .sf-tb-btn-play {
                     background: linear-gradient(135deg, #10b981, #059669);
                     color: white;
                 }
-                .sf-btn-play.stop {
+                .sf-tb-btn-play.stop {
                     background: linear-gradient(135deg, #ef4444, #dc2626);
                 }
-                .sf-m-checkbox-group {
-                    display: flex;
-                    align-items: center;
-                    font-size: 12px;
-                    color: #cbd5e1;
-                    margin-bottom: 10px;
-                    cursor: pointer;
+                
+                .sf-tb-btn-hide {
+                    background: rgba(255,255,255,0.1);
+                    color: #fff;
+                    position: absolute;
+                    left: 10px;
+                    border-radius: 5px;
                 }
-                .sf-m-checkbox-group input {
-                    margin-left: 8px;
-                    cursor: pointer;
+                .sf-tb-btn-hide:hover { background: rgba(239, 68, 68, 0.8); }
+
+                .sf-tb-input {
+                    background: rgba(0,0,0,0.5);
+                    border: 1px solid #38bdf8;
+                    color: #fff;
+                    padding: 4px 8px;
+                    border-radius: 5px;
+                    width: 70px;
+                    text-align: center;
+                    font-weight: bold;
+                    margin-left: 5px;
                 }
-                .sf-m-log {
-                    margin-top: 10px;
+                #sf-tb-log {
+                    position: absolute;
+                    bottom: -30px;
+                    left: 50%;
+                    transform: translateX(-50%);
+                    background: rgba(0,0,0,0.8);
+                    padding: 4px 15px;
+                    border-radius: 0 0 10px 10px;
                     font-size: 11px;
                     color: #a4b0be;
-                    background: rgba(0,0,0,0.4);
-                    padding: 8px;
-                    border-radius: 4px;
-                    text-align: center;
-                    max-height: 40px;
-                    overflow: hidden;
+                    white-space: nowrap;
+                    opacity: 0;
+                    transition: opacity 0.3s;
                 }
+                #sf-tb-log.show { opacity: 1; }
             </style>
             
-            <div class="sf-m-header">
-                <div class="sf-m-title">🎲 مساعد بنك الحظ</div>
-                <button class="sf-m-close" id="sf-m-close-btn">✖</button>
-            </div>
-            
-            <div class="sf-m-stats">
-                <div class="sf-m-stat-box">
-                    <span>النرد المتاح</span>
-                    <strong id="sf-m-dice-val">0</strong>
-                </div>
-                <div class="sf-m-stat-box">
-                    <span>المستوى (Round)</span>
-                    <strong id="sf-m-round-val">0</strong>
-                </div>
+            <!-- زر إخفاء الشريط -->
+            <button id="sf-tb-hide-btn" class="sf-tb-btn sf-tb-btn-hide">✖ إخفاء</button>
+
+            <!-- معلومات النرد -->
+            <div class="sf-tb-group">
+                <span class="sf-tb-label">النرد الجاهز:</span>
+                <span class="sf-tb-value sf-tb-dice-val" id="sf-tb-dice-val">0</span>
             </div>
 
-            <button id="sf-m-exchange-btn" class="sf-m-btn sf-btn-exchange">
-                💱 التبديل الكلي للعملات
+            <!-- معلومات العملات -->
+            <div class="sf-tb-group">
+                <span class="sf-tb-label">العملات المتاحة:</span>
+                <input type="number" id="sf-tb-coins-input" class="sf-tb-input" value="0">
+            </div>
+
+            <!-- أزرار التحكم -->
+            <button id="sf-tb-exchange-btn" class="sf-tb-btn sf-tb-btn-exchange">
+                💱 تبديل دقيق
             </button>
             
-            <label class="sf-m-checkbox-group">
-                <input type="checkbox" id="sf-m-stop-round-10" checked>
-                توقف تلقائي عند مستوى 10
-            </label>
-
-            <button id="sf-m-play-btn" class="sf-m-btn sf-btn-play">
-                ▶️ تشغيل اللعب التلقائي
+            <button id="sf-tb-play-btn" class="sf-tb-btn sf-tb-btn-play">
+                ▶️ تشغيل اللعب
             </button>
 
-            <div id="sf-m-log" class="sf-m-log">
-                جاهز...
-            </div>
+            <!-- رسائل النظام -->
+            <div id="sf-tb-log">جاهز...</div>
         `;
 
-        document.body.appendChild(monopolyUI);
+        document.body.appendChild(topBarUI);
 
         // Bind Events
-        document.getElementById('sf-m-close-btn').onclick = () => {
-            monopolyUI.style.display = 'none';
+        document.getElementById('sf-tb-hide-btn').onclick = () => {
+            topBarUI.style.display = 'none';
             stopAutoPlay();
+            logMessage("تم إخفاء الشريط وإيقاف اللعب.", true);
         };
         
-        document.getElementById('sf-m-exchange-btn').onclick = () => {
-            smartExchange();
+        document.getElementById('sf-tb-exchange-btn').onclick = () => {
+            accurateExchange();
         };
 
-        document.getElementById('sf-m-play-btn').onclick = () => {
+        document.getElementById('sf-tb-play-btn').onclick = () => {
             if (isPlaying) {
                 stopAutoPlay();
             } else {
@@ -6525,77 +6548,97 @@ if (window.SF && window.SF.modules) {
             }
         };
 
-        document.getElementById('sf-m-stop-round-10').onchange = (e) => {
-            stopAtRound10 = e.target.checked;
-        };
-        
-        updateUIData(dice, round);
+        updateUIData(dice, coins, round);
     }
 
-    function updateUIData(dice, round) {
-        if (!monopolyUI) return;
+    function updateUIData(dice, coins, round) {
+        if (!topBarUI) return;
         currentDice = dice;
         currentRound = round;
-        document.getElementById('sf-m-dice-val').innerText = dice;
-        document.getElementById('sf-m-round-val').innerText = round;
+        
+        // Only update coin input if it's currently 0 or we found a positive reading
+        const coinInput = document.getElementById('sf-tb-coins-input');
+        if (coins > 0 || parseInt(coinInput.value) === 0) {
+            coinInput.value = coins;
+        }
+
+        document.getElementById('sf-tb-dice-val').innerText = dice;
     }
 
-    function logMessage(msg) {
-        console.log(`[MonopolySmartHelper] ${msg}`);
-        const logEl = document.getElementById('sf-m-log');
-        if (logEl) logEl.innerText = msg;
+    function logMessage(msg, keep = false) {
+        console.log(`[MonopolySmart] ${msg}`);
+        const logEl = document.getElementById('sf-tb-log');
+        if (logEl) {
+            logEl.innerText = msg;
+            logEl.classList.add('show');
+            if (!keep) {
+                setTimeout(() => logEl.classList.remove('show'), 3000);
+            }
+        }
     }
 
     // ==========================================
-    // 3. ذكاء التبديل الكلي (Smart Exchange All)
+    // 3. التبديل الدقيق والاحترافي (Accurate Exchange)
     // ==========================================
-    async function smartExchange() {
+    async function accurateExchange() {
         let gw = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
         if (!gw.NetUtils || !gw.NetUtils.netManager) return;
         
-        logMessage("🔄 جاري فحص العملات والتبديل الكلي...");
-        const exchangeBtn = document.getElementById('sf-m-exchange-btn');
+        const coinInput = document.getElementById('sf-tb-coins-input');
+        let totalCoins = parseInt(coinInput.value);
+        
+        if (isNaN(totalCoins) || totalCoins < 100) {
+            logMessage("⚠️ العملات غير كافية! (كل 1 نرد يتطلب 100 عملة)");
+            return;
+        }
+
+        // حساب عدد النرد الذي يمكن تبديله (تكلفة النرد الواحد = 100 عملة)
+        let qtyOfDice = Math.floor(totalCoins / 100);
+
+        logMessage(`🔄 جاري تبديل ${qtyOfDice} نرد بدقة...`);
+        const exchangeBtn = document.getElementById('sf-tb-exchange-btn');
         exchangeBtn.disabled = true;
-        exchangeBtn.innerText = "⏳ جاري التبديل...";
+        exchangeBtn.innerText = "⏳ جاري...";
 
         try {
-            let successCount = 0;
-            // Trying batches of 10
-            while (true) {
-                let res = await gw.NetUtils.netManager.request("Activity/Monopoly", { action: "exchange", index: 1, qty: 10 });
-                if (res && res.status) {
-                    successCount += 10;
-                    currentDice += 10;
-                    updateUIData(currentDice, currentRound);
-                } else {
-                    break;
-                }
-                await sleep(500);
-            }
+            // نقوم بإرسال طلب واحد للتبديل بالكمية المحسوبة بدقة
+            let res = await gw.NetUtils.netManager.request("Activity/Monopoly", { action: "exchange", index: 1, qty: qtyOfDice });
             
-            // Trying batches of 1
-            while (true) {
-                let res = await gw.NetUtils.netManager.request("Activity/Monopoly", { action: "exchange", index: 1, qty: 1 });
-                if (res && res.status) {
-                    successCount += 1;
-                    currentDice += 1;
-                    updateUIData(currentDice, currentRound);
-                } else {
-                    break;
-                }
-                await sleep(300);
-            }
-
-            if (successCount > 0) {
-                logMessage(`✅ تم تبديل العملات بـ ${successCount} نرد!`);
+            if (res && res.status) {
+                let cost = qtyOfDice * 100;
+                logMessage(`✅ تم التبديل بنجاح! حصلت على ${qtyOfDice} نرد (خصم ${cost} عملة)`);
+                
+                // تحديث مربع العملات بالباقي
+                let remainingCoins = totalCoins - cost;
+                coinInput.value = remainingCoins;
             } else {
-                logMessage("⚠️ لا تملك عملات كافية للتبديل.");
+                // إذا رفض السيرفر طلب الكمية كدفعة واحدة، نجرب إرسالها واحد تلو الآخر بدقة
+                logMessage(`⚠️ السيرفر رفض الدفعة. جاري التبديل الدقيق التدريجي...`);
+                let successCount = 0;
+                
+                for (let i = 0; i < qtyOfDice; i++) {
+                    let singleRes = await gw.NetUtils.netManager.request("Activity/Monopoly", { action: "exchange", index: 1, qty: 1 });
+                    if (singleRes && singleRes.status) {
+                        successCount++;
+                    } else {
+                        break;
+                    }
+                    await sleep(300);
+                }
+                
+                if (successCount > 0) {
+                    let cost = successCount * 100;
+                    logMessage(`✅ تم تبديل ${successCount} نرد. (خصم ${cost} عملة)`);
+                    coinInput.value = totalCoins - cost;
+                } else {
+                    logMessage("❌ فشل التبديل.");
+                }
             }
             
             // Sync
             let syncRes = await gw.NetUtils.netManager.request("Activity/Monopoly", { action: "loadData" });
             if (syncRes && syncRes.data) {
-                updateUIData(syncRes.data.counter || 0, syncRes.data.round || 0);
+                updateUIData(syncRes.data.counter || 0, parseInt(coinInput.value), syncRes.data.round || 0);
             }
 
         } catch (e) {
@@ -6603,28 +6646,24 @@ if (window.SF && window.SF.modules) {
         }
 
         exchangeBtn.disabled = false;
-        exchangeBtn.innerText = "💱 التبديل الكلي للعملات";
+        exchangeBtn.innerText = "💱 تبديل دقيق";
     }
 
     // ==========================================
-    // 4. اللعب الذكي (Smart Auto Play)
+    // 4. اللعب الذكي والتلقائي
     // ==========================================
     async function startAutoPlay() {
         if (currentDice <= 0) {
             logMessage("⚠️ لا يوجد نرد للعب!");
             return;
         }
-        if (stopAtRound10 && currentRound >= 10) {
-            logMessage("🛑 لقد وصلت للمستوى 10 بالفعل!");
-            return;
-        }
 
         isPlaying = true;
-        const playBtn = document.getElementById('sf-m-play-btn');
-        playBtn.innerText = "⏸️ إيقاف اللعب";
+        const playBtn = document.getElementById('sf-tb-play-btn');
+        playBtn.innerText = "⏸️ إيقاف";
         playBtn.classList.add('stop');
         
-        logMessage("▶️ جاري اللعب التلقائي...");
+        logMessage("▶️ جاري اللعب التلقائي...", true);
         executePlayCycle();
     }
 
@@ -6634,22 +6673,16 @@ if (window.SF && window.SF.modules) {
             clearTimeout(playTimeout);
             playTimeout = null;
         }
-        const playBtn = document.getElementById('sf-m-play-btn');
+        const playBtn = document.getElementById('sf-tb-play-btn');
         if (playBtn) {
-            playBtn.innerText = "▶️ تشغيل اللعب التلقائي";
+            playBtn.innerText = "▶️ تشغيل اللعب";
             playBtn.classList.remove('stop');
         }
-        logMessage("⏸️ تم إيقاف اللعب.");
+        logMessage("⏸️ تم الإيقاف.");
     }
 
     async function executePlayCycle() {
         if (!isPlaying) return;
-
-        if (stopAtRound10 && currentRound >= 10) {
-            logMessage("🎉 مبروك! وصلت للمستوى 10.");
-            stopAutoPlay();
-            return;
-        }
 
         try {
             let gw = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
@@ -6662,18 +6695,10 @@ if (window.SF && window.SF.modules) {
                 
                 currentDice--;
                 logMessage(`🎲 رُمي (${points}) -> موقع ${pos} ${reward && Object.keys(reward).length ? '🎁' : ''}`);
-                updateUIData(currentDice, currentRound);
+                updateUIData(currentDice, currentCoins, currentRound);
                 
-                // Sync every 5 rolls to detect round changes
-                if (currentDice % 5 === 0) {
-                    let syncRes = await gw.NetUtils.netManager.request("Activity/Monopoly", { action: "loadData" });
-                    if (syncRes && syncRes.data) {
-                        updateUIData(syncRes.data.counter || 0, syncRes.data.round || 0);
-                    }
-                }
-
                 if (currentDice <= 0) {
-                    logMessage("⚠️ نفد النرد!");
+                    logMessage("⚠️ نفد النرد! تم الإيقاف.");
                     stopAutoPlay();
                     return;
                 }
@@ -6681,7 +6706,7 @@ if (window.SF && window.SF.modules) {
                 let jitter = Math.floor(Math.random() * 500) + 1200;
                 playTimeout = setTimeout(executePlayCycle, jitter);
             } else {
-                logMessage("⚠️ خطأ في الاستجابة أو انتهت الفعالية.");
+                logMessage("⚠️ توقف! السيرفر لم يقبل اللعب.");
                 stopAutoPlay();
             }
         } catch (e) {
@@ -6696,7 +6721,6 @@ if (window.SF && window.SF.modules) {
 
     // Start Interceptor
     setupInterceptor();
-    console.log("[SupremeFarm] Monopoly Smart Helper Initialized.");
 })();
 
 
