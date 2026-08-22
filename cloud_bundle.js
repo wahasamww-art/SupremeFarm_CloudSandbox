@@ -1,6 +1,6 @@
 // ===================================================================
 // SupremeFarm Modular - Cloud Distribution Bundle
-// Generated at: 2026-08-22T10:44:16.785Z
+// Generated at: 2026-08-22T10:59:16.460Z
 // ===================================================================
 
 // --- File: core/EventBus.js ---
@@ -5238,13 +5238,45 @@ SF.StoreRevealModule = class StoreRevealModule extends SF.ModuleBase {
                     return result;
                 };
 
-                // 5. Hook ShipOrderModel.prototype (متجر قسائم السيارة / الشحن)
-                ShipOrderModelCls.prototype.hasBuyOnce = function(t) {
-                    return false; // تجاهل شرط الشراء لمرة واحدة
-                };
-                ShipOrderModelCls.prototype.hasLimitQty = function(t) {
-                    return 999; // إعطاء رصيد وهمي كبير لتجاوز حد الشراء
-                };
+                // 5. Populate Config.StoreShipOrder with ALL items that cost vouchers
+                if (window.Config && window.Config.Store && window.Config.StoreShipOrder) {
+                    let injectedCount = 0;
+                    for (let key in window.Config.Store) {
+                        let item = window.Config.Store[key];
+                        if (item.new_cash1 || item.new_cash2 || item.new_cash3) {
+                            if (window.Config.StoreShipOrder.indexOf(item.id) === -1) {
+                                window.Config.StoreShipOrder.push(item.id);
+                                injectedCount++;
+                            }
+                        }
+                    }
+                    sysLog('تم إضافة ' + injectedCount + ' عنصر مخفي إلى متجر قسائم السيارة.');
+                }
+
+                // 6. Hook ShipOrderShopItem to explicitly show allowed quantities
+                let ShipOrderShopItemCls;
+                try {
+                    ShipOrderShopItemCls = window.egret && window.egret.getDefinitionByName('ShipOrderShopItem');
+                } catch(e) {}
+
+                if (ShipOrderShopItemCls && ShipOrderShopItemCls.prototype) {
+                    const origUpdateInfo = ShipOrderShopItemCls.prototype.updateInfo;
+                    ShipOrderShopItemCls.prototype.updateInfo = function() {
+                        origUpdateInfo.call(this);
+                        
+                        // Force display of limit text
+                        this.lblUnlock.visible = true;
+                        
+                        if (this.itemData.shiporder_buyonce) {
+                            this.lblUnlock.text = "شراء مرة واحدة فقط";
+                        } else if (this.itemData.shiporder_buylimit) {
+                            var limit = this.model.hasLimitQty(this.itemData.id);
+                            this.lblUnlock.text = "المتبقي للمزرعة: " + Math.max(0, limit);
+                        } else {
+                            this.lblUnlock.text = "الكمية: غير محدود ∞";
+                        }
+                    };
+                }
 
                 ShopModelCls.prototype._sf_hooked_reveal = true;
                 sysLog('تم حقن رقعة المتجر الجراحية (Store Hooks) بنجاح.');
