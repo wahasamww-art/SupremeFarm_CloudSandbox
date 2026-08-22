@@ -21,7 +21,7 @@
 
 // ===================================================================
 // SupremeFarm Modular - Cloud Distribution Bundle
-// Generated at: 2026-08-22T14:09:30.880Z
+// Generated at: 2026-08-22T14:14:32.951Z
 // ===================================================================
 
 var SF = window.SF || {};
@@ -3781,22 +3781,19 @@ SF.AlbumTrackerModule = class AlbumTrackerModule extends SF.ModuleBase {
                     let pkg = packages[i];
                     let isFlame = !!(albumModel.flameCardPackageCfg && albumModel.flameCardPackageCfg[pkg.id]);
                     
-                    for (let j = 0; j < pkg.num; j++) {
-                        openedCount++;
-                        let remainingForThisType = pkg.num - j - 1;
-                        status.innerText = `📦 جاري فتح النوع (${i+1}/${packages.length}) | متبقي: ${remainingForThisType} | الإجمالي: (${openedCount}/${total})`;
-                        
-                        albumModel.isSendMessage = false; // تجاوز قفل اللعبة لضمان عدم تجاهل أي طلب
-                        if (isFlame) albumModel.callServerUseItemFlame(pkg.id, 1);
-                        else albumModel.callServerUseItem(pkg.id, 1);
-                        
-                        // انتظار إرسال الطلب والاستجابة لتحديث الواجهة (Jitter)
-                        await new Promise(r => setTimeout(r, 600 + Math.random() * 300));
-                        
-                        // تحديث واجهة الألبوم الأصلية لتقليل العدد واختفاء الحزمة تدريجياً
-                        if (unsafeWindow.GF.albumController) {
-                            unsafeWindow.GF.albumController.updateWarePanel1View();
-                        }
+                    openedCount += pkg.num;
+                    status.innerText = `📦 جاري فتح (${pkg.num}) حزمة من النوع (${i+1}/${packages.length}) بضربة واحدة... 💥`;
+                    
+                    albumModel.isSendMessage = false; // تجاوز قفل اللعبة
+                    if (isFlame) albumModel.callServerUseItemFlame(pkg.id, pkg.num);
+                    else albumModel.callServerUseItem(pkg.id, pkg.num);
+                    
+                    // انتظار بين كل نوع وآخر للسماح للسيرفر بمعالجة الكمية
+                    await new Promise(r => setTimeout(r, 800 + Math.random() * 400));
+                    
+                    // تحديث واجهة الألبوم الأصلية لاختفاء الحزم المفتوحة
+                    if (unsafeWindow.GF.albumController) {
+                        unsafeWindow.GF.albumController.updateWarePanel1View();
                     }
                 }
                 status.innerText = 'تم مسح الحزم بنجاح! مبروك ✔️';
