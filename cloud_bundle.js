@@ -1,6 +1,6 @@
 // ===================================================================
 // SupremeFarm Modular - Cloud Distribution Bundle
-// Generated at: 2026-08-22T11:09:22.883Z
+// Generated at: 2026-08-22T11:15:13.164Z
 // ===================================================================
 
 // --- File: core/EventBus.js ---
@@ -5267,6 +5267,42 @@ SF.StoreRevealModule = class StoreRevealModule extends SF.ModuleBase {
                         }
                         this.lblUnlock.visible = true;
                     };
+                }
+
+                // 6. Hook ShipOrderModel to STOP hiding exhausted items (let the UI grey them out instead)
+                if (ShipOrderModelCls && ShipOrderModelCls.prototype) {
+                    ShipOrderModelCls.prototype.getCash3Shop = function() {
+                        var e = [], i = (this.shipordersExtra && this.shipordersExtra.shop) ? this.shipordersExtra.shop : [];
+                        i.forEach(function(id) {
+                            var o = window.Config.Store_GetItemData(id);
+                            if (o) e.push(o);
+                        }, this);
+                        return e;
+                    };
+
+                    const origShopList = Object.getOwnPropertyDescriptor(ShipOrderModelCls.prototype, "shopList");
+                    if (origShopList && origShopList.get) {
+                        Object.defineProperty(ShipOrderModelCls.prototype, "shopList", {
+                            get: function() {
+                                var e = { 1: this.getCash3Shop(), 2: [], 3: [], 4: [], 5: [], 6: [], 7: [] };
+                                var i = window.Config.StoreShipOrder || [];
+                                i.forEach(function(id) {
+                                    var o = window.Config.Store_GetItemData(id);
+                                    if (!o) return;
+                                    switch (o.type) {
+                                        case 14:
+                                        case 15: e[2].push(o); break;
+                                        case 2: e[3].push(o); break;
+                                        case 3: e[4].push(o); break;
+                                        case 5: e[5].push(o); break;
+                                        case 10: e[6].push(o); break;
+                                        default: e[7].push(o);
+                                    }
+                                }, this);
+                                return e;
+                            }
+                        });
+                    }
                 }
 
                 ShopModelCls.prototype._sf_hooked_reveal = true;
