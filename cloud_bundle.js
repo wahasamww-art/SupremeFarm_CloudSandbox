@@ -1,6 +1,6 @@
 // ===================================================================
 // SupremeFarm Modular - Cloud Distribution Bundle
-// Generated at: 2026-08-22T11:04:22.179Z
+// Generated at: 2026-08-22T11:09:22.883Z
 // ===================================================================
 
 // --- File: core/EventBus.js ---
@@ -5179,11 +5179,12 @@ SF.StoreRevealModule = class StoreRevealModule extends SF.ModuleBase {
             }
 
             function injectReveal() {
-                let ShopModelCls, SilverShopModelCls, ShipOrderModelCls;
+                let ShopModelCls, SilverShopModelCls, ShipOrderModelCls, ShipOrderShopItemCls;
                 try {
                     ShopModelCls = window.egret && window.egret.getDefinitionByName('ShopModel');
                     SilverShopModelCls = window.egret && window.egret.getDefinitionByName('SilverShopModel');
                     ShipOrderModelCls = window.egret && window.egret.getDefinitionByName('ShipOrderModel');
+                    ShipOrderShopItemCls = window.egret && window.egret.getDefinitionByName('ShipOrderShopItem');
                 } catch(e) {}
 
                 if (!ShopModelCls || !ShopModelCls.prototype || !SilverShopModelCls || !SilverShopModelCls.prototype || !ShipOrderModelCls || !ShipOrderModelCls.prototype) {
@@ -5196,53 +5197,40 @@ SF.StoreRevealModule = class StoreRevealModule extends SF.ModuleBase {
                 // 1. Hook ShopModel.prototype.isCanBuy
                 const origIsCanBuy = ShopModelCls.prototype.isCanBuy;
                 ShopModelCls.prototype.isCanBuy = function(t) {
-                    // Always return true to bypass not_in_shop, buyable=0, and ActivityUnlock restrictions
                     return true;
                 };
 
                 // 2. Hook ShopModel.prototype.isAlwaysOnline
                 const origIsAlwaysOnline = ShopModelCls.prototype.isAlwaysOnline;
                 ShopModelCls.prototype.isAlwaysOnline = function(t) {
-                    // Ignore time_limit restrictions
                     const itemData = window.Config && window.Config.Store_GetItemData ? window.Config.Store_GetItemData(t) : null;
                     if (!itemData) return false;
                     return this.isCanBuy(t);
                 };
 
-                // 3. Hook ShopModel.prototype.getLimitTime (لإظهار العناصر منتهية الصلاحية)
-                ShopModelCls.prototype.getLimitTime = function(t) {
-                    return 999999999; 
-                };
-
-                // 4. Hook SilverShopModel.prototype.chargeData (متجر الغموض / القسائم)
+                // 3. Hook SilverShopModel.prototype.chargeData
                 const origChargeData = SilverShopModelCls.prototype.chargeData;
                 SilverShopModelCls.prototype.chargeData = function(t) {
-                    // Temporarily force buyable to true just for the duration of this function
-                    // to bypass the internal check: t.hasOwnProperty("buyable") && !t.buyable
                     let originalBuyable = t.buyable;
                     let hasBuyable = t.hasOwnProperty("buyable");
-                    
-                    if (hasBuyable && !t.buyable) {
-                        t.buyable = 1;
-                    }
-                    
+                    if (hasBuyable && !t.buyable) { t.buyable = 1; }
                     let result;
-                    try {
-                        result = origChargeData.call(this, t);
-                    } catch(e) {}
-                    
-                    // Restore to avoid side effects
-                    if (hasBuyable) {
-                        t.buyable = originalBuyable;
-                    }
+                    try { result = origChargeData.call(this, t); } catch(e) {}
+                    if (hasBuyable) { t.buyable = originalBuyable; }
                     return result;
                 };
 
-                // 5. Populate Config.StoreShipOrder with ALL items that cost vouchers
+                // 4. Global Data Manipulation (Inject into arrays & remove limits)
                 if (window.Config && window.Config.Store && window.Config.StoreShipOrder) {
                     let injectedCount = 0;
                     for (let key in window.Config.Store) {
                         let item = window.Config.Store[key];
+                        
+                        // Delete expiration timers so they don't get filtered out or show ugly "9999 days" texts
+                        if (item.hasOwnProperty('limit_config')) delete item.limit_config;
+                        if (item.hasOwnProperty('time_limit')) delete item.time_limit;
+
+                        // Inject missing voucher items into the store
                         if (item.new_cash1 || item.new_cash2 || item.new_cash3) {
                             if (window.Config.StoreShipOrder.indexOf(item.id) === -1) {
                                 window.Config.StoreShipOrder.push(item.id);
@@ -5250,15 +5238,10 @@ SF.StoreRevealModule = class StoreRevealModule extends SF.ModuleBase {
                             }
                         }
                     }
-                    sysLog('تم إضافة ' + injectedCount + ' عنصر مخفي إلى متجر قسائم السيارة.');
+                    sysLog('تم إضافة ' + injectedCount + ' عنصر مخفي، وإزالة قيود الوقت عن جميع العناصر.');
                 }
 
-                // 6. Hook ShipOrderShopItem to explicitly show allowed quantities
-                let ShipOrderShopItemCls;
-                try {
-                    ShipOrderShopItemCls = window.egret && window.egret.getDefinitionByName('ShipOrderShopItem');
-                } catch(e) {}
-
+                // 5. Hook UI Item to clearly display quantities without text overlap
                 if (ShipOrderShopItemCls && ShipOrderShopItemCls.prototype) {
                     const origUpdateInfo = ShipOrderShopItemCls.prototype.updateInfo;
                     ShipOrderShopItemCls.prototype.updateInfo = function() {
@@ -5274,24 +5257,15 @@ SF.StoreRevealModule = class StoreRevealModule extends SF.ModuleBase {
                             limitText = "الكمية: غير محدود ∞";
                         }
 
-                        // If point_level is locking the item, preserve its original message
+                        // Because we deleted limit_config, lblTime is always hidden for expired items.
+                        // So we safely use lblUnlock. We only preserve it if the item is locked by level.
                         var t = this.dataModel && this.dataModel.AppData ? this.dataModel.AppData.order_points : 0;
                         if (this.itemData.hasOwnProperty("point_level") && this.itemData.point_level > t) {
                             this.lblUnlock.text = this.lblUnlock.text + " | " + limitText;
-                            this.lblUnlock.visible = true;
-                            return;
-                        }
-
-                        // Prevent overlap with Time Limit label (lblTime)
-                        if (this.lblTime && this.lblTime.visible) {
-                            // Append our text to the time text
-                            this.lblTime.text = this.lblTime.text + " | " + limitText;
-                            this.lblUnlock.visible = false;
                         } else {
-                            // Safe to use lblUnlock
                             this.lblUnlock.text = limitText;
-                            this.lblUnlock.visible = true;
                         }
+                        this.lblUnlock.visible = true;
                     };
                 }
 
