@@ -1,6 +1,6 @@
 // ===================================================================
 // SupremeFarm Modular - Cloud Distribution Bundle
-// Generated at: 2026-08-06T22:30:10.177Z
+// Generated at: 2026-08-22T04:50:16.818Z
 // ===================================================================
 
 // --- File: core/EventBus.js ---
@@ -2343,6 +2343,28 @@ SF.CropinatorModule = class CropinatorModule extends SF.ModuleBase {
                                 }
                             } catch(e) {}
                         }
+
+                        try {
+                            let pObj = target.plant || target.crop || target;
+                            let seedId = pObj.plant_id || pObj.plantId || pObj.seed_id || (pObj.configData ? pObj.configData.id : null);
+                            if (seedId && seedId != 101 && gw.Config) {
+                                let c = gw.Config.Store_GetItemData(seedId);
+                                let productId = c ? (c.product_id || c.product || seedId) : seedId;
+                                
+                                if (!c && target.configData && target.configData.product_id) {
+                                    productId = target.configData.product_id;
+                                }
+
+                                if (productId && gw.GF && gw.GF.loginModel && gw.GF.loginModel.AppData && gw.GF.loginModel.AppData.storage) {
+                                    let curQty = gw.GF.loginModel.AppData.storage[productId] || 0;
+                                    gw.GF.loginModel.AppData.storage[productId] = curQty + 1;
+                                }
+
+                                if (productId && gw.GF && gw.GF.gameController && gw.Animations) {
+                                    gw.GF.gameController.collectTopTip(productId, 1);
+                                }
+                            }
+                        } catch(e) {}
                     } catch(e) {
                         sysLog('خطأ أثناء حصاد العنصر ' + target.id + ': ' + e.message);
                     }
@@ -2417,7 +2439,11 @@ SF.CropinatorModule = class CropinatorModule extends SF.ModuleBase {
 
             function applyGreenhouseVisualPatch() {
                 if (gw.GF && gw.GF.loginModel && !gw.GF.loginModel._hookedDirtyData) {
+                    const originalDirtyData = gw.GF.loginModel.dealDirtyData;
                     gw.GF.loginModel.dealDirtyData = function() {
+                        if (typeof originalDirtyData === 'function') {
+                            try { originalDirtyData.apply(this, arguments); } catch(e) {}
+                        }
                         if (!this.AppData || !this.AppData.map) return;
                         let t = this.AppData.map;
                         let e = {};
@@ -4349,17 +4375,9 @@ SF.BattlePassModule = class BattlePassModule extends SF.ModuleBase {
     }
 
     logStatus(message) {
-        if (this.container) {
-            const logDiv = this.container.querySelector('#sf-bp-status-log');
-            if (logDiv) {
-                logDiv.innerText = message;
-            }
-        } else {
-            // Fallback for floating button text if container doesn't exist
-            let btn = document.getElementById('btn-bp-smart');
-            if (btn && message.includes("⏳")) {
-                btn.innerHTML = message;
-            }
+        const logDiv = this.container.querySelector('#sf-bp-status-log');
+        if (logDiv) {
+            logDiv.innerText = message;
         }
         console.log(`[SF-BattlePassModule] ${message}`);
     }
@@ -4370,35 +4388,30 @@ SF.BattlePassModule = class BattlePassModule extends SF.ModuleBase {
 
         let visualTriggered = false;
         try {
-            // محاولة استخدام TipView (الطريقة الأكثر نجاحاً واستقراراً للعبة)
-            if (gw.TipView && typeof gw.TipView.show === 'function') {
-                let rewardsArray = [];
-                let items = rewardStr.toString().split(',');
-                items.forEach(item => {
-                    let parts = item.split('_');
-                    if (parts.length >= 2) {
-                        rewardsArray.push({ type: parseInt(parts[0]), num: parseInt(parts[1]) });
-                    } else if (parts.length === 1) {
-                        rewardsArray.push({ type: parseInt(parts[0]), num: 1 });
+            if (gw.DropEventManager && gw.DropEventManager.instance) {
+                for (let k in gw.DropEventManager.instance) {
+                    if (typeof gw.DropEventManager.instance[k] === 'function' && k.toLowerCase().includes('rewardpanel')) {
+                        gw.DropEventManager.instance[k](rewardStr);
+                        visualTriggered = true; break;
                     }
-                });
-                
-                if (rewardsArray.length > 0) {
-                    gw.TipView.show(rewardsArray);
-                    visualTriggered = true;
-                    console.log("[SF-BattlePass] تم تفعيل الرسوميات بنجاح عبر TipView:", rewardsArray);
                 }
             }
-        } catch(e) {
-            console.error("[SF-BattlePass] خطأ أثناء تشغيل TipView:", e);
-        }
+        } catch(e) {}
 
-        // الطريقة الاحتياطية (Fallback)
         if (!visualTriggered && gw.App && gw.App.CommonTips) {
             for (let k in gw.App.CommonTips) {
                 if (typeof gw.App.CommonTips[k] === 'function' && k.toLowerCase().includes('reward') && k.toLowerCase().includes('show')) {
                     gw.App.CommonTips[k](rewardStr);
-                    break;
+                    visualTriggered = true; break;
+                }
+            }
+        }
+
+        if (!visualTriggered && gw.GF && gw.GF.loginModel) {
+            for (let k in gw.GF.loginModel) {
+                if (typeof gw.GF.loginModel[k] === 'function' && k.toLowerCase().includes('showreward')) {
+                    gw.GF.loginModel[k](rewardStr);
+                    visualTriggered = true; break;
                 }
             }
         }
@@ -5498,7 +5511,7 @@ SF.SessionExtractorModule = class SessionExtractorModule extends SF.ModuleBase {
             </style>
             
             <div class="sf-card">
-                <button id="sf-btn-extract-smart" class="sf-extractor-btn">🚀 استخراج مفتاح الدخول (ضغطة واحدة)</button>
+                <button id="sf-btn-extract-smart" class="sf-extractor-btn">🚀 استخراج مفتاح الدخول (V2)</button>
                 <textarea id="sf-txt-smart" class="sf-extractor-textarea" readonly placeholder="سيظهر المفتاح هنا..."></textarea>
             </div>
         `;
