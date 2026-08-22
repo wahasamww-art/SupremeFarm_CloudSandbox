@@ -21,7 +21,7 @@
 
 // ===================================================================
 // SupremeFarm Modular - Cloud Distribution Bundle
-// Generated at: 2026-08-22T14:14:32.951Z
+// Generated at: 2026-08-22T14:55:45.849Z
 // ===================================================================
 
 var SF = window.SF || {};
@@ -6306,6 +6306,179 @@ SF.SessionExtractorModule = class SessionExtractorModule extends SF.ModuleBase {
 if (window.SF && window.SF.modules) {
     window.SF.modules.register(new SF.SessionExtractorModule());
 }
+
+
+// --- File: features/MonopolyModule.js ---
+window.SF = window.SF || {};
+
+SF.MonopolyModule = class MonopolyModule extends SF.ModuleBase {
+    constructor() {
+        super('monopoly', 'بنك الحظ', '🎲');
+        this.isRunning = false;
+        this.autoPlayTimeout = null;
+    }
+
+    render() {
+        return `
+            <style>
+                .sf-monopoly-btn {
+                    padding: 10px 15px;
+                    border: none;
+                    border-radius: 6px;
+                    font-weight: bold;
+                    cursor: pointer;
+                    width: 100%;
+                    transition: all 0.3s ease;
+                }
+                .sf-monopoly-btn-start {
+                    background: linear-gradient(135deg, #2ecc71, #27ae60);
+                    color: white;
+                    box-shadow: 0 4px 15px rgba(46, 204, 113, 0.3);
+                }
+                .sf-monopoly-btn-stop {
+                    background: linear-gradient(135deg, #e74c3c, #c0392b);
+                    color: white;
+                    box-shadow: 0 4px 15px rgba(231, 76, 60, 0.3);
+                }
+                .sf-monopoly-log {
+                    margin-top: 10px;
+                    padding: 8px;
+                    background: rgba(0,0,0,0.4);
+                    border-radius: 5px;
+                    border: 1px solid rgba(255,255,255,0.1);
+                    font-size: 11px;
+                    color: #a4b0be;
+                    text-align: right;
+                    min-height: 20px;
+                }
+            </style>
+            
+            <div class="sf-card">
+                <p style="color: var(--sf-text-muted); font-size: 13px; margin-bottom: 15px; text-align: center;">
+                    رمي النرد تلقائياً واستلام الجوائز في فعالية بنك الحظ (Monopoly).
+                </p>
+                
+                <button id="sf-monopoly-toggle-btn" class="sf-monopoly-btn sf-monopoly-btn-start">
+                    ▶️ تشغيل الرمي التلقائي
+                </button>
+
+                <div id="sf-monopoly-status-log" class="sf-monopoly-log">
+                    [النظام] جاهز...
+                </div>
+            </div>
+        `;
+    }
+
+    bindEvents() {
+        const toggleBtn = this.container.querySelector('#sf-monopoly-toggle-btn');
+        if (toggleBtn) {
+            toggleBtn.onclick = () => {
+                if (this.isRunning) {
+                    this.stopAutoPlay();
+                } else {
+                    this.startAutoPlay();
+                }
+            };
+        }
+    }
+
+    logStatus(message) {
+        const logDiv = this.container.querySelector('#sf-monopoly-status-log');
+        if (logDiv) {
+            logDiv.innerText = message;
+        }
+        console.log(`[SF-MonopolyModule] ${message}`);
+    }
+
+    updateUIButtonState() {
+        const btn = this.container.querySelector('#sf-monopoly-toggle-btn');
+        if (btn) {
+            if (this.isRunning) {
+                btn.innerText = "⏸️ إيقاف الرمي التلقائي";
+                btn.className = "sf-monopoly-btn sf-monopoly-btn-stop";
+            } else {
+                btn.innerText = "▶️ تشغيل الرمي التلقائي";
+                btn.className = "sf-monopoly-btn sf-monopoly-btn-start";
+            }
+        }
+    }
+
+    async executePlay() {
+        if (!this.isRunning) return;
+
+        try {
+            let gw = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
+
+            if (!gw.NetUtils || !gw.NetUtils.netManager) {
+                this.logStatus("⏳ في انتظار تحميل كلاسات اللعبة...");
+                this._scheduleRetry();
+                return;
+            }
+
+            // إرسال طلب رمي النرد
+            let response = await gw.NetUtils.netManager.request("Activity/Monopoly", { action: "play" });
+            
+            if (response && response.status) {
+                let points = response.data.points;
+                let pos = response.data.pos;
+                let reward = response.data.reward;
+                
+                let rewardMsg = "";
+                if (reward && Object.keys(reward).length > 0) {
+                    rewardMsg = " 🎁 تم استلام جائزة!";
+                }
+                
+                this.logStatus(`🎲 تم الرمي (الرقم ${points}) -> الموقع ${pos}${rewardMsg}`);
+                this._scheduleNextPlay();
+            } else {
+                this.logStatus("⚠️ توقف: ربما نفد النرد أو انتهت الفعالية.");
+                this.stopAutoPlay(true);
+            }
+
+        } catch (err) {
+            console.error("[SF-MonopolyModule] Exception:", err);
+            this.logStatus("❌ خطأ: " + err.message);
+            this.stopAutoPlay(true);
+        }
+    }
+
+    _scheduleNextPlay() {
+        if (!this.isRunning) return;
+        let jitter = Math.floor(Math.random() * 800) + 700;
+        // التأخير بين الرميات (2 إلى 3 ثانية لمحاكاة السلوك البشري وأمان الشبكة)
+        let nextRunDelay = 1500 + jitter; 
+        this.autoPlayTimeout = setTimeout(() => this.executePlay(), nextRunDelay);
+    }
+
+    _scheduleRetry() {
+        if (!this.isRunning) return;
+        this.autoPlayTimeout = setTimeout(() => this.executePlay(), 2000);
+    }
+
+    startAutoPlay() {
+        if (this.isRunning) return;
+        this.isRunning = true;
+        this.updateUIButtonState();
+        this.logStatus("▶️ بدء رمي النرد...");
+        this.executePlay();
+    }
+
+    stopAutoPlay(preserveMessage = false) {
+        if (!this.isRunning) return;
+        this.isRunning = false;
+        if (this.autoPlayTimeout) {
+            clearTimeout(this.autoPlayTimeout);
+            this.autoPlayTimeout = null;
+        }
+        this.updateUIButtonState();
+        if (!preserveMessage) {
+            this.logStatus("⏸️ تم الإيقاف.");
+        }
+    }
+};
+
+console.log('[SF-MonopolyModule] ✅ MonopolyModule class defined. Registering now...');
+SF.modules.register(new SF.MonopolyModule());
 
 
 // --- System Initialization ---
