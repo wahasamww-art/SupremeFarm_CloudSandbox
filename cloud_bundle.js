@@ -1,6 +1,6 @@
 // ===================================================================
 // SupremeFarm Modular - Cloud Distribution Bundle
-// Generated at: 2026-08-22T11:15:13.164Z
+// Generated at: 2026-08-22T11:24:55.752Z
 // ===================================================================
 
 // --- File: core/EventBus.js ---
@@ -5284,19 +5284,19 @@ SF.StoreRevealModule = class StoreRevealModule extends SF.ModuleBase {
                     if (origShopList && origShopList.get) {
                         Object.defineProperty(ShipOrderModelCls.prototype, "shopList", {
                             get: function() {
-                                var e = { 1: this.getCash3Shop(), 2: [], 3: [], 4: [], 5: [], 6: [], 7: [] };
+                                var e = { 0: this.getCash3Shop(), 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] };
                                 var i = window.Config.StoreShipOrder || [];
                                 i.forEach(function(id) {
                                     var o = window.Config.Store_GetItemData(id);
                                     if (!o) return;
                                     switch (o.type) {
                                         case 14:
-                                        case 15: e[2].push(o); break;
-                                        case 2: e[3].push(o); break;
-                                        case 3: e[4].push(o); break;
-                                        case 5: e[5].push(o); break;
-                                        case 10: e[6].push(o); break;
-                                        default: e[7].push(o);
+                                        case 15: e[1].push(o); break;
+                                        case 2: e[2].push(o); break;
+                                        case 3: e[3].push(o); break;
+                                        case 5: e[4].push(o); break;
+                                        case 10: e[5].push(o); break;
+                                        default: e[6].push(o);
                                     }
                                 }, this);
                                 return e;
