@@ -21,7 +21,7 @@
 
 // ===================================================================
 // SupremeFarm Modular - Cloud Distribution Bundle
-// Generated at: 2026-08-29T15:54:13.063Z
+// Generated at: 2026-08-29T16:01:22.543Z
 // ===================================================================
 
 var SF = window.SF || {};
@@ -3353,7 +3353,17 @@ SF.MachineBuilderModule = class MachineBuilderModule extends SF.ModuleBase {
                                     logMsg(`[نجاح] تم استخراج loginSession بنجاح! (${ls.substring(0,5)}...)`);
                                 }
                             } else {
-                                logMsg(`[خطأ] فشل استخراج loginSession! سيتم تخطي الحساب لعدم اكتمال بياناته.`, 'error');
+                                // 💡 كود استكشافي مدمج لمعرفة سبب الرفض من السيرفر
+                                let errorText = 'غير معروف';
+                                try {
+                                    let respU8 = new Uint8Array(initRes.response);
+                                    let textDec = new TextDecoder().decode(respU8);
+                                    let matches = textDec.match(/([a-zA-Z0-9_ ]{5,})/g);
+                                    if (matches) errorText = matches.join(' | ');
+                                } catch(e) {}
+                                logMsg(`[خطأ] رد السيرفر: ${errorText.substring(0, 150)}...`, 'error');
+                                console.error('[Hawk-Eye] Failed AMF Dump:', initRes.response);
+                                
                                 accountIndex++;
                                 saveState(accountIndex);
                                 continue;
