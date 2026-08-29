@@ -21,7 +21,7 @@
 
 // ===================================================================
 // SupremeFarm Modular - Cloud Distribution Bundle
-// Generated at: 2026-08-29T16:09:53.575Z
+// Generated at: 2026-08-29T16:23:32.153Z
 // ===================================================================
 
 var SF = window.SF || {};
@@ -3329,9 +3329,19 @@ SF.MachineBuilderModule = class MachineBuilderModule extends SF.ModuleBase {
                                 responseType: "arraybuffer",
                                 anonymous: true,
                                 cookie: `__Host-bf_s=${currentAlt.cookie || currentAlt.sessionKey}`,
-                                headers: { "Content-Type": "application/x-amf" },
+                                headers: { 
+                                    "Content-Type": "application/x-amf",
+                                    "Accept": "*/*",
+                                    "Origin": "https://familyfarm-play-fb.diandian.com",
+                                    "Referer": "https://familyfarm-play-fb.diandian.com/",
+                                    "Cookie": `__Host-bf_s=${currentAlt.cookie || currentAlt.sessionKey}`
+                                },
                                 onload: resolve,
-                                onerror: resolve
+                                onerror: (err) => {
+                                    console.error("[GM_xmlhttpRequest] Error:", err);
+                                    err.response = err.response || new ArrayBuffer(0); // fallback
+                                    resolve(err);
+                                }
                             });
                         });
 
