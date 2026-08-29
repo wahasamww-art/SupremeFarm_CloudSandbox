@@ -21,7 +21,7 @@
 
 // ===================================================================
 // SupremeFarm Modular - Cloud Distribution Bundle
-// Generated at: 2026-08-29T17:00:38.230Z
+// Generated at: 2026-08-29T17:05:34.051Z
 // ===================================================================
 
 var SF = window.SF || {};
@@ -3113,7 +3113,7 @@ SF.MachineBuilderModule = class MachineBuilderModule extends SF.ModuleBase {
                 XMLHttpRequest.prototype.send = originalSend;
                 XMLHttpRequest.prototype.setRequestHeader = originalSetRequestHeader;
                 resolve(res);
-            }).catch(err => {
+            }, err => {
                 XMLHttpRequest.prototype.open = originalOpen;
                 XMLHttpRequest.prototype.send = originalSend;
                 XMLHttpRequest.prototype.setRequestHeader = originalSetRequestHeader;
