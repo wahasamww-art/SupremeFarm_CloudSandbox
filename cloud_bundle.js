@@ -21,7 +21,7 @@
 
 // ===================================================================
 // SupremeFarm Modular - Cloud Distribution Bundle
-// Generated at: 2026-08-29T16:23:32.153Z
+// Generated at: 2026-08-29T16:33:06.197Z
 // ===================================================================
 
 var SF = window.SF || {};
@@ -3293,7 +3293,7 @@ SF.MachineBuilderModule = class MachineBuilderModule extends SF.ModuleBase {
             }
 
             try {
-                let sUrl = domain + "gateway.php?s=" + currentSession.substring(0, 6) + "_" + currentUid;
+                let sUrl = domain.replace("http://", "https://") + "gateway.php?s=" + currentSession.substring(0, 6) + "_" + currentUid;
                 let myGhostClient = new amf.Client("save_data", sUrl);
 
                 // 🔥 1. طلب ملف الداتا باستخدام القالب الثابت (Base64) تماماً كما في CenturyPro
