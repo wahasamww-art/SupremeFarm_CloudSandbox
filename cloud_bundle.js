@@ -21,7 +21,7 @@
 
 // ===================================================================
 // SupremeFarm Modular - Cloud Distribution Bundle
-// Generated at: 2026-08-29T16:53:01.355Z
+// Generated at: 2026-08-29T17:00:38.230Z
 // ===================================================================
 
 var SF = window.SF || {};
@@ -3059,7 +3059,16 @@ SF.MachineBuilderModule = class MachineBuilderModule extends SF.ModuleBase {
                     GM_xmlhttpRequest({
                         method: "POST",
                         url: (ghostUrl.startsWith("http") ? ghostUrl : (serverDomain + ghostUrl)).replace("http://", "https://"),
-                        data: new Blob([data], {type: "application/x-amf"}),
+                        data: (function(d){
+                            if(typeof d === 'string') {
+                                let u8 = new Uint8Array(d.length);
+                                for(let i=0; i<d.length; i++) u8[i] = d.charCodeAt(i) & 0xff;
+                                return new Blob([u8.buffer], {type: "application/x-amf"});
+                            } else if (d instanceof ArrayBuffer || d instanceof Uint8Array) {
+                                return new Blob([d], {type: "application/x-amf"});
+                            }
+                            return d;
+                        })(data),
                         responseType: "arraybuffer",
                         anonymous: true,
                         cookie: `__Host-bf_s=${customCookie}`,
@@ -3083,6 +3092,14 @@ SF.MachineBuilderModule = class MachineBuilderModule extends SF.ModuleBase {
                             if (fakeXhr.onreadystatechange) fakeXhr.onreadystatechange();
                         },
                         onerror: function(err) {
+                            console.error("[FakeXHR Error] Request failed:", err);
+                            Object.defineProperty(fakeXhr, 'readyState', { value: 4 });
+                            Object.defineProperty(fakeXhr, 'status', { value: 0 });
+                            Object.defineProperty(fakeXhr, 'response', { value: new ArrayBuffer(0) });
+                            if (fakeXhr.onload) fakeXhr.onload({ target: fakeXhr });
+                            if (fakeXhr.onreadystatechange) fakeXhr.onreadystatechange();
+                        },
+                        onerror: function(err) {
                             if (fakeXhr.onerror) fakeXhr.onerror(err);
                         }
                     });
@@ -3096,11 +3113,11 @@ SF.MachineBuilderModule = class MachineBuilderModule extends SF.ModuleBase {
                 XMLHttpRequest.prototype.send = originalSend;
                 XMLHttpRequest.prototype.setRequestHeader = originalSetRequestHeader;
                 resolve(res);
-            }).fail(err => {
+            }).catch(err => {
                 XMLHttpRequest.prototype.open = originalOpen;
                 XMLHttpRequest.prototype.send = originalSend;
                 XMLHttpRequest.prototype.setRequestHeader = originalSetRequestHeader;
-                reject(err);
+                resolve({ error: "network_error", details: err });
             });
         });
     }
