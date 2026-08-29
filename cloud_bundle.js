@@ -21,7 +21,7 @@
 
 // ===================================================================
 // SupremeFarm Modular - Cloud Distribution Bundle
-// Generated at: 2026-08-29T16:41:06.631Z
+// Generated at: 2026-08-29T16:47:50.310Z
 // ===================================================================
 
 var SF = window.SF || {};
@@ -3058,12 +3058,18 @@ SF.MachineBuilderModule = class MachineBuilderModule extends SF.ModuleBase {
                     let fakeXhr = this;
                     GM_xmlhttpRequest({
                         method: "POST",
-                        url: ghostUrl.startsWith("http") ? ghostUrl : (serverDomain + ghostUrl),
+                        url: (ghostUrl.startsWith("http") ? ghostUrl : (serverDomain + ghostUrl)).replace("http://", "https://"),
                         data: data,
                         responseType: "arraybuffer",
                         anonymous: true,
                         cookie: `__Host-bf_s=${customCookie}`,
-                        headers: { "Content-Type": ghostHeaders["Content-Type"] || "application/x-amf" },
+                        headers: { 
+                            "Content-Type": ghostHeaders["Content-Type"] || "application/x-amf",
+                            "Accept": "*/*",
+                            "Origin": "https://familyfarm-play-fb.diandian.com",
+                            "Referer": "https://familyfarm-play-fb.diandian.com/",
+                            "Cookie": `__Host-bf_s=${customCookie}`
+                        },
                         onload: function(res) {
                             Object.defineProperty(fakeXhr, 'readyState', { value: 4 });
                             Object.defineProperty(fakeXhr, 'status', { value: res.status });
