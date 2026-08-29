@@ -21,7 +21,7 @@
 
 // ===================================================================
 // SupremeFarm Modular - Cloud Distribution Bundle
-// Generated at: 2026-08-29T16:01:22.543Z
+// Generated at: 2026-08-29T16:09:53.575Z
 // ===================================================================
 
 var SF = window.SF || {};
@@ -3354,14 +3354,20 @@ SF.MachineBuilderModule = class MachineBuilderModule extends SF.ModuleBase {
                                 }
                             } else {
                                 // 💡 كود استكشافي مدمج لمعرفة سبب الرفض من السيرفر
-                                let errorText = 'غير معروف';
+                                let byteLen = 0;
+                                let errorText = 'Unknown Error';
                                 try {
                                     let respU8 = new Uint8Array(initRes.response);
-                                    let textDec = new TextDecoder().decode(respU8);
-                                    let matches = textDec.match(/([a-zA-Z0-9_ ]{5,})/g);
-                                    if (matches) errorText = matches.join(' | ');
+                                    byteLen = respU8.length;
+                                    let ascii = '';
+                                    for(let i=0; i<respU8.length; i++){
+                                        if (respU8[i] >= 32 && respU8[i] <= 126) ascii += String.fromCharCode(respU8[i]);
+                                        else ascii += '.';
+                                    }
+                                    let printable = ascii.replace(/\.+/g, '.').substring(0, 100);
+                                    errorText = `(Bytes: ${byteLen}) ` + printable;
                                 } catch(e) {}
-                                logMsg(`[خطأ] رد السيرفر: ${errorText.substring(0, 150)}...`, 'error');
+                                logMsg(`[Rejected] Server reply: ${errorText}`, 'error');
                                 console.error('[Hawk-Eye] Failed AMF Dump:', initRes.response);
                                 
                                 accountIndex++;
