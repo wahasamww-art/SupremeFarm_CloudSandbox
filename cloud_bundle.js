@@ -21,7 +21,7 @@
 
 // ===================================================================
 // SupremeFarm Modular - Cloud Distribution Bundle
-// Generated at: 2026-08-29T16:33:06.197Z
+// Generated at: 2026-08-29T16:41:06.631Z
 // ===================================================================
 
 var SF = window.SF || {};
@@ -3325,7 +3325,7 @@ SF.MachineBuilderModule = class MachineBuilderModule extends SF.ModuleBase {
                             GM_xmlhttpRequest({
                                 method: "POST",
                                 url: sUrl,
-                                data: pBytes.buffer,
+                                data: new Blob([pBytes.buffer], {type: "application/x-amf"}),
                                 responseType: "arraybuffer",
                                 anonymous: true,
                                 cookie: `__Host-bf_s=${currentAlt.cookie || currentAlt.sessionKey}`,
