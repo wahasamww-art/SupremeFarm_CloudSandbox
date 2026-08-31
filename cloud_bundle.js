@@ -5991,6 +5991,9 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
                 // This triggers the internal data update + UI event naturally
                 gw.GF.loginModel.addTreasure("experience", exp);
                 gw.GF.loginModel.addTreasure("coins", coin);
+                if (typeof this.log === 'function') {
+                    this.log(`💸 إضافة لحظية: +${exp} خبرة | +${coin} ذهب`);
+                }
             }
             
             if (gw.GF && gw.GF.gameController && gw.Animations) {
@@ -6002,6 +6005,9 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
                 let ep = gw.egret.Point.create(window.innerWidth / 2, 30);
                 if (gw.GF.gameController.operArea && gw.GF.gameController.operArea.lblExp) {
                     gw.GF.gameController.operArea.lblExp.parent.localToGlobal(0, 0, ep);
+                    if (gw.GF.loginModel && gw.GF.loginModel.AppData) {
+                        gw.GF.gameController.operArea.lblExp.textFormatNum = gw.GF.loginModel.AppData.experience;
+                    }
                 }
                 gw.Animations.flyItemTo("exp", startRect, ep);
                 
@@ -6009,6 +6015,9 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
                 let cp = gw.egret.Point.create(window.innerWidth - 100, 30);
                 if (gw.GF.gameController.operArea && gw.GF.gameController.operArea.lblCoin) {
                     gw.GF.gameController.operArea.lblCoin.parent.localToGlobal(0, 0, cp);
+                    if (gw.GF.loginModel && gw.GF.loginModel.AppData) {
+                        gw.GF.gameController.operArea.lblCoin.textFormatNum = gw.GF.loginModel.AppData.coins;
+                    }
                 }
                 gw.Animations.flyItemTo("coin", startRect, cp);
             }
