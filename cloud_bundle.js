@@ -5738,32 +5738,25 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
 
                         for (let obj of updates) {
                             if (obj && obj.needResponse && obj.needResponse.data) {
-                                const ch = obj.needResponse.channel;
-                                if (ch) {
-                                    const chStr = String(ch);
-                                    if (chStr.startsWith("friend_collect") || chStr.startsWith("friend_fertilize") || chStr.startsWith("friend_water") || chStr === "water_plants") {
-                                        found = true;
-                                        const rData = obj.needResponse.data;
-                                    
+                                const rData = obj.needResponse.data;
+                                if (rData) {
                                     if (rData.msg === "ok") {
                                         if (rData.product) {
                                             product = rData.product;
                                             totalAdded += (rData.product_num || 1);
                                         }
                                         msg = "ok";
-                                        // Save the latest valid rData for rewards extraction
                                         self.lastValidRData = rData;
                                     } else if (rData.msg === "used up") {
                                         usedUpFound = true;
                                     } else if (!msg) {
                                         msg = rData.msg || rData.error;
                                     }
-                                    }
                                 }
                             }
                         }
 
-                        if (found && self.activeCallback) {
+                        if (self.activeCallback) {
                             if (usedUpFound) msg = "used up";
                             self.activeCallback({ product, msg, totalAdded, raw: self.lastValidRData });
                             self.activeCallback = null;
@@ -6020,7 +6013,7 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
                 }
                 gw.Animations.flyItemTo("exp", startRect, ep);
                 
-                gw.GF.gameController.collectTopTip("coin", coin);
+                gw.GF.gameController.collectTopTip("coins", coin);
                 let cp = gw.egret.Point.create(window.innerWidth - 100, 30);
                 if (gw.GF.gameController.operArea && gw.GF.gameController.operArea.lblCoin) {
                     gw.GF.gameController.operArea.lblCoin.parent.localToGlobal(0, 0, cp);
