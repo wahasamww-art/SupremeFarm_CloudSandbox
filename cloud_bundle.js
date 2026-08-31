@@ -6160,6 +6160,7 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
                     } else {
                         if (res.totalAdded > 0) {
                             this.totalFruits += res.totalAdded;
+                            this.totalHarvested += res.totalAdded; // استرجاع عداد الثمار
                             this.log(`✅ الضربة القاضية (10 نقرات مدمجة): تم حصد ${res.totalAdded} ثمرة! إجمالي الثمار: ${this.totalHarvested}/${this.targetLimit}`);
 
                             if (gw.GF && gw.GF.loginModel && gw.GF.loginModel.AppData && gw.GF.loginModel.AppData.storage) {
@@ -6197,7 +6198,8 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
                         }
                     }
 
-                    this.totalHarvested += 1; // تحديث عداد الجيران
+                    this.blacklist[friendId] = true;
+                    this.saveBlacklist();
                     this.update(); 
                     updateStatsUI();
                     break;
