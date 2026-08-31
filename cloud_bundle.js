@@ -6332,16 +6332,36 @@ if (window.SF && window.SF.modules) {
 
 // --- File: features/TimeBreakerModule.js ---
 (function() {
-    // نسبة الخصم من وقت كل آلة/حيوان (30% = أسرع بـ 30%)
     const OFFSET_PERCENT = 0.30;
-    // حد أدنى للوقت المتبقي بعد الخصم (لا نقل عن 5 ثوان)
     const MIN_COLLECT_IN = 5;
-
     const hookedProtos = new WeakSet();
-    const hookedObjects = new WeakSet();
 
     function calcOffset(collect_in) {
         return Math.floor(Math.max(0, collect_in * OFFSET_PERCENT));
+    }
+
+    function applyHack(obj) {
+        if (!obj || !obj.start_time) return;
+
+        // نستخدم start_time كمعرّف للدورة — كل دورة جديدة لها start_time مختلف
+        const cycleKey = '_tb_st_' + obj.start_time;
+        if (obj[cycleKey]) return; // تم تطبيق الهاك لهذه الدورة بالفعل
+        obj[cycleKey] = true;
+
+        const animals = obj.animals || 1;
+        const offset = calcOffset(obj.collect_in);
+        const newCollectIn = Math.max(MIN_COLLECT_IN, obj.collect_in - offset);
+
+        // old_collect_in = newCollectIn × animals
+        // بحيث: checkProducts تحسب → collect_in = old_collect_in / animals = newCollectIn ✓
+        obj.old_collect_in = newCollectIn * animals;
+        obj.collect_in = newCollectIn;
+
+        if (typeof obj.stopTimer === 'function') obj.stopTimer();
+        if (typeof obj.startTimer === 'function') obj.startTimer();
+
+        const kind = obj._data && obj._data.config_data && obj._data.config_data.kind || 'كائن';
+        console.log(`✅ [SupremeFarm] ${kind}: ${newCollectIn + offset}s → ${newCollectIn}s (-${offset}s)`);
     }
 
     function hookProduceOnProto(proto) {
@@ -6353,28 +6373,7 @@ if (window.SF && window.SF.modules) {
 
         proto.produce = function() {
             const result = origProduce.apply(this, arguments);
-
-            if (this.start_time > 0 && !hookedObjects.has(this)) {
-                hookedObjects.add(this);
-
-                const animals = this.animals || 1;
-                const offset = calcOffset(this.collect_in);
-                const newCollectIn = Math.max(MIN_COLLECT_IN, this.collect_in - offset);
-
-                // نضبط old_collect_in = newCollectIn × animals
-                // بحيث لو checkProducts استدعت: collect_in = old_collect_in / animals = newCollectIn ✓
-                this.old_collect_in = newCollectIn * animals;
-
-                // نضبط collect_in مباشرة للدورة الحالية
-                this.collect_in = newCollectIn;
-
-                // نوقف المؤقت القديم ونشغل جديد بالوقت المخفض
-                if (typeof this.stopTimer === 'function') this.stopTimer();
-                if (typeof this.startTimer === 'function') this.startTimer();
-
-                console.log(`✅ [SupremeFarm] ${this._data && this._data.config_data && this._data.config_data.kind || 'كائن'}: ${this.collect_in + offset}s → ${this.collect_in}s (-${offset}s)`);
-            }
-
+            applyHack(this);
             return result;
         };
 
@@ -6399,7 +6398,7 @@ if (window.SF && window.SF.modules) {
             }
 
             if (hooked > 0) {
-                console.log(`✅ [SupremeFarm] TimeBreaker جاهز! خصم ${Math.round(OFFSET_PERCENT*100)}% من وقت كل آلة/حيوان.`);
+                console.log(`✅ [SupremeFarm] TimeBreaker جاهز! خصم ${Math.round(OFFSET_PERCENT * 100)}% من كل دورة إنتاج.`);
                 return true;
             }
         } catch(e) {}
@@ -6410,6 +6409,7 @@ if (window.SF && window.SF.modules) {
         if (scanAndHook()) clearInterval(iv);
     }, 2000);
 })();
+
 
 // --- File: features/SessionExtractorModule.js ---
 window.SF = window.SF || {};
