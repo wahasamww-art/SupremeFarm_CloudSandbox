@@ -6200,6 +6200,7 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
 
                     this.update(); 
                     updateStatsUI();
+                    break;
                 }
             }
         }
