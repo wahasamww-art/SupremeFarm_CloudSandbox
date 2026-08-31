@@ -6337,42 +6337,52 @@ if (window.SF && window.SF.modules) {
     
     function injectStealthTimeBreaker() {
         let gw = (typeof unsafeWindow !== 'undefined') ? unsafeWindow : window;
-        if (!gw.Machine || !gw.Animal || !gw.ServerTime) return false;
+        if (!gw.egret || !gw.ServerTime) return false;
+        
+        let MachineClass, AnimalClass;
+        try {
+            MachineClass = gw.egret.getDefinitionByName("Machine");
+            AnimalClass = gw.egret.getDefinitionByName("Animal");
+        } catch (e) {
+            return false;
+        }
+
+        if (!MachineClass || !AnimalClass) return false;
         
         let offset = 20; // 20 seconds reduction
 
-        if (!gw.Machine.prototype._tb_stealth) {
-            let origMachineNext = gw.Machine.prototype.next_product_in;
-            gw.Machine.prototype.next_product_in = function() {
+        if (!MachineClass.prototype._tb_stealth) {
+            let origMachineNext = MachineClass.prototype.next_product_in;
+            MachineClass.prototype.next_product_in = function() {
                 let t = origMachineNext.apply(this, arguments);
                 return Math.max(0, t - offset);
             };
 
-            let origMachineReady = gw.Machine.prototype.isReady;
-            gw.Machine.prototype.isReady = function() {
+            let origMachineReady = MachineClass.prototype.isReady;
+            MachineClass.prototype.isReady = function() {
                 if (this.start_time > 0 && this.collect_in > 0) {
                     return gw.ServerTime.timestamp >= (this.start_time + this.collect_in - offset);
                 }
                 return origMachineReady.apply(this, arguments);
             };
-            gw.Machine.prototype._tb_stealth = true;
+            MachineClass.prototype._tb_stealth = true;
         }
 
-        if (!gw.Animal.prototype._tb_stealth) {
-            let origAnimalNext = gw.Animal.prototype.next_product_in;
-            gw.Animal.prototype.next_product_in = function() {
+        if (!AnimalClass.prototype._tb_stealth) {
+            let origAnimalNext = AnimalClass.prototype.next_product_in;
+            AnimalClass.prototype.next_product_in = function() {
                 let t = origAnimalNext.apply(this, arguments);
                 return Math.max(0, t - offset);
             };
 
-            let origAnimalReady = gw.Animal.prototype.isReady;
-            gw.Animal.prototype.isReady = function() {
+            let origAnimalReady = AnimalClass.prototype.isReady;
+            AnimalClass.prototype.isReady = function() {
                 if (this.start_time > 0 && this.collect_in > 0) {
                     return gw.ServerTime.timestamp >= (this.start_time + this.collect_in - offset);
                 }
                 return origAnimalReady.apply(this, arguments);
             };
-            gw.Animal.prototype._tb_stealth = true;
+            AnimalClass.prototype._tb_stealth = true;
         }
         
         console.log("✅ [SupremeFarm] تم تفعيل كاسر الوقت الخفي (-20 ثانية) للآلات والحيوانات!");
