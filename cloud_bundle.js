@@ -21,7 +21,7 @@
 
 // ===================================================================
 // SupremeFarm Modular - Cloud Distribution Bundle
-// Generated at: 2026-08-29T17:05:34.051Z
+// Generated at: 2026-08-31T21:07:20.993Z
 // ===================================================================
 
 var SF = window.SF || {};
@@ -2148,8 +2148,6 @@ SF.ZeroGasModule = class ZeroGasModule extends SF.ModuleBase {
                                     delete payload.isAuto;
                                     console.log('[SF-ZeroGas] Network Intercept: Completely removed automatic keys for ' + action);
                                 }
-
-
                             }
 
                             // Proactively block ALL toggle_automation and shop automation endpoints
@@ -2157,9 +2155,7 @@ SF.ZeroGasModule = class ZeroGasModule extends SF.ModuleBase {
                                 console.log('[SF-ZeroGas] BLOCKED ' + action + ' to prevent server side gas deduction for automation!');
                                 return; // Block the request completely
                             }
-                        } catch(e) {
-                            console.error("[SF-ZeroGas] Intercept Error:", e);
-                        }
+                        } catch(e) {}
 
                         return original_enqueue.apply(this, arguments);
                     };
@@ -5704,8 +5700,8 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
 
         for (let key in store) {
             const item = store[key];
-            if (item && item.type && !["decor", "avatar", "clothing", "material", "consumable", "coin", "cash", "mission", "coupon"].includes(item.type.toLowerCase())) {
-                items.push({ id: item.id, name: item.name || `Item ${item.id}`, type: item.type, kind: item.kind });
+            if (item && (item.type === "seeds" || item.type === "trees")) {
+                items.push({ id: item.id, name: item.name || `Item ${item.id}`, type: item.type });
             }
         }
         return items;
@@ -5725,14 +5721,8 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
             try {
                 if (event === "HTTP_SUCCESS") {
                     const data = args[1];
-                    let updates = null;
                     if (data && data.objects_to_update) {
-                        updates = Array.isArray(data.objects_to_update) ? data.objects_to_update : Object.values(data.objects_to_update);
-                    } else if (data && Array.isArray(data)) {
-                        updates = data;
-                    }
-
-                    if (updates) {
+                        const updates = Array.isArray(data.objects_to_update) ? data.objects_to_update : Object.values(data.objects_to_update);
                         
                         let found = false;
                         let product = null;
@@ -5742,15 +5732,15 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
 
                         for (let obj of updates) {
                             if (obj && obj.needResponse && obj.needResponse.data) {
-                                const rData = obj.needResponse.data;
-                                if (rData) {
-                                    if (rData.msg === "ok") {
-                                        if (rData.product) {
-                                            product = rData.product;
-                                            totalAdded += (rData.product_num || 1);
-                                        }
+                                const ch = obj.needResponse.channel;
+                                if (ch === "friend_collect" || ch === "friend_collect_trees" || ch === "friend_fertilize" || ch === "friend_water") {
+                                    found = true;
+                                    const rData = obj.needResponse.data;
+                                    
+                                    if (rData.msg === "ok" && rData.product) {
+                                        product = rData.product;
+                                        totalAdded += (rData.product_num || 1);
                                         msg = "ok";
-                                        self.lastValidRData = rData;
                                     } else if (rData.msg === "used up") {
                                         usedUpFound = true;
                                     } else if (!msg) {
@@ -5760,11 +5750,10 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
                             }
                         }
 
-                        if (self.activeCallback) {
+                        if (found && self.activeCallback) {
                             if (usedUpFound) msg = "used up";
-                            self.activeCallback({ product, msg, totalAdded, raw: self.lastValidRData });
+                            self.activeCallback({ product, msg, totalAdded });
                             self.activeCallback = null;
-                            self.lastValidRData = null;
                         }
                     }
                 }
@@ -5845,7 +5834,6 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
                     <select id="sf-harvest-mode" style="width: 140px; margin-bottom: 0;">
                         <option value="harvest">حصاد (تجميع ثمار)</option>
                         <option value="fertilize">تسميد / ساقية (مساعدة)</option>
-                        <option value="building">حصاد أبنية (بركة الملح وغيرها)</option>
                     </select>
                 </div>
 
@@ -5888,12 +5876,9 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
         modeSelect.addEventListener('change', () => {
             if (modeSelect.value === 'harvest') {
                 inputTarget.placeholder = "عدد الثمار...";
-            } else if (modeSelect.value === 'fertilize') {
-                inputTarget.placeholder = "عدد الجيران...";
             } else {
-                inputTarget.placeholder = "العدد...";
+                inputTarget.placeholder = "عدد الجيران...";
             }
-            searchInput.dispatchEvent(new Event('input'));
         });
 
         searchInput.addEventListener("focus", lazyLoadData);
@@ -5906,23 +5891,12 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
                 return;
             }
 
-            let modeItems = this.allItems;
-            const currentMode = modeSelect.value;
-            if (currentMode === "building") {
-                modeItems = this.allItems.filter(item => !["seeds", "trees"].includes(item.type));
-            } else {
-                modeItems = this.allItems.filter(item => ["seeds", "trees"].includes(item.type));
-            }
-
-            const filtered = modeItems.filter(item => item.name.toLowerCase().includes(query) || String(item.id).includes(query));
+            const filtered = this.allItems.filter(item => item.name.toLowerCase().includes(query) || String(item.id).includes(query));
             
             filtered.slice(0, 50).forEach(item => {
                 const opt = document.createElement("option");
                 opt.value = JSON.stringify(item);
-                let tName = item.type;
-                if (tName === 'trees') tName = 'شجرة';
-                if (tName === 'seeds') tName = 'بذرة/محصول';
-                opt.innerText = `[${item.id}] ${item.name} (${tName})`;
+                opt.innerText = `[${item.id}] ${item.name} (${item.type === 'trees' ? 'شجرة' : 'محصول'})`;
                 resultsSelect.appendChild(opt);
             });
             resultsSelect.size = Math.min(8, Math.max(2, filtered.length));
@@ -5955,7 +5929,7 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
             const item = JSON.parse(selectedOpt.value);
             this.currentMode = modeSelect.value;
             this.targetLimit = limit;
-            this.startHarvest(item.id, item.type, item.kind);
+            this.startHarvest(item.id, item.type);
         });
 
         btnStop.addEventListener('click', () => {
@@ -5983,51 +5957,6 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
 
     sleep(ms) {
         return new Promise(resolve => setTimeout(resolve, ms));
-    }
-
-    processRewards() {
-        try {
-            let gw = (typeof unsafeWindow !== 'undefined') ? unsafeWindow : window;
-            
-            // Fixed rewards for 10 clicks (mega harvest)
-            let exp = 10;   // 1 xp * 10 clicks
-            let coin = 50;  // 5 coins * 10 clicks
-            
-            if (gw.GF && gw.GF.loginModel && gw.GF.loginModel.addTreasure) {
-                // This triggers the internal data update + UI event naturally
-                gw.GF.loginModel.addTreasure("experience", exp);
-                gw.GF.loginModel.addTreasure("coins", coin);
-                if (typeof this.log === 'function') {
-                    this.log(`💸 إضافة لحظية: +${exp} خبرة | +${coin} ذهب`);
-                }
-            }
-            
-            if (gw.GF && gw.GF.gameController && gw.Animations) {
-                let startRect = gw.egret.Rectangle.create();
-                startRect.x = window.innerWidth / 2; startRect.y = window.innerHeight / 2;
-                startRect.width = 50; startRect.height = 50;
-                
-                gw.GF.gameController.collectTopTip("exp", exp);
-                let ep = gw.egret.Point.create(window.innerWidth / 2, 30);
-                if (gw.GF.gameController.operArea && gw.GF.gameController.operArea.lblExp) {
-                    gw.GF.gameController.operArea.lblExp.parent.localToGlobal(0, 0, ep);
-                    if (gw.GF.loginModel && gw.GF.loginModel.AppData) {
-                        gw.GF.gameController.operArea.lblExp.textFormatNum = gw.GF.loginModel.AppData.experience;
-                    }
-                }
-                gw.Animations.flyItemTo("exp", startRect, ep);
-                
-                gw.GF.gameController.collectTopTip("coins", coin);
-                let cp = gw.egret.Point.create(window.innerWidth - 100, 30);
-                if (gw.GF.gameController.operArea && gw.GF.gameController.operArea.lblCoin) {
-                    gw.GF.gameController.operArea.lblCoin.parent.localToGlobal(0, 0, cp);
-                    if (gw.GF.loginModel && gw.GF.loginModel.AppData) {
-                        gw.GF.gameController.operArea.lblCoin.textFormatNum = gw.GF.loginModel.AppData.coins;
-                    }
-                }
-                gw.Animations.flyItemTo("coin", startRect, cp);
-            }
-        } catch(e) { console.log("Error flying rewards:", e); }
     }
 
     randomJitter() {
@@ -6093,7 +6022,7 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
         }
     }
 
-    async startHarvest(itemId, itemType, itemKind) {
+    async startHarvest(itemId, itemType) {
         const gw = (typeof unsafeWindow !== 'undefined') ? unsafeWindow : window;
         if (!gw.GF || !gw.GF.loginModel) {
             this.log("⚠️ اللعبة لم تحمل بالكامل.");
@@ -6108,20 +6037,14 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
         if(this.btnStart) this.btnStart.style.display = 'none';
         if(this.btnStop) this.btnStop.style.display = 'block';
 
-        let modeName = "الحصاد";
-        let targetName = "ثمرة";
-        if (this.currentMode === "fertilize") { modeName = "التسميد/الساقية"; targetName = "جار"; }
-        else if (this.currentMode === "building") { modeName = "حصاد الأبنية"; targetName = "ثمرة"; }
+        const isFertilize = (this.currentMode === "fertilize");
+        const modeName = isFertilize ? "التسميد/الساقية" : "الحصاد";
+        const targetName = isFertilize ? "جار" : "ثمرة";
 
         this.log(`🔥 انطلاق وضع [${modeName}] لمحصول [${itemId}]! الهدف: ${this.targetLimit} ${targetName}`);
 
-        let harvestCmd = (itemType === "trees") ? "friend_collect_trees" : "friend_collect";
+        const harvestCmd = (itemType === "trees") ? "friend_collect_trees" : "friend_collect";
         const fertCmd = (itemType === "trees") ? "friend_water.save_data" : "friend_fertilize.save_data";
-        
-        if (this.currentMode === "building") {
-            let kindStr = (itemKind || "saltpond").toLowerCase();
-            harvestCmd = "friend_collect_" + kindStr;
-        }
         
         let friendsList = [];
         if (gw.GF.friendsModel && gw.GF.friendsModel.allNeighbors) {
@@ -6163,30 +6086,13 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
                 if (this.currentMode === "fertilize") {
                     const payloadToUse = { friend_id: friendId, plant_x: 0, plant_y: 0, plant_id: itemId };
                     
-                    const fertPromise = new Promise(resolve => {
-                        this.activeCallback = resolve;
-                        setTimeout(() => { if (this.activeCallback) { this.activeCallback(null); } }, 5000);
-                    });
-
                     let burst = 10;
                     for (let b = 0; b < burst; b++) {
                         gw.NetUtils.enqueue(fertCmd, payloadToUse);
                     }
-                    // الضربة الـ 11 لاستلام مكافأة الجار في نفس الدفعة
-                    gw.NetUtils.enqueue("water_plants", {
-                        id: friendId,
-                        needResponse: "water_plants",
-                        cur_sceneid: 0
-                    });
-                    
                     if (gw.NetUtils.flush) gw.NetUtils.flush();
                     
-                    const res = await fertPromise;
-                    if (res && res.msg !== "used up") {
-                        this.processRewards();
-                    } else {
-                        await this.sleep(500); // fallback wait
-                    }
+                    await this.sleep(1000); // إعطاء السيرفر ثانية لمعالجة الطلبات
                     
                     this.log(`⛔ الجار [${friendId}] تم توجيه 10 نقرات تسميد مدمجة له بنجاح.`);
                     this.blacklist[friendId] = true;
@@ -6201,7 +6107,7 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
                     break; // الانتقال للجار التالي
                 }
 
-                if (this.currentMode === "harvest" || this.currentMode === "building") {
+                if (this.currentMode === "harvest") {
                     let harvestPayload;
                     if (itemType === "trees") {
                         harvestPayload = { 
@@ -6211,13 +6117,6 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
                             cur_sceneid: 1, 
                             id: itemId, 
                             achievement_add: "social_1825_9758" 
-                        };
-                    } else if (this.currentMode === "building") {
-                        harvestPayload = { 
-                            friend_id: friendId, 
-                            itemid: itemId,
-                            friendName: neighbor.name || "",
-                            cur_sceneid: 0
                         };
                     } else {
                         harvestPayload = { friend_id: friendId, itemid: itemId };
@@ -6237,13 +6136,6 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
                     for (let b = 0; b < burst; b++) {
                         gw.NetUtils.enqueue(harvestCmd, harvestPayload);
                     }
-                    // الضربة الـ 11 لاستلام مكافأة الجار في نفس الدفعة
-                    gw.NetUtils.enqueue("water_plants", {
-                        id: friendId,
-                        needResponse: "water_plants",
-                        cur_sceneid: 0
-                    });
-
                     if (gw.NetUtils.flush) gw.NetUtils.flush();
 
                     const res = await harvestPromise;
@@ -6254,15 +6146,13 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
                     } else {
                         if (res.totalAdded > 0) {
                             this.totalFruits += res.totalAdded;
-                            this.totalHarvested += res.totalAdded; // استرجاع عداد الثمار
+                            this.totalHarvested += res.totalAdded; // إضافة الثمار للعداد الرئيسي
                             this.log(`✅ الضربة القاضية (10 نقرات مدمجة): تم حصد ${res.totalAdded} ثمرة! إجمالي الثمار: ${this.totalHarvested}/${this.targetLimit}`);
 
                             if (gw.GF && gw.GF.loginModel && gw.GF.loginModel.AppData && gw.GF.loginModel.AppData.storage) {
                                 let curQty = gw.GF.loginModel.AppData.storage[res.product] || 0;
                                 gw.GF.loginModel.AppData.storage[res.product] = curQty + res.totalAdded;
                             }
-                            
-                            this.processRewards(res);
 
                             try {
                                 if (gw.GF && gw.GF.gameController && gw.Animations) {
@@ -6281,30 +6171,22 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
                             } catch(e) {}
                         }
                         
-                        if (res.msg === "used up" || res.totalAdded === 0) {
-                            if (res.msg === "used up") {
-                                this.log(`⛔ استنفدت طاقة الجار [${friendId}]. إضافته للقائمة السوداء.`);
-                            } else {
-                                this.log(`⚠️ حصيلة فارغة للجار [${friendId}] بعد 10 نقرات. الجار فارغ، ننتقل للتالي.`);
-                            }
+                        if (res.msg === "used up") {
+                            this.log(`⛔ استنفدت طاقة الجار [${friendId}]. إضافته للقائمة السوداء.`);
                             this.blacklist[friendId] = true;
                             this.saveBlacklist();
                             neighborHasEnergy = false;
                         } else {
-                            await this.sleep(this.randomJitter()); // تأخير عشوائي لتجنب الحظر من السيرفر (Rate Limit)
+                            if (res.totalAdded === 0) {
+                                this.log(`⚠️ نقرة فارغة للجار [${friendId}]. مستمرون بالضرب حتى نفاذ طاقته...`);
+                            }
+                            await this.sleep(this.randomJitter());
                         }
                     }
 
-                    this.blacklist[friendId] = true;
-                    this.saveBlacklist();
                     this.update(); 
                     updateStatsUI();
-                    break;
                 }
-            }
-            // تأخير قبل الانتقال للجار التالي لتجنب حظر السيرفر
-            if (this.isRunning) {
-                await this.sleep(150); // تأخير قصير جداً لجعل التسميد صاروخياً
             }
         }
 
@@ -6910,6 +6792,517 @@ if (window.SF && window.SF.modules) {
 
     // Start Interceptor
     setupInterceptor();
+})();
+
+
+// --- File: features/MiniSlot2AutoModule.js ---
+// ==========================================
+// 🎰 MiniSlot2 Auto-Spin Module (دوّر وأربح)
+// شريط تحكم ذكي للعب التلقائي بعدد محدد
+// ==========================================
+(function() {
+    'use strict';
+
+    let topBarUI = null;
+    let isPlaying = false;
+    let spinTimeout = null;
+    let currentFreeSpins = 0;
+    let currentTokens = 0;
+    let todaySpinTimes = 0;
+    let targetSpins = 0;
+    let completedSpins = 0;
+    let totalRewards = {};
+    let spinLock = false; // قفل لمنع إرسال أكثر من spin في نفس الوقت
+
+    const CMD = '/Activity/MiniSlot2.save_data';
+    const TOKEN_ID = 225463; // عملة سلوت الخاصة بـ MiniSlot2
+
+    let isUIHidden = false; // لمنع إعادة الفتح التلقائي بعد الإغلاق
+
+    // ==========================================
+    // 1. نظام كشف الفعالية (Auto-Detect)
+    // ==========================================
+    function setupInterceptor() {
+        let gw = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
+        let checkInterval = setInterval(() => {
+            if (gw.NetUtils && gw.NetUtils.request) {
+                clearInterval(checkInterval);
+
+                const originalRequest = gw.NetUtils.request.bind(gw.NetUtils);
+                gw.NetUtils.request = function(cmd, data) {
+                    let result = originalRequest.apply(this, arguments);
+
+                    if (cmd && cmd.includes('MiniSlot2') && result && result.then) {
+                        result.then(function(res) {
+                            let resData = res && res.data ? res.data : res;
+                            if (resData) {
+                                if (cmd === CMD) {
+                                    onMiniSlot2Response(gw, resData, data);
+                                } else {
+                                    // تم رصد تحديث أو فتح للفعالية، نحدث فقط الرصيد بصمت
+                                    setTimeout(() => refreshFreeSpins(gw), 500);
+                                }
+                            }
+                        });
+                    }
+                    return result;
+                };
+
+                readInitialData(gw);
+                console.log('[MiniSlot2Auto] ✅ تم تفعيل اعتراض الشبكة.');
+            }
+        }, 1000);
+    }
+
+    // ==========================================
+    // 2. قراءة البيانات الحية (Live Data Reading)
+    // ==========================================
+    function readInitialData(gw) {
+        try {
+            refreshFreeSpins(gw);
+            if (gw.GF && gw.GF.loginModel && gw.GF.loginModel.AppData) {
+                let appData = gw.GF.loginModel.AppData;
+                if (appData.miniSlot2Data) {
+                    todaySpinTimes = appData.miniSlot2Data.todaySpinTimes || 0;
+                }
+            }
+        } catch (e) {
+            console.warn('[MiniSlot2Auto] خطأ في قراءة البيانات:', e);
+        }
+    }
+
+    function refreshFreeSpins(gw) {
+        try {
+            currentFreeSpins = 0;
+            currentTokens = 0;
+            
+            if (gw.GF && gw.GF.loginModel) {
+                if (gw.GF.loginModel.AppData) {
+                    currentFreeSpins = gw.GF.loginModel.AppData.free_spins || 0;
+                }
+                
+                // البحث عن معرف العملة الديناميكي من الإعدادات بدلاً من الاعتماد على رقم ثابت
+                let activeTokenID = TOKEN_ID;
+                try {
+                    let cfg = gw.Config.GetData('MiniSlot2') || gw.Config.GetData('minislot2');
+                    if (cfg && cfg.item_id) {
+                        activeTokenID = Number(cfg.item_id);
+                    }
+                } catch(e) {}
+
+                // الطريقة الأصلية والمضمونة للعبة
+                if (typeof gw.GF.loginModel.get_gifts_num_by_id === 'function') {
+                    currentTokens = gw.GF.loginModel.get_gifts_num_by_id(activeTokenID) || 0;
+                }
+                
+                // قراءة احتياطية مباشرة من الذاكرة إذا فشلت الطريقة الأولى
+                if (currentTokens === 0 && gw.GF.loginModel.AppData && gw.GF.loginModel.AppData.gifts) {
+                    let gifts = gw.GF.loginModel.AppData.gifts;
+                    if (gifts && gifts[String(activeTokenID)] !== undefined) {
+                        currentTokens = Number(gifts[String(activeTokenID)]);
+                    }
+                }
+            }
+        } catch (e) {
+            console.error("[MiniSlot2Auto] خطأ في قراءة الرصيد:", e);
+        }
+        
+        // مهم جداً: تحديث الواجهة فوراً بعد قراءة الرقم الجديد
+        updateUIData();
+    }
+
+    function onMiniSlot2Response(gw, data, requestData) {
+        // تحديث من رد السيرفر مباشرة
+        if (data.load) {
+            todaySpinTimes = data.load.todaySpinTimes || 0;
+        }
+        if (data.spin) {
+            todaySpinTimes = data.spin.todaySpinTimes || todaySpinTimes;
+            
+            // استخراج وصف الجائزة
+            let rewards = data.spin.rewards || [];
+            let rewardDesc = rewards.map(r => {
+                let name = r.id;
+                try {
+                    let item = gw.Config.Store_GetItemData(Number(r.id));
+                    if (item && item.name) name = item.name;
+                } catch(e) {}
+                return name + ' x' + r.qty;
+            }).join(', ');
+            
+            // تحديث سجل اللعب في الشريط الخاص بنا
+            if (isPlaying) {
+                logMessage('🎁 النتيجة: ' + (rewardDesc || 'لا شيء'), true);
+            }
+        }
+
+        // تحديث الذاكرة بعد تأخير قصير جداً لضمان تحديث الـ Bag
+        setTimeout(() => {
+            refreshFreeSpins(gw);
+            updateUIData();
+        }, 300);
+    }
+
+    // ==========================================
+    // 3. تصميم الشريط العلوي الاحترافي
+    // ==========================================
+    function showTopBarUI() {
+        if (topBarUI) {
+            updateUIData();
+            topBarUI.style.display = 'flex';
+            return;
+        }
+
+        topBarUI = document.createElement('div');
+        topBarUI.id = 'sf-minislot2-topbar';
+
+        topBarUI.innerHTML = `
+            <style>
+                #sf-minislot2-topbar {
+                    position: absolute;
+                    top: 43%; /* تم التنزيل قليلاً ليكون فوق الشريط الأسود مباشرة */
+                    left: 50%;
+                    transform: translate(-50%, -50%);
+                    background: rgba(0, 0, 0, 0.85);
+                    border: 1px solid #737373;
+                    border-radius: 8px;
+                    padding: 3px 8px;
+                    display: flex;
+                    flex-direction: row;
+                    align-items: center;
+                    justify-content: space-between;
+                    color: #fff;
+                    font-family: 'Segoe UI', Tahoma, sans-serif;
+                    z-index: 9999999;
+                    direction: rtl;
+                    gap: 8px;
+                    width: 220px; /* أصغر جداً */
+                    height: 30px; /* أنحف */
+                    box-shadow: inset 0 0 10px rgba(0,0,0,0.8), 0 2px 10px rgba(0,0,0,0.5);
+                }
+                .sf-ms-item {
+                    display: flex; align-items: center; gap: 3px;
+                }
+                .sf-ms-label { font-size: 10px; color: #d4b896; }
+                .sf-ms-value { font-size: 12px; font-weight: bold; color: #fbbf24; }
+                .sf-ms-input {
+                    background: rgba(255,255,255,0.1); border: 1px solid #f59e0b;
+                    color: #fff; padding: 1px 3px; border-radius: 3px;
+                    width: 30px; text-align: center; font-weight: bold; font-size: 11px;
+                }
+                .sf-ms-btn-play {
+                    background: linear-gradient(180deg, #10b981, #059669);
+                    color: white; border: 1px solid #047857; border-radius: 6px;
+                    padding: 2px 8px; font-weight: bold; cursor: pointer;
+                    font-size: 10px; transition: 0.2s;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.5);
+                }
+                .sf-ms-btn-play.stop { background: linear-gradient(180deg, #ef4444, #b91c1c); border-color: #991b1b; }
+                .sf-ms-btn-play:hover { transform: scale(1.05); }
+                .sf-ms-close {
+                    background: rgba(239, 68, 68, 0.8); color: white; border: 1px solid #fff;
+                    border-radius: 50%; width: 20px; height: 20px; line-height: 18px;
+                    font-size: 10px; cursor: pointer; text-align: center;
+                    position: absolute; left: -8px; top: -8px;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.5);
+                }
+                #sf-ms-reward-box {
+                    position: absolute; bottom: -45px; left: 50%; transform: translateX(-50%);
+                    font-size: 13px; color: #a7f3d0; background: rgba(16, 185, 129, 0.85);
+                    padding: 5px 15px; border-radius: 8px; white-space: nowrap;
+                    display: none; border: 1px solid #10b981; font-weight: bold;
+                }
+                #sf-ms-log {
+                    position: absolute; bottom: -30px; left: 50%; transform: translateX(-50%);
+                    font-size: 11px; color: #fca5a5; background: rgba(0,0,0,0.8);
+                    padding: 3px 8px; border-radius: 4px; display: none; white-space: nowrap;
+                }
+                #sf-ms-log.show { display: block; }
+            </style>
+
+            <div class="sf-ms-close" id="sf-ms-hide-btn">✖</div>
+
+            <div class="sf-ms-item">
+                <span class="sf-ms-label">🎰 رصيد:</span>
+                <span class="sf-ms-value" id="sf-ms-free-val">0</span>
+            </div>
+
+            <div class="sf-ms-item">
+                <span class="sf-ms-label">🔢 ألعب:</span>
+                <input type="number" id="sf-ms-count-input" class="sf-ms-input" value="1" min="1" max="999">
+            </div>
+
+            <button id="sf-ms-play-btn" class="sf-ms-btn-play">▶️ تشغيل</button>
+
+            <div id="sf-ms-log"></div>
+        `;
+
+        document.body.appendChild(topBarUI);
+
+        // ربط الأحداث
+        document.getElementById('sf-ms-hide-btn').onclick = () => {
+            topBarUI.style.display = 'none';
+            isUIHidden = true; // نمنع ظهورها مجدداً حتى يتم إعادة تحميل الصفحة
+            stopAutoSpin();
+            logMessage('تم إخفاء الواجهة وإيقاف اللعب.', true);
+        };
+
+        document.getElementById('sf-ms-play-btn').onclick = () => {
+            if (isPlaying) {
+                stopAutoSpin();
+            } else {
+                startAutoSpin();
+            }
+        };
+
+        updateUIData();
+    }
+
+    function updateUIData() {
+        if (!topBarUI) return;
+        let freeEl = document.getElementById('sf-ms-free-val');
+        let progressEl = document.getElementById('sf-ms-progress');
+
+        // عرض رصيد العملات الحقيقي ليتطابق مع اللعبة 100%
+        if (freeEl) freeEl.innerText = currentTokens;
+        
+        if (progressEl && isPlaying) {
+            progressEl.innerText = `(${completedSpins}/${targetSpins})`;
+        } else if (progressEl) {
+            progressEl.innerText = '';
+        }
+    }
+
+    function logMessage(msg, keep) {
+        if (keep === undefined) keep = false;
+        console.log('[MiniSlot2Auto] ' + msg);
+        let logEl = document.getElementById('sf-ms-log');
+        if (logEl) {
+            logEl.innerText = msg;
+            logEl.classList.add('show');
+            if (!keep) {
+                setTimeout(() => logEl.classList.remove('show'), 4000);
+            }
+        }
+    }
+
+    // ==========================================
+    // 4. محرك اللعب التلقائي (Auto-Spin Engine)
+    // ==========================================
+    function startAutoSpin() {
+        let gw = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
+        refreshFreeSpins(gw);
+
+        let countInput = document.getElementById('sf-ms-count-input');
+        targetSpins = parseInt(countInput.value) || 1;
+
+        if (targetSpins <= 0) {
+            logMessage('⚠️ أدخل عدد دورات صحيح!');
+            return;
+        }
+
+        if ((currentFreeSpins + currentTokens) <= 0) {
+            logMessage('⚠️ لا يوجد رصيد أو دورات مجانية!');
+            return;
+        }
+
+        isPlaying = true;
+        completedSpins = 0;
+        totalRewards = {};
+        
+        // إخفاء صندوق الجائزة السابق
+        let rewardBox = document.getElementById('sf-ms-reward-box');
+        if (rewardBox) rewardBox.style.display = 'none';
+
+        let playBtn = document.getElementById('sf-ms-play-btn');
+        playBtn.innerText = '⏸️ إيقاف';
+        playBtn.classList.add('stop');
+        countInput.disabled = true;
+
+        logMessage('▶️ جاري اللعب التلقائي... (0/' + targetSpins + ')', true);
+        updateUIData();
+        executeSpinCycle();
+    }
+
+    function stopAutoSpin() {
+        isPlaying = false;
+        if (spinTimeout) {
+            clearTimeout(spinTimeout);
+            spinTimeout = null;
+        }
+        spinLock = false;
+
+        let playBtn = document.getElementById('sf-ms-play-btn');
+        let countInput = document.getElementById('sf-ms-count-input');
+        if (playBtn) {
+            playBtn.innerText = '▶️ تشغيل';
+            playBtn.classList.remove('stop');
+        }
+        if (countInput) countInput.disabled = false;
+
+        // ملخص النتائج
+        if (completedSpins > 0) {
+            let summary = '⏸️ انتهى! ' + completedSpins + ' دورة';
+            let rewardList = Object.keys(totalRewards);
+            if (rewardList.length > 0) {
+                let gw = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
+                let names = rewardList.map(id => {
+                    let name = id;
+                    try {
+                        let item = gw.Config.Store_GetItemData(Number(id));
+                        if (item && item.name) name = item.name;
+                    } catch(e) { /* fallback to id */ }
+                    return name + ' x' + totalRewards[id];
+                });
+                summary += ' | 🎁 ' + names.join(', ');
+            }
+            logMessage(summary, true);
+        } else {
+            logMessage('⏸️ تم الإيقاف.');
+        }
+
+        updateUIData();
+    }
+
+    async function executeSpinCycle() {
+        if (!isPlaying) return;
+        if (spinLock) return;
+
+        let inputEl = document.getElementById('sf-ms-count-input');
+        let targetSpins = inputEl ? Number(inputEl.value) : 1;
+        if (isNaN(targetSpins) || targetSpins <= 0) targetSpins = 99999;
+
+        if (completedSpins >= targetSpins) {
+            logMessage('✅ اكتملت جميع الدورات! (' + completedSpins + ')', true);
+            stopAutoSpin();
+            return;
+        }
+
+        let gw = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
+        refreshFreeSpins(gw);
+
+        if ((currentFreeSpins + currentTokens) <= 0) {
+            logMessage('⚠️ لا يوجد رصيد أو دورات مجانية!', true);
+            stopAutoSpin();
+            return;
+        }
+
+        spinLock = true;
+
+        try {
+            // البحث عن اللوحة والزر
+            let popups = gw.LayerManager.UI_Popup.$children || gw.LayerManager.UI_Popup.children || [];
+            let slotPanel = null;
+            for (let i = 0; i < popups.length; i++) {
+                let skin = popups[i].skinName || '';
+                if (typeof skin === 'string' && skin.toLowerCase().includes('minislot2')) {
+                    slotPanel = popups[i];
+                    break;
+                }
+            }
+
+            if (slotPanel && slotPanel.btnSpin) {
+                // التحقق من حالة الزر الطبيعية (لا يمكننا تخطي الأنميشن لأن السيرفر يحظر السرعة العالية)
+                let isLocked = (slotPanel.btnSpin.touchEnabled === false) || (slotPanel.btnSpin.enabled === false) || slotPanel.isSpinning;
+                
+                if (isLocked) {
+                    spinLock = false;
+                    spinTimeout = setTimeout(executeSpinCycle, 500); // انتظر حتى يفك السيرفر واللعبة القفل طبيعياً
+                    return;
+                }
+
+                // محاكاة النقر البشري الطبيعي
+                slotPanel.btnSpin.dispatchEventWith("touchTap");
+                completedSpins++;
+                
+                logMessage('🎰 جاري التدوير... (' + completedSpins + '/' + targetSpins + ')', true);
+
+                if (completedSpins >= targetSpins) {
+                    spinLock = false;
+                    logMessage('✅ اكتملت الدفعة (' + completedSpins + ') بنجاح!', true);
+                    stopAutoSpin();
+                    return;
+                }
+
+                // ننتظر 3.5 ثانية (وهي المدة الإجبارية للسيرفر لإنهاء الدورة)
+                spinLock = false;
+                spinTimeout = setTimeout(executeSpinCycle, 3500);
+
+            } else {
+                spinLock = false;
+                logMessage('⚠️ تعذر العثور على زر التشغيل الأصلي!', true);
+                stopAutoSpin();
+            }
+
+        } catch (e) {
+            spinLock = false;
+            console.error("[MiniSlot2Auto]", e);
+            logMessage('⚠️ حدث خطأ غير متوقع.', true);
+            stopAutoSpin();
+        }
+    }
+
+    // ==========================================
+    // 5. نظام رصد النوافذ الدقيق (Native Panel Detection)
+    // ==========================================
+    function setupPanelDetector() {
+        let gw = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
+        let checkInterval = setInterval(() => {
+            if (gw.App && gw.App.ControllerManager) {
+                clearInterval(checkInterval);
+                const oldApply = gw.App.ControllerManager.applyFunc;
+                gw.App.ControllerManager.applyFunc = function() {
+                    let args = Array.from(arguments);
+                    
+                    // رصد حدث فتح لوحة الفعالية تحديداً
+                    if (args[0] === 10019 && args[1] === 1000015) {
+                        isUIHidden = false; // تصفير حالة الإخفاء
+                        setTimeout(() => {
+                            refreshFreeSpins(gw);
+                            if (!topBarUI || topBarUI.style.display === 'none') {
+                                showTopBarUI();
+                            }
+                        }, 500);
+                    }
+                    
+                    // (تم إزالة الإخفاء التلقائي عبر 10160 لأنه يتعارض مع التولتيبس)
+                    
+                    return oldApply.apply(this, arguments);
+                };
+                console.log('[MiniSlot2Auto] ✅ تم تفعيل رصد النوافذ الداخلي بدقة.');
+            }
+        }, 1000);
+
+        // فحص دوري ذكي لضمان اختفاء الشريط فور إغلاق اللوحة
+        setInterval(() => {
+            if (topBarUI && topBarUI.style.display !== 'none' && gw.LayerManager && gw.LayerManager.UI_Popup) {
+                let popups = gw.LayerManager.UI_Popup.$children || gw.LayerManager.UI_Popup.children || [];
+                let isSlotOpen = false;
+                for (let i = 0; i < popups.length; i++) {
+                    let skin = popups[i].skinName || '';
+                    if (typeof skin === 'string' && skin.toLowerCase().includes('minislot2')) {
+                        isSlotOpen = true;
+                        break;
+                    }
+                }
+                // إذا تم إغلاق لوحة السلوت (لم تعد موجودة في الشاشة)
+                if (!isSlotOpen) {
+                    topBarUI.style.display = 'none';
+                    isUIHidden = true;
+                    if (typeof stopAutoSpin === 'function') stopAutoSpin();
+                }
+            }
+        }, 1500);
+    }
+
+    // ==========================================
+    // 6. التشغيل الأساسي
+    // ==========================================
+    setupInterceptor();
+    setupPanelDetector();
+
+    console.log('[MiniSlot2Auto] ✅ جاهز للعمل. الشريط سيظهر تلقائياً داخل اللوحة فقط.');
+
 })();
 
 
