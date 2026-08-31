@@ -6331,32 +6331,48 @@ if (window.SF && window.SF.modules) {
 }
 
 
-// --- File: features/TimeBreakerModule.js ---
+// --- File: features/TimeHackerModule.js ---
 window.SF = window.SF || {};
 
-SF.TimeBreakerModule = class TimeBreakerModule extends SF.ModuleBase {
+SF.TimeHackerModule = class TimeHackerModule extends SF.ModuleBase {
     constructor() {
-        super("time_breaker", "كسر الوقت", "⏳");
+        super("time_hacker", "خداع الوقت", "⏳");
         this.enabled = false;
         this.injected = false;
-        this.timeRatio = 0.6666;
+        this.timeOffset = 20; // Default minus 20 seconds
     }
 
     render(container) {
         this.container = container;
         this.container.innerHTML = `
             <div style="padding:15px; background: rgba(0, 0, 0, 0.4); border-radius: 8px; margin-bottom: 10px;">
-                <h3 style="margin-top:0; color:#ffeb3b; font-size: 16px;">⏳ كسر وقت الآلات والحيوانات</h3>
-                <p style="font-size:12px; color:#ccc; line-height: 1.5;">هذه الميزة تقوم بتقليص وقت إنتاج الآلات والحيوانات إلى <strong>الثلثين (مثال: 60 ثانية تصبح 40)</strong>.</p>
+                <h3 style="margin-top:0; color:#ffeb3b; font-size: 16px;">⏳ خداع الوقت (تخطي ثواني)</h3>
+                <p style="font-size:12px; color:#ccc; line-height: 1.5;">هذه الميزة تستغل تسامح السيرفر (Lag Tolerance) لخصم ثوانٍ محددة من وقت الإنتاج للآلات والحيوانات.</p>
+                
+                <div style="margin-top: 10px;">
+                    <label style="color:#fff; font-size:13px;">خصم كم ثانية؟</label>
+                    <input type="number" id="sf-timehacker-offset" value="${this.timeOffset}" style="width: 60px; margin-right: 10px; background: #333; color: #fff; border: 1px solid #555; border-radius: 4px; padding: 2px 5px; text-align: center;">
+                </div>
+
                 <label style="display:flex; align-items:center; gap:10px; margin-top:15px; cursor:pointer; font-size:14px; color:#fff;">
-                    <input type="checkbox" id="sf-timebreaker-toggle" style="width:18px; height:18px;">
-                    <span>تفعيل كسر الوقت (تطبيق فوري)</span>
+                    <input type="checkbox" id="sf-timehacker-toggle" style="width:18px; height:18px;">
+                    <span>تفعيل الخصم (تطبيق فوري)</span>
                 </label>
             </div>
         `;
         
-        let toggle = this.container.querySelector("#sf-timebreaker-toggle");
+        let toggle = this.container.querySelector("#sf-timehacker-toggle");
+        let offsetInput = this.container.querySelector("#sf-timehacker-offset");
+
         toggle.checked = this.enabled;
+
+        offsetInput.addEventListener("change", (e) => {
+            this.timeOffset = parseInt(e.target.value) || 20;
+            if (this.enabled) {
+                this.refreshAllMapObjects();
+            }
+        });
+
         toggle.addEventListener("change", (e) => {
             this.enabled = e.target.checked;
             if (this.enabled) {
@@ -6364,7 +6380,7 @@ SF.TimeBreakerModule = class TimeBreakerModule extends SF.ModuleBase {
             }
             this.refreshAllMapObjects();
             if (window.SF && window.SF.bus) {
-                window.SF.bus.emit("toast", { msg: this.enabled ? "تم تفعيل كسر الوقت ⚡" : "تم إيقاف كسر الوقت 🛑", type: "info" });
+                window.SF.bus.emit("toast", { msg: this.enabled ? "تم تفعيل الخصم" : "تم الإيقاف", type: "info" });
             }
         });
     }
@@ -6378,7 +6394,7 @@ SF.TimeBreakerModule = class TimeBreakerModule extends SF.ModuleBase {
             const self = this;
             gw.Machine.prototype.checkProducts = function() {
                 if (self.enabled && this.old_collect_in) {
-                    this.collect_in = Math.ceil(this.old_collect_in * self.timeRatio);
+                    this.collect_in = Math.max(1, this.old_collect_in - self.timeOffset);
                 } else if (!self.enabled && this.old_collect_in) {
                     this.collect_in = this.old_collect_in;
                 }
@@ -6393,7 +6409,7 @@ SF.TimeBreakerModule = class TimeBreakerModule extends SF.ModuleBase {
             gw.Animal.prototype.checkProducts = function() {
                 if (self.enabled && this.old_collect_in) {
                     let base = this.old_collect_in / (this.animals || 1);
-                    this.collect_in = Math.ceil(base * self.timeRatio);
+                    this.collect_in = Math.max(1, base - self.timeOffset);
                 } else if (!self.enabled && this.old_collect_in) {
                     this.collect_in = this.old_collect_in / (this.animals || 1);
                 }
@@ -6424,7 +6440,7 @@ SF.TimeBreakerModule = class TimeBreakerModule extends SF.ModuleBase {
 }
 
 if (window.SF && window.SF.modules) {
-    window.SF.modules.register(new SF.TimeBreakerModule());
+    window.SF.modules.register(new SF.TimeHackerModule());
 }
 
 
