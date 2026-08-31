@@ -6390,13 +6390,38 @@ if (window.SF && window.SF.modules) {
             hooked = true;
         }
 
-        // Hook على checkProducts() — نصفّر _collTime قبل الحساب
+        // Hook على onProduction() — نجبر onProductComplete() حتى لو _interactiveStatus مش محدد
+        if (proto.hasOwnProperty('onProduction')) {
+            const origOnProd = proto.onProduction;
+            proto.onProduction = function() {
+                origOnProd.apply(this, arguments);
+                // للحيوانات التي لا تملك _interactiveStatus: نجبر إنتاج المنتج
+                if (!this._interactiveStatus && typeof this.onProductComplete === 'function') {
+                    if (this.getRawMaterials && this.getRawMaterials() > 0) {
+                        this.onProductComplete();
+                    }
+                }
+            };
+            hooked = true;
+        }
+
+        // Hook على checkProducts() — نضمن إنتاج المنتج عند انتهاء الدورة
         if (proto.hasOwnProperty('checkProducts')) {
             const origCheck = proto.checkProducts;
             proto.checkProducts = function() {
-                // _collTime قد يتراكم من collect أثناء الإنتاج → نصفّره لكل دورة مخترقة
-                const ci = getOriginalCollectIn(this);
-                if (ci > 0) this._collTime = 0;
+                // 1) صفّر _collTime (قد يتراكم من collect أثناء الإنتاج)
+                this._collTime = 0;
+
+                // 2) اضمن أن elapsed >= collect_in + 1 لضمان e >= 1
+                //    بنحرك serverData.start_time للخلف بثانية واحدة فقط إذا لزم
+                if (this.serverData && this.serverData.start_time && this.old_collect_in) {
+                    const ci = this.old_collect_in / (this.animals || 1);
+                    const needed_st = ServerTime.timestamp - Math.ceil(ci) - 1;
+                    if (this.serverData.start_time > needed_st) {
+                        this.serverData.start_time = needed_st;
+                    }
+                }
+
                 return origCheck.apply(this, arguments);
             };
             hooked = true;
