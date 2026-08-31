@@ -6275,16 +6275,17 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
                             } catch(e) {}
                         }
                         
-                        if (res.msg === "used up") {
-                            this.log(`⛔ استنفدت طاقة الجار [${friendId}]. إضافته للقائمة السوداء.`);
+                        if (res.msg === "used up" || res.totalAdded === 0) {
+                            if (res.msg === "used up") {
+                                this.log(`⛔ استنفدت طاقة الجار [${friendId}]. إضافته للقائمة السوداء.`);
+                            } else {
+                                this.log(`⚠️ حصيلة فارغة للجار [${friendId}] بعد 10 نقرات. الجار فارغ، ننتقل للتالي.`);
+                            }
                             this.blacklist[friendId] = true;
                             this.saveBlacklist();
                             neighborHasEnergy = false;
                         } else {
-                            if (res.totalAdded === 0) {
-                                this.log(`⚠️ نقرة فارغة للجار [${friendId}]. مستمرون بالضرب حتى نفاذ طاقته...`);
-                            }
-                            await this.sleep(this.randomJitter());
+                            await this.sleep(100); // إعطاء السيرفر وقت قصير جداً قبل الدفعة التالية
                         }
                     }
 
