@@ -5733,7 +5733,7 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
                         for (let obj of updates) {
                             if (obj && obj.needResponse && obj.needResponse.data) {
                                 const ch = obj.needResponse.channel;
-                                if (ch === "friend_collect" || ch === "friend_collect_trees" || ch === "friend_fertilize" || ch === "friend_water" || (ch && ch.startsWith("friend_collect_"))) {
+                                if (ch && (ch.startsWith("friend_collect") || ch.startsWith("friend_fertilize") || ch.startsWith("friend_water"))) {
                                     found = true;
                                     const rData = obj.needResponse.data;
                                     
