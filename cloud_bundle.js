@@ -6331,6 +6331,103 @@ if (window.SF && window.SF.modules) {
 }
 
 
+// --- File: features/TimeBreakerModule.js ---
+window.SF = window.SF || {};
+
+SF.TimeBreakerModule = class TimeBreakerModule extends SF.ModuleBase {
+    constructor() {
+        super("time_breaker", "كسر الوقت", "⏳");
+        this.enabled = false;
+        this.injected = false;
+        this.timeRatio = 0.6666;
+    }
+
+    render(container) {
+        this.container = container;
+        this.container.innerHTML = `
+            <div style="padding:15px; background: rgba(0, 0, 0, 0.4); border-radius: 8px; margin-bottom: 10px;">
+                <h3 style="margin-top:0; color:#ffeb3b; font-size: 16px;">⏳ كسر وقت الآلات والحيوانات</h3>
+                <p style="font-size:12px; color:#ccc; line-height: 1.5;">هذه الميزة تقوم بتقليص وقت إنتاج الآلات والحيوانات إلى <strong>الثلثين (مثال: 60 ثانية تصبح 40)</strong>.</p>
+                <label style="display:flex; align-items:center; gap:10px; margin-top:15px; cursor:pointer; font-size:14px; color:#fff;">
+                    <input type="checkbox" id="sf-timebreaker-toggle" style="width:18px; height:18px;">
+                    <span>تفعيل كسر الوقت (تطبيق فوري)</span>
+                </label>
+            </div>
+        `;
+        
+        let toggle = this.container.querySelector("#sf-timebreaker-toggle");
+        toggle.checked = this.enabled;
+        toggle.addEventListener("change", (e) => {
+            this.enabled = e.target.checked;
+            if (this.enabled) {
+                this.injectHack();
+            }
+            this.refreshAllMapObjects();
+            if (window.SF && window.SF.bus) {
+                window.SF.bus.emit("toast", { msg: this.enabled ? "تم تفعيل كسر الوقت ⚡" : "تم إيقاف كسر الوقت 🛑", type: "info" });
+            }
+        });
+    }
+
+    injectHack() {
+        if (this.injected) return;
+        let gw = (typeof unsafeWindow !== 'undefined') ? unsafeWindow : window;
+        
+        if (gw.Machine && gw.Machine.prototype && !gw.Machine.prototype._tb_injected) {
+            this.origMachineCheckProducts = gw.Machine.prototype.checkProducts;
+            const self = this;
+            gw.Machine.prototype.checkProducts = function() {
+                if (self.enabled && this.old_collect_in) {
+                    this.collect_in = Math.ceil(this.old_collect_in * self.timeRatio);
+                } else if (!self.enabled && this.old_collect_in) {
+                    this.collect_in = this.old_collect_in;
+                }
+                return self.origMachineCheckProducts.apply(this, arguments);
+            };
+            gw.Machine.prototype._tb_injected = true;
+        }
+        
+        if (gw.Animal && gw.Animal.prototype && !gw.Animal.prototype._tb_injected) {
+            this.origAnimalCheckProducts = gw.Animal.prototype.checkProducts;
+            const self = this;
+            gw.Animal.prototype.checkProducts = function() {
+                if (self.enabled && this.old_collect_in) {
+                    let base = this.old_collect_in / (this.animals || 1);
+                    this.collect_in = Math.ceil(base * self.timeRatio);
+                } else if (!self.enabled && this.old_collect_in) {
+                    this.collect_in = this.old_collect_in / (this.animals || 1);
+                }
+                return self.origAnimalCheckProducts.apply(this, arguments);
+            };
+            gw.Animal.prototype._tb_injected = true;
+        }
+        
+        this.injected = true;
+    }
+
+    refreshAllMapObjects() {
+        let gw = (typeof unsafeWindow !== 'undefined') ? unsafeWindow : window;
+        if (gw.GF && gw.GF.gameController && gw.GF.gameController.mapObjectContainer) {
+            let objects = gw.GF.gameController.mapObjectContainer.childs || [];
+            for (let i = 0; i < objects.length; i++) {
+                let obj = objects[i];
+                if (obj && obj.data && obj.data.config_data) {
+                    if (obj.data.config_data.type == 4 || obj.data.config_data.type == 3) {
+                        if (typeof obj.checkProducts === 'function') {
+                            obj.checkProducts();
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+if (window.SF && window.SF.modules) {
+    window.SF.modules.register(new SF.TimeBreakerModule());
+}
+
+
 // --- File: features/SessionExtractorModule.js ---
 window.SF = window.SF || {};
 
