@@ -6333,70 +6333,60 @@ if (window.SF && window.SF.modules) {
 
 // --- File: features/TimeBreakerModule.js ---
 (function() {
-    console.log("🚀 [SupremeFarm] جارِ حقن كاسر الوقت الجذري بصمت (-20 ثانية)...");
+    console.log("🚀 [SupremeFarm] جارِ حقن كاسر الوقت المباشر (-20 ثانية)...");
     
-    function injectTimeBreaker() {
+    function injectDirectTimeBreaker() {
         let gw = (typeof unsafeWindow !== 'undefined') ? unsafeWindow : window;
-        if (!gw.egret || !gw.ServerTime) return false;
+        if (!gw.GF || !gw.GF.gameController || !gw.GF.gameController.mapObjectContainer) return;
         
-        let CollectObjectClass;
-        try {
-            CollectObjectClass = gw.egret.getDefinitionByName("CollectObject");
-        } catch (e) {
-            return false;
-        }
-
-        if (!CollectObjectClass) return false;
+        let objects = gw.GF.gameController.mapObjectContainer.childs || [];
+        let offset = 20; // 20 seconds reduction
         
-        let offset = 20; // خصم 20 ثانية
-
-        if (!CollectObjectClass.prototype._tb_hacked) {
+        for (let i = 0; i < objects.length; i++) {
+            let obj = objects[i];
             
-            // نعرّف old_collect_in كخاصية ديناميكية
-            Object.defineProperty(CollectObjectClass.prototype, "old_collect_in", {
-                get: function() {
-                    let val = this._real_old_collect_in || 0;
-                    return Math.max(1, val - offset);
-                },
-                set: function(val) {
-                    this._real_old_collect_in = val;
-                },
-                enumerable: true,
-                configurable: true
-            });
-
-            // تحديث فوري للكائنات الموجودة بالفعل على الخريطة
-            // وإزالة الخصائص الخاصة (Own Properties) التي كانت تحجب الـ Prototype
-            if (gw.GF && gw.GF.gameController && gw.GF.gameController.mapObjectContainer) {
-                let objects = gw.GF.gameController.mapObjectContainer.childs || [];
-                for (let i = 0; i < objects.length; i++) {
-                    let obj = objects[i];
+            // Check if it's an object with time properties (Machine, Animal, etc.)
+            if (obj && obj.old_collect_in !== undefined && obj.collect_in !== undefined) {
+                
+                // Only hack it once
+                if (!obj._tb_direct_hacked) {
                     
-                    // إذا كان الكائن يمتلك الخاصية داخله مباشرة (Own Property)
-                    if (obj.hasOwnProperty("old_collect_in")) {
-                        let savedValue = obj.old_collect_in; // حفظ القيمة
-                        delete obj.old_collect_in; // حذفها لكي يعمل الـ Prototype
-                        obj.old_collect_in = savedValue; // إعادة التعيين (ستمر الآن عبر الـ Setter)
+                    // Reduce the base time directly on the instance!
+                    if (obj.old_collect_in > offset) {
+                        obj.old_collect_in -= offset;
+                    } else {
+                        obj.old_collect_in = 1;
+                    }
+                    
+                    // Force the object to recalculate its products and collect_in based on the new old_collect_in
+                    if (typeof obj.checkProducts === 'function') {
+                        obj.checkProducts();
+                    } else {
+                        let animals = obj.animals || 1;
+                        obj.collect_in = obj.old_collect_in / animals;
+                    }
+                    
+                    // If the object is currently working, its old timer is still ticking based on the 60s time.
+                    // We MUST restart the timer so it schedules based on the new 40s time!
+                    if (obj.is_working && typeof obj.stopTimer === 'function' && typeof obj.startTimer === 'function') {
+                        obj.stopTimer();
+                        obj.startTimer();
                         
-                        if (typeof obj.checkProducts === 'function') {
-                            obj.checkProducts();
+                        // Force update stage visual if needed
+                        if (typeof obj.updateStage === 'function') {
+                            obj.updateStage();
                         }
                     }
+                    
+                    obj._tb_direct_hacked = true;
                 }
             }
-
-            CollectObjectClass.prototype._tb_hacked = true;
-            console.log("✅ [SupremeFarm] تم تفعيل كاسر الوقت الجذري وإزالة الحواجز للآلات والحيوانات!");
         }
-        
-        return true;
     }
 
-    let checkInterval = setInterval(() => {
-        if (injectTimeBreaker()) {
-            clearInterval(checkInterval);
-        }
-    }, 1000);
+    // Run this direct memory editor every 1 second to catch any new machines or animals placed
+    setInterval(injectDirectTimeBreaker, 1000);
+    console.log("✅ [SupremeFarm] تم تفعيل كاسر الوقت المباشر للآلات والحيوانات!");
 })();
 
 
