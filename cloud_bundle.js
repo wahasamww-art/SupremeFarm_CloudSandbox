@@ -6090,6 +6090,13 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
                     for (let b = 0; b < burst; b++) {
                         gw.NetUtils.enqueue(fertCmd, payloadToUse);
                     }
+                    // الضربة الـ 11 لاستلام مكافأة الجار في نفس الدفعة
+                    gw.NetUtils.enqueue("water_plants", {
+                        id: friendId,
+                        needResponse: "water_plants",
+                        cur_sceneid: 0
+                    });
+                    
                     if (gw.NetUtils.flush) gw.NetUtils.flush();
                     
                     await this.sleep(1000); // إعطاء السيرفر ثانية لمعالجة الطلبات
@@ -6136,6 +6143,13 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
                     for (let b = 0; b < burst; b++) {
                         gw.NetUtils.enqueue(harvestCmd, harvestPayload);
                     }
+                    // الضربة الـ 11 لاستلام مكافأة الجار في نفس الدفعة
+                    gw.NetUtils.enqueue("water_plants", {
+                        id: friendId,
+                        needResponse: "water_plants",
+                        cur_sceneid: 0
+                    });
+
                     if (gw.NetUtils.flush) gw.NetUtils.flush();
 
                     const res = await harvestPromise;
