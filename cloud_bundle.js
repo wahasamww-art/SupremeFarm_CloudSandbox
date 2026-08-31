@@ -5700,8 +5700,8 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
 
         for (let key in store) {
             const item = store[key];
-            if (item && (item.type === "seeds" || item.type === "trees")) {
-                items.push({ id: item.id, name: item.name || `Item ${item.id}`, type: item.type });
+            if (item && (item.type === "seeds" || item.type === "trees" || item.type === "machine" || item.type === "building" || item.type === "workshop")) {
+                items.push({ id: item.id, name: item.name || `Item ${item.id}`, type: item.type, kind: item.kind });
             }
         }
         return items;
@@ -5733,7 +5733,7 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
                         for (let obj of updates) {
                             if (obj && obj.needResponse && obj.needResponse.data) {
                                 const ch = obj.needResponse.channel;
-                                if (ch === "friend_collect" || ch === "friend_collect_trees" || ch === "friend_fertilize" || ch === "friend_water") {
+                                if (ch === "friend_collect" || ch === "friend_collect_trees" || ch === "friend_fertilize" || ch === "friend_water" || (ch && ch.startsWith("friend_collect_"))) {
                                     found = true;
                                     const rData = obj.needResponse.data;
                                     
@@ -5834,6 +5834,7 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
                     <select id="sf-harvest-mode" style="width: 140px; margin-bottom: 0;">
                         <option value="harvest">حصاد (تجميع ثمار)</option>
                         <option value="fertilize">تسميد / ساقية (مساعدة)</option>
+                        <option value="building">حصاد أبنية (بركة الملح وغيرها)</option>
                     </select>
                 </div>
 
@@ -5929,7 +5930,7 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
             const item = JSON.parse(selectedOpt.value);
             this.currentMode = modeSelect.value;
             this.targetLimit = limit;
-            this.startHarvest(item.id, item.type);
+            this.startHarvest(item.id, item.type, item.kind);
         });
 
         btnStop.addEventListener('click', () => {
@@ -6022,7 +6023,7 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
         }
     }
 
-    async startHarvest(itemId, itemType) {
+    async startHarvest(itemId, itemType, itemKind) {
         const gw = (typeof unsafeWindow !== 'undefined') ? unsafeWindow : window;
         if (!gw.GF || !gw.GF.loginModel) {
             this.log("⚠️ اللعبة لم تحمل بالكامل.");
@@ -6037,14 +6038,20 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
         if(this.btnStart) this.btnStart.style.display = 'none';
         if(this.btnStop) this.btnStop.style.display = 'block';
 
-        const isFertilize = (this.currentMode === "fertilize");
-        const modeName = isFertilize ? "التسميد/الساقية" : "الحصاد";
-        const targetName = isFertilize ? "جار" : "ثمرة";
+        let modeName = "الحصاد";
+        let targetName = "ثمرة";
+        if (this.currentMode === "fertilize") { modeName = "التسميد/الساقية"; targetName = "جار"; }
+        else if (this.currentMode === "building") { modeName = "حصاد الأبنية"; targetName = "ثمرة"; }
 
         this.log(`🔥 انطلاق وضع [${modeName}] لمحصول [${itemId}]! الهدف: ${this.targetLimit} ${targetName}`);
 
-        const harvestCmd = (itemType === "trees") ? "friend_collect_trees" : "friend_collect";
+        let harvestCmd = (itemType === "trees") ? "friend_collect_trees" : "friend_collect";
         const fertCmd = (itemType === "trees") ? "friend_water.save_data" : "friend_fertilize.save_data";
+        
+        if (this.currentMode === "building") {
+            let kindStr = (itemKind || "saltpond").toLowerCase();
+            harvestCmd = "friend_collect_" + kindStr;
+        }
         
         let friendsList = [];
         if (gw.GF.friendsModel && gw.GF.friendsModel.allNeighbors) {
@@ -6114,7 +6121,7 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
                     break; // الانتقال للجار التالي
                 }
 
-                if (this.currentMode === "harvest") {
+                if (this.currentMode === "harvest" || this.currentMode === "building") {
                     let harvestPayload;
                     if (itemType === "trees") {
                         harvestPayload = { 
@@ -6124,6 +6131,13 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
                             cur_sceneid: 1, 
                             id: itemId, 
                             achievement_add: "social_1825_9758" 
+                        };
+                    } else if (this.currentMode === "building") {
+                        harvestPayload = { 
+                            friend_id: friendId, 
+                            itemid: itemId,
+                            friendName: neighbor.name || "",
+                            cur_sceneid: 0
                         };
                     } else {
                         harvestPayload = { friend_id: friendId, itemid: itemId };
