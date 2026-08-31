@@ -21,7 +21,7 @@
 
 // ===================================================================
 // SupremeFarm Modular - Cloud Distribution Bundle
-// Generated at: 2026-08-31T21:07:20.993Z
+// Generated at: 2026-08-31T21:19:06.925Z
 // ===================================================================
 
 var SF = window.SF || {};
@@ -7224,9 +7224,9 @@ if (window.SF && window.SF.modules) {
                     return;
                 }
 
-                // ننتظر 3.5 ثانية (وهي المدة الإجبارية للسيرفر لإنهاء الدورة)
+                // ننتظر 5.5 ثانية (لضمان أن الأنميشن الداخلي للعبة انتهى تماماً لكي لا تتجاهل اللعبة الضغطة)
                 spinLock = false;
-                spinTimeout = setTimeout(executeSpinCycle, 3500);
+                spinTimeout = setTimeout(executeSpinCycle, 5500);
 
             } else {
                 spinLock = false;
