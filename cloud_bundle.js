@@ -6330,65 +6330,71 @@ if (window.SF && window.SF.modules) {
     window.SF.modules.register(new SF.AutoMegaHarvestModule());
 }
 
-
 // --- File: features/TimeBreakerModule.js ---
 (function() {
     console.log("🚀 [SupremeFarm] جارِ حقن كاسر الوقت المباشر (-20 ثانية)...");
-    
+
     function injectDirectTimeBreaker() {
         let gw = (typeof unsafeWindow !== 'undefined') ? unsafeWindow : window;
-        if (!gw.GF || !gw.GF.gameController || !gw.GF.gameController.mapObjectContainer) return;
         
-        let objects = gw.GF.gameController.mapObjectContainer.childs || [];
-        let offset = 20; // 20 seconds reduction
+        // الوصول الدقيق إلى المكان الذي تخفي فيه اللعبة الآلات
+        if (!gw.GF || !gw.GF.gameController || !gw.GF.gameController.gameView) return;
+        
+        let objLayer = gw.GF.gameController.gameView.objLayer;
+        if (!objLayer) return;
+        
+        let objects = [];
+        
+        // استخراج الكائنات مباشرة من محرك الطبقات الخاص باللعبة
+        if (objLayer.$children && Array.isArray(objLayer.$children)) {
+            objects = objLayer.$children;
+        } else if (typeof objLayer.getChildAt === 'function' && objLayer.numChildren > 0) {
+            for (let i = 0; i < objLayer.numChildren; i++) {
+                objects.push(objLayer.getChildAt(i));
+            }
+        }
+        
+        let offset = 20; // 20 ثانية خصم
+        let modified = 0;
         
         for (let i = 0; i < objects.length; i++) {
             let obj = objects[i];
             
-            // Check if it's an object with time properties (Machine, Animal, etc.)
-            if (obj && obj.old_collect_in !== undefined && obj.collect_in !== undefined) {
-                
-                // Only hack it once
+            // التأكد من أنه آلة أو حيوان قابل لكسر الوقت
+            if (obj && obj.old_collect_in !== undefined && typeof obj.checkProducts === 'function') {
                 if (!obj._tb_direct_hacked) {
                     
-                    // Reduce the base time directly on the instance!
+                    // التلاعب المباشر بالذاكرة الأساسية للآلة
                     if (obj.old_collect_in > offset) {
                         obj.old_collect_in -= offset;
                     } else {
                         obj.old_collect_in = 1;
                     }
                     
-                    // Force the object to recalculate its products and collect_in based on the new old_collect_in
-                    if (typeof obj.checkProducts === 'function') {
-                        obj.checkProducts();
-                    } else {
-                        let animals = obj.animals || 1;
-                        obj.collect_in = obj.old_collect_in / animals;
-                    }
+                    // إعادة الحساب
+                    obj.checkProducts();
                     
-                    // If the object is currently working, its old timer is still ticking based on the 60s time.
-                    // We MUST restart the timer so it schedules based on the new 40s time!
+                    // إعادة تشغيل المؤقت الداخلي للآلة لتعمل بالوقت المخفض
                     if (obj.is_working && typeof obj.stopTimer === 'function' && typeof obj.startTimer === 'function') {
                         obj.stopTimer();
                         obj.startTimer();
-                        
-                        // Force update stage visual if needed
-                        if (typeof obj.updateStage === 'function') {
-                            obj.updateStage();
-                        }
+                        if (typeof obj.updateStage === 'function') obj.updateStage();
                     }
                     
                     obj._tb_direct_hacked = true;
+                    modified++;
                 }
             }
         }
+        
+        if (modified > 0) {
+            console.log(`✅ [SupremeFarm] تم كسر الوقت (-20 ثانية) بنجاح لـ ${modified} من الآلات والحيوانات!`);
+        }
     }
 
-    // Run this direct memory editor every 1 second to catch any new machines or animals placed
-    setInterval(injectDirectTimeBreaker, 1000);
-    console.log("✅ [SupremeFarm] تم تفعيل كاسر الوقت المباشر للآلات والحيوانات!");
+    // تكرار الفحص كل ثانيتين لاصطياد أي آلة أو حيوان يتم وضعه حديثاً
+    setInterval(injectDirectTimeBreaker, 2000);
 })();
-
 
 // --- File: features/SessionExtractorModule.js ---
 window.SF = window.SF || {};
