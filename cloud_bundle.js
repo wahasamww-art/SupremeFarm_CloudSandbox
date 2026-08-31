@@ -2153,10 +2153,10 @@ SF.ZeroGasModule = class ZeroGasModule extends SF.ModuleBase {
                                 if (action === 'collect_product.save_data' && payload.unique_id) {
                                     const layer = window.GF && window.GF.gameController && window.GF.gameController.gameView && window.GF.gameController.gameView.objLayer;
                                     if (layer && layer.$children) {
-                                        const obj = layer.$children.find(c => c && c.map_unique_id === payload.unique_id);
+                                        const obj = layer.$children.find(c => c && c.map_unique_id == payload.unique_id);
                                         if (obj && obj._data && obj._data.config_data && obj._data.config_data.type === 'animals') {
                                             if (obj.old_collect_in && obj.collect_in) {
-                                                const originalTime = obj.old_collect_in / (obj.animals || 1);
+                                                const originalTime = obj._data.config_data.collect_in / (obj.animals || 1);
                                                 const hackedTime = obj.collect_in;
                                                 const diff = originalTime - hackedTime;
                                                 if (diff > 0) {
