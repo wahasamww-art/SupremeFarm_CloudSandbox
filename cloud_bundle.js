@@ -6331,117 +6331,47 @@ if (window.SF && window.SF.modules) {
 }
 
 
-// --- File: features/TimeHackerModule.js ---
-window.SF = window.SF || {};
-
-SF.TimeHackerModule = class TimeHackerModule extends SF.ModuleBase {
-    constructor() {
-        super("time_hacker", "خداع الوقت", "⏳");
-        this.enabled = false;
-        this.injected = false;
-        this.timeOffset = 20; // Default minus 20 seconds
-    }
-
-    render(container) {
-        this.container = container;
-        this.container.innerHTML = `
-            <div style="padding:15px; background: rgba(0, 0, 0, 0.4); border-radius: 8px; margin-bottom: 10px;">
-                <h3 style="margin-top:0; color:#ffeb3b; font-size: 16px;">⏳ خداع الوقت (تخطي ثواني)</h3>
-                <p style="font-size:12px; color:#ccc; line-height: 1.5;">هذه الميزة تستغل تسامح السيرفر (Lag Tolerance) لخصم ثوانٍ محددة من وقت الإنتاج للآلات والحيوانات.</p>
-                
-                <div style="margin-top: 10px;">
-                    <label style="color:#fff; font-size:13px;">خصم كم ثانية؟</label>
-                    <input type="number" id="sf-timehacker-offset" value="${this.timeOffset}" style="width: 60px; margin-right: 10px; background: #333; color: #fff; border: 1px solid #555; border-radius: 4px; padding: 2px 5px; text-align: center;">
-                </div>
-
-                <label style="display:flex; align-items:center; gap:10px; margin-top:15px; cursor:pointer; font-size:14px; color:#fff;">
-                    <input type="checkbox" id="sf-timehacker-toggle" style="width:18px; height:18px;">
-                    <span>تفعيل الخصم (تطبيق فوري)</span>
-                </label>
-            </div>
-        `;
-        
-        let toggle = this.container.querySelector("#sf-timehacker-toggle");
-        let offsetInput = this.container.querySelector("#sf-timehacker-offset");
-
-        toggle.checked = this.enabled;
-
-        offsetInput.addEventListener("change", (e) => {
-            this.timeOffset = parseInt(e.target.value) || 20;
-            if (this.enabled) {
-                this.refreshAllMapObjects();
-            }
-        });
-
-        toggle.addEventListener("change", (e) => {
-            this.enabled = e.target.checked;
-            if (this.enabled) {
-                this.injectHack();
-            }
-            this.refreshAllMapObjects();
-            if (window.SF && window.SF.bus) {
-                window.SF.bus.emit("toast", { msg: this.enabled ? "تم تفعيل الخصم" : "تم الإيقاف", type: "info" });
-            }
-        });
-    }
-
-    injectHack() {
-        if (this.injected) return;
+// --- File: features/InvisibleTimeBreaker.js ---
+(function() {
+    console.log("🚀 [SupremeFarm] جارِ حقن كاسر الوقت الخفي (-20 ثانية)...");
+    
+    function injectStealthTimeBreaker() {
         let gw = (typeof unsafeWindow !== 'undefined') ? unsafeWindow : window;
+        if (!gw.Machine || !gw.Animal) return false;
         
-        if (gw.Machine && gw.Machine.prototype && !gw.Machine.prototype._tb_injected) {
-            this.origMachineCheckProducts = gw.Machine.prototype.checkProducts;
-            const self = this;
+        if (!gw.Machine.prototype._tb_stealth) {
+            let origMachine = gw.Machine.prototype.checkProducts;
             gw.Machine.prototype.checkProducts = function() {
-                if (self.enabled && this.old_collect_in) {
-                    this.collect_in = Math.max(1, this.old_collect_in - self.timeOffset);
-                } else if (!self.enabled && this.old_collect_in) {
-                    this.collect_in = this.old_collect_in;
+                if (this.old_collect_in) {
+                    this.collect_in = Math.max(1, this.old_collect_in - 20);
                 }
-                return self.origMachineCheckProducts.apply(this, arguments);
+                return origMachine.apply(this, arguments);
             };
-            gw.Machine.prototype._tb_injected = true;
+            gw.Machine.prototype._tb_stealth = true;
         }
-        
-        if (gw.Animal && gw.Animal.prototype && !gw.Animal.prototype._tb_injected) {
-            this.origAnimalCheckProducts = gw.Animal.prototype.checkProducts;
-            const self = this;
+
+        if (!gw.Animal.prototype._tb_stealth) {
+            let origAnimal = gw.Animal.prototype.checkProducts;
             gw.Animal.prototype.checkProducts = function() {
-                if (self.enabled && this.old_collect_in) {
+                if (this.old_collect_in) {
                     let base = this.old_collect_in / (this.animals || 1);
-                    this.collect_in = Math.max(1, base - self.timeOffset);
-                } else if (!self.enabled && this.old_collect_in) {
-                    this.collect_in = this.old_collect_in / (this.animals || 1);
+                    this.collect_in = Math.max(1, base - 20);
                 }
-                return self.origAnimalCheckProducts.apply(this, arguments);
+                return origAnimal.apply(this, arguments);
             };
-            gw.Animal.prototype._tb_injected = true;
+            gw.Animal.prototype._tb_stealth = true;
         }
         
-        this.injected = true;
+        console.log("✅ [SupremeFarm] تم تفعيل كاسر الوقت الخفي للآلات والحيوانات بنجاح!");
+        return true;
     }
 
-    refreshAllMapObjects() {
-        let gw = (typeof unsafeWindow !== 'undefined') ? unsafeWindow : window;
-        if (gw.GF && gw.GF.gameController && gw.GF.gameController.mapObjectContainer) {
-            let objects = gw.GF.gameController.mapObjectContainer.childs || [];
-            for (let i = 0; i < objects.length; i++) {
-                let obj = objects[i];
-                if (obj && obj.data && obj.data.config_data) {
-                    if (obj.data.config_data.type == 4 || obj.data.config_data.type == 3) {
-                        if (typeof obj.checkProducts === 'function') {
-                            obj.checkProducts();
-                        }
-                    }
-                }
-            }
+    let checkInterval = setInterval(() => {
+        if (injectStealthTimeBreaker()) {
+            clearInterval(checkInterval);
         }
-    }
-}
-
-if (window.SF && window.SF.modules) {
-    window.SF.modules.register(new SF.TimeHackerModule());
-}
+    }, 1000);
+})();
 
 
 // --- File: features/SessionExtractorModule.js ---
