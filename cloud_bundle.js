@@ -2148,6 +2148,27 @@ SF.ZeroGasModule = class ZeroGasModule extends SF.ModuleBase {
                                     delete payload.isAuto;
                                     console.log('[SF-ZeroGas] Network Intercept: Completely removed automatic keys for ' + action);
                                 }
+
+                                // 🕒 Time-Spoofing for Animals (Bypass Server Timer)
+                                if (action === 'collect_product.save_data' && payload.unique_id) {
+                                    const layer = window.GF && window.GF.gameController && window.GF.gameController.gameView && window.GF.gameController.gameView.objLayer;
+                                    if (layer && layer.$children) {
+                                        const obj = layer.$children.find(c => c && c.map_unique_id === payload.unique_id);
+                                        if (obj && obj._data && obj._data.config_data && obj._data.config_data.type === 'animals') {
+                                            if (obj.old_collect_in && obj.collect_in) {
+                                                const originalTime = obj.old_collect_in / (obj.animals || 1);
+                                                const hackedTime = obj.collect_in;
+                                                const diff = originalTime - hackedTime;
+                                                if (diff > 0) {
+                                                    // Spoof opTime to make the server think the full time has passed
+                                                    const curTime = 0.001 * egret.getTimer();
+                                                    payload.opTime = curTime + diff + 1; // +1s for safety margin
+                                                    console.log(`[SF-ZeroGas] 🕒 Spoofed opTime for ${obj._data.config_data.kind}: +${diff}s`);
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
                             }
 
                             // Proactively block ALL toggle_automation and shop automation endpoints
@@ -2155,11 +2176,13 @@ SF.ZeroGasModule = class ZeroGasModule extends SF.ModuleBase {
                                 console.log('[SF-ZeroGas] BLOCKED ' + action + ' to prevent server side gas deduction for automation!');
                                 return; // Block the request completely
                             }
-                        } catch(e) {}
+                        } catch(e) {
+                            console.error("[SF-ZeroGas] Intercept Error:", e);
+                        }
 
                         return original_enqueue.apply(this, arguments);
                     };
-                    console.log("✅ [SF-ZeroGas] NetUtils hooked.");
+                    console.log("✅ [SF-ZeroGas] NetUtils hooked with Time-Spoofing.");
                 } else {
                     setTimeout(injectNetUtils, 1000);
                 }
