@@ -5721,8 +5721,14 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
             try {
                 if (event === "HTTP_SUCCESS") {
                     const data = args[1];
+                    let updates = null;
                     if (data && data.objects_to_update) {
-                        const updates = Array.isArray(data.objects_to_update) ? data.objects_to_update : Object.values(data.objects_to_update);
+                        updates = Array.isArray(data.objects_to_update) ? data.objects_to_update : Object.values(data.objects_to_update);
+                    } else if (data && Array.isArray(data)) {
+                        updates = data;
+                    }
+
+                    if (updates) {
                         
                         let found = false;
                         let product = null;
@@ -5733,9 +5739,11 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
                         for (let obj of updates) {
                             if (obj && obj.needResponse && obj.needResponse.data) {
                                 const ch = obj.needResponse.channel;
-                                if (ch && (ch.startsWith("friend_collect") || ch.startsWith("friend_fertilize") || ch.startsWith("friend_water"))) {
-                                    found = true;
-                                    const rData = obj.needResponse.data;
+                                if (ch) {
+                                    const chStr = String(ch);
+                                    if (chStr.startsWith("friend_collect") || chStr.startsWith("friend_fertilize") || chStr.startsWith("friend_water") || chStr === "water_plants") {
+                                        found = true;
+                                        const rData = obj.needResponse.data;
                                     
                                     if (rData.msg === "ok") {
                                         if (rData.product) {
@@ -5749,6 +5757,7 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
                                         usedUpFound = true;
                                     } else if (!msg) {
                                         msg = rData.msg || rData.error;
+                                    }
                                     }
                                 }
                             }
@@ -6285,7 +6294,7 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
                             this.saveBlacklist();
                             neighborHasEnergy = false;
                         } else {
-                            await this.sleep(100); // إعطاء السيرفر وقت قصير جداً قبل الدفعة التالية
+                            await this.sleep(this.randomJitter()); // تأخير عشوائي لتجنب الحظر من السيرفر (Rate Limit)
                         }
                     }
 
@@ -6295,6 +6304,10 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
                     updateStatsUI();
                     break;
                 }
+            }
+            // تأخير قبل الانتقال للجار التالي لتجنب حظر السيرفر
+            if (this.isRunning) {
+                await this.sleep(this.randomJitter());
             }
         }
 
