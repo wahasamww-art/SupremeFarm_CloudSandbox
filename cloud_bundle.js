@@ -6413,6 +6413,20 @@ if (window.SF && window.SF.modules) {
             hooked = true;
         }
 
+        // Hook على onProduction()
+        if (proto.hasOwnProperty('onProduction')) {
+            const origOnProd = proto.onProduction;
+            proto.onProduction = function() {
+                origOnProd.apply(this, arguments);
+                if (!this._interactiveStatus && typeof this.onProductComplete === 'function') {
+                    if (this.getRawMaterials && this.getRawMaterials() > 0) {
+                        this.onProductComplete();
+                    }
+                }
+            };
+            hooked = true;
+        }
+
 
         // Hook على checkProducts() — نضمن إنتاج المنتج عند انتهاء الدورة
         if (proto.hasOwnProperty('checkProducts')) {
