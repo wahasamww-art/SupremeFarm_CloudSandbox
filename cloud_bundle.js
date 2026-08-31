@@ -6307,7 +6307,7 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
             }
             // تأخير قبل الانتقال للجار التالي لتجنب حظر السيرفر
             if (this.isRunning) {
-                await this.sleep(this.randomJitter());
+                await this.sleep(150); // تأخير قصير جداً لجعل التسميد صاروخياً
             }
         }
 
