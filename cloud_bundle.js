@@ -21,7 +21,7 @@
 
 // ===================================================================
 // SupremeFarm Modular - Cloud Distribution Bundle
-// Generated at: 2026-08-31T21:26:05.573Z
+// Generated at: 2026-08-31T21:40:02.255Z
 // ===================================================================
 
 var SF = window.SF || {};
@@ -7244,37 +7244,13 @@ if (window.SF && window.SF.modules) {
     // ==========================================
     function setupPanelDetector() {
         let gw = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
-        let checkInterval = setInterval(() => {
-            if (gw.App && gw.App.ControllerManager) {
-                clearInterval(checkInterval);
-                const oldApply = gw.App.ControllerManager.applyFunc;
-                gw.App.ControllerManager.applyFunc = function() {
-                    let args = Array.from(arguments);
-                    
-                    // رصد حدث فتح لوحة الفعالية تحديداً
-                    if (args[0] === 10019 && args[1] === 1000015) {
-                        isUIHidden = false; // تصفير حالة الإخفاء
-                        setTimeout(() => {
-                            refreshFreeSpins(gw);
-                            if (!topBarUI || topBarUI.style.display === 'none') {
-                                showTopBarUI();
-                            }
-                        }, 500);
-                    }
-                    
-                    // (تم إزالة الإخفاء التلقائي عبر 10160 لأنه يتعارض مع التولتيبس)
-                    
-                    return oldApply.apply(this, arguments);
-                };
-                console.log('[MiniSlot2Auto] ✅ تم تفعيل رصد النوافذ الداخلي بدقة.');
-            }
-        }, 1000);
-
-        // فحص دوري ذكي لضمان اختفاء الشريط فور إغلاق اللوحة
+        
+        // فحص دوري ذكي لضمان ظهور الشريط فقط عندما تكون اللوحة مفتوحة حقاً
         setInterval(() => {
-            if (topBarUI && topBarUI.style.display !== 'none' && gw.LayerManager && gw.LayerManager.UI_Popup) {
+            if (gw.LayerManager && gw.LayerManager.UI_Popup) {
                 let popups = gw.LayerManager.UI_Popup.$children || gw.LayerManager.UI_Popup.children || [];
                 let isSlotOpen = false;
+                
                 for (let i = 0; i < popups.length; i++) {
                     let skin = popups[i].skinName || '';
                     if (typeof skin === 'string' && skin.toLowerCase().includes('minislot2')) {
@@ -7282,14 +7258,25 @@ if (window.SF && window.SF.modules) {
                         break;
                     }
                 }
-                // إذا تم إغلاق لوحة السلوت (لم تعد موجودة في الشاشة)
-                if (!isSlotOpen) {
-                    topBarUI.style.display = 'none';
-                    isUIHidden = true;
-                    if (typeof stopAutoSpin === 'function') stopAutoSpin();
+                
+                if (isSlotOpen) {
+                    // إذا اللوحة مفتوحة والشريط مخفي (ولم يقم المستخدم بإغلاقه يدوياً لهذه الجلسة)
+                    if (!isUIHidden && (!topBarUI || topBarUI.style.display === 'none')) {
+                        refreshFreeSpins(gw);
+                        showTopBarUI();
+                    }
+                } else {
+                    // إذا اللوحة مغلقة، نخفي الشريط ونصفر حالة الإخفاء ليظهر في المرة القادمة
+                    if (topBarUI && topBarUI.style.display !== 'none') {
+                        topBarUI.style.display = 'none';
+                        isUIHidden = false; // تصفير حتى يظهر مجدداً عند فتح اللوحة مرة أخرى
+                        if (typeof stopAutoSpin === 'function') stopAutoSpin();
+                    }
                 }
             }
-        }, 1500);
+        }, 1000);
+        
+        console.log('[MiniSlot2Auto] ✅ تم تفعيل رصد النوافذ الداخلي بدقة.');
     }
 
     // ==========================================
