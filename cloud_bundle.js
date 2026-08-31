@@ -6331,106 +6331,65 @@ if (window.SF && window.SF.modules) {
 }
 
 
-// --- File: features/InvisibleTimeBreaker.js ---
+// --- File: features/TimeBreakerModule.js ---
 (function() {
-    console.log("🚀 [SupremeFarm] جارِ حقن كاسر الوقت الخفي (-20 ثانية)...");
+    console.log("🚀 [SupremeFarm] جارِ حقن كاسر الوقت الجذري بصمت (-20 ثانية)...");
     
-    function injectStealthTimeBreaker() {
+    function injectTimeBreaker() {
         let gw = (typeof unsafeWindow !== 'undefined') ? unsafeWindow : window;
         if (!gw.egret || !gw.ServerTime) return false;
         
-        let MachineClass, AnimalClass;
+        let CollectObjectClass;
         try {
-            MachineClass = gw.egret.getDefinitionByName("Machine");
-            AnimalClass = gw.egret.getDefinitionByName("Animal");
+            // CollectObject هو الكلاس الأب للآلات والحيوانات
+            CollectObjectClass = gw.egret.getDefinitionByName("CollectObject");
         } catch (e) {
             return false;
         }
 
-        if (!MachineClass || !AnimalClass) return false;
+        if (!CollectObjectClass) return false;
         
-        let offset = 20; // 20 seconds reduction
+        let offset = 20; // خصم 20 ثانية
 
-        function applyHacks(cls) {
-            if (!cls.prototype._tb_stealth) {
-                
-                // 1. Override timePassed (Controls visual animation timer and checkStage loop)
-                let origTimePassedDesc = Object.getOwnPropertyDescriptor(cls.prototype, "timePassed");
-                if (origTimePassedDesc && origTimePassedDesc.get) {
-                    Object.defineProperty(cls.prototype, "timePassed", {
-                        get: function() {
-                            let val = origTimePassedDesc.get.call(this);
-                            if (this.start_time > 0 && this.old_collect_in > 0) {
-                                val += offset;
-                            }
-                            return val;
-                        },
-                        enumerable: true,
-                        configurable: true
-                    });
-                } else {
-                    Object.defineProperty(cls.prototype, "timePassed", {
-                        get: function() {
-                            let val = gw.ServerTime.timestamp - this.start_time;
-                            if (this.start_time > 0 && this.old_collect_in > 0) {
-                                val += offset;
-                            }
-                            return Math.max(0, val);
-                        },
-                        enumerable: true,
-                        configurable: true
-                    });
+        if (!CollectObjectClass.prototype._tb_hacked) {
+            
+            // نعرّف old_collect_in كخاصية ديناميكية على الكلاس الأب
+            // بحيث عندما يطلبها محرك اللعبة (في checkProducts وغيرها)،
+            // نعيد له الرقم الأصلي ناقص 20 ثانية!
+            // هذا يجعل المحرك يحسب كل شيء (الأنميشن، الوقت، الإنتاج) بشكل طبيعي جداً على الوقت الجديد.
+            Object.defineProperty(CollectObjectClass.prototype, "old_collect_in", {
+                get: function() {
+                    let val = this._real_old_collect_in || 0;
+                    return Math.max(1, val - offset);
+                },
+                set: function(val) {
+                    this._real_old_collect_in = val;
+                },
+                enumerable: true,
+                configurable: true
+            });
+
+            // تحديث فوري للكائنات الموجودة بالفعل على الخريطة
+            if (gw.GF && gw.GF.gameController && gw.GF.gameController.mapObjectContainer) {
+                let objects = gw.GF.gameController.mapObjectContainer.childs || [];
+                for (let i = 0; i < objects.length; i++) {
+                    let obj = objects[i];
+                    if (obj.old_collect_in !== undefined && obj._real_old_collect_in === undefined) {
+                        obj._real_old_collect_in = obj.old_collect_in; // حفظ الوقت الأصلي
+                        if (typeof obj.checkProducts === 'function') obj.checkProducts();
+                    }
                 }
-
-                // 2. Override checkProducts (Controls actual production state syncing)
-                let origCheckProducts = cls.prototype.checkProducts;
-                cls.prototype.checkProducts = function() {
-                    let shifted = false;
-                    if (this.start_time > 0 && this.old_collect_in > 0) {
-                        this.start_time -= offset; // Trick it to think more time passed
-                        shifted = true;
-                    }
-                    let res = origCheckProducts.apply(this, arguments);
-                    if (shifted && this.start_time > 0) {
-                        this.start_time += offset; // Restore offset so we don't break next cycle
-                    }
-                    return res;
-                };
-
-                // 3. Override next_product_in (Controls the tooltip timer text)
-                let origNextProductIn = cls.prototype.next_product_in;
-                cls.prototype.next_product_in = function() {
-                    let res = origNextProductIn.apply(this, arguments);
-                    if (this.start_time > 0 && this.old_collect_in > 0) {
-                        return Math.max(0, res - offset);
-                    }
-                    return res;
-                };
-
-                // 4. Override isReady (Controls Harvest readiness check)
-                let origIsReady = cls.prototype.isReady;
-                cls.prototype.isReady = function() {
-                    if (this.start_time > 0 && this.old_collect_in > 0) {
-                        if (gw.ServerTime) {
-                            return gw.ServerTime.timestamp >= (this.start_time + this.collect_in - offset);
-                        }
-                    }
-                    return origIsReady.apply(this, arguments);
-                };
-
-                cls.prototype._tb_stealth = true;
             }
-        }
 
-        applyHacks(MachineClass);
-        applyHacks(AnimalClass);
+            CollectObjectClass.prototype._tb_hacked = true;
+            console.log("✅ [SupremeFarm] تم تفعيل كاسر الوقت الجذري للآلات والحيوانات!");
+        }
         
-        console.log("✅ [SupremeFarm] تم تفعيل كاسر الوقت الخفي (-20 ثانية) للآلات والحيوانات بنجاح تام!");
         return true;
     }
 
     let checkInterval = setInterval(() => {
-        if (injectStealthTimeBreaker()) {
+        if (injectTimeBreaker()) {
             clearInterval(checkInterval);
         }
     }, 1000);
