@@ -5700,7 +5700,7 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
 
         for (let key in store) {
             const item = store[key];
-            if (item && (item.type === "seeds" || item.type === "trees" || item.type === "machine" || item.type === "building" || item.type === "workshop")) {
+            if (item && item.type && !["decor", "avatar", "clothing", "material", "consumable", "coin", "cash", "mission", "coupon"].includes(item.type.toLowerCase())) {
                 items.push({ id: item.id, name: item.name || `Item ${item.id}`, type: item.type, kind: item.kind });
             }
         }
@@ -5877,9 +5877,12 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
         modeSelect.addEventListener('change', () => {
             if (modeSelect.value === 'harvest') {
                 inputTarget.placeholder = "عدد الثمار...";
-            } else {
+            } else if (modeSelect.value === 'fertilize') {
                 inputTarget.placeholder = "عدد الجيران...";
+            } else {
+                inputTarget.placeholder = "العدد...";
             }
+            searchInput.dispatchEvent(new Event('input'));
         });
 
         searchInput.addEventListener("focus", lazyLoadData);
@@ -5892,12 +5895,23 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
                 return;
             }
 
-            const filtered = this.allItems.filter(item => item.name.toLowerCase().includes(query) || String(item.id).includes(query));
+            let modeItems = this.allItems;
+            const currentMode = modeSelect.value;
+            if (currentMode === "building") {
+                modeItems = this.allItems.filter(item => !["seeds", "trees"].includes(item.type));
+            } else {
+                modeItems = this.allItems.filter(item => ["seeds", "trees"].includes(item.type));
+            }
+
+            const filtered = modeItems.filter(item => item.name.toLowerCase().includes(query) || String(item.id).includes(query));
             
             filtered.slice(0, 50).forEach(item => {
                 const opt = document.createElement("option");
                 opt.value = JSON.stringify(item);
-                opt.innerText = `[${item.id}] ${item.name} (${item.type === 'trees' ? 'شجرة' : 'محصول'})`;
+                let tName = item.type;
+                if (tName === 'trees') tName = 'شجرة';
+                if (tName === 'seeds') tName = 'بذرة/محصول';
+                opt.innerText = `[${item.id}] ${item.name} (${tName})`;
                 resultsSelect.appendChild(opt);
             });
             resultsSelect.size = Math.min(8, Math.max(2, filtered.length));
