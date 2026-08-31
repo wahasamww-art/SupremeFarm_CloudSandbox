@@ -6337,32 +6337,45 @@ if (window.SF && window.SF.modules) {
     
     function injectStealthTimeBreaker() {
         let gw = (typeof unsafeWindow !== 'undefined') ? unsafeWindow : window;
-        if (!gw.Machine || !gw.Animal) return false;
+        if (!gw.Machine || !gw.Animal || !gw.ServerTime) return false;
         
+        let offset = 20; // 20 seconds reduction
+
         if (!gw.Machine.prototype._tb_stealth) {
-            let origMachine = gw.Machine.prototype.checkProducts;
-            gw.Machine.prototype.checkProducts = function() {
-                if (this.old_collect_in) {
-                    this.collect_in = Math.max(1, this.old_collect_in - 20);
+            let origMachineNext = gw.Machine.prototype.next_product_in;
+            gw.Machine.prototype.next_product_in = function() {
+                let t = origMachineNext.apply(this, arguments);
+                return Math.max(0, t - offset);
+            };
+
+            let origMachineReady = gw.Machine.prototype.isReady;
+            gw.Machine.prototype.isReady = function() {
+                if (this.start_time > 0 && this.collect_in > 0) {
+                    return gw.ServerTime.timestamp >= (this.start_time + this.collect_in - offset);
                 }
-                return origMachine.apply(this, arguments);
+                return origMachineReady.apply(this, arguments);
             };
             gw.Machine.prototype._tb_stealth = true;
         }
 
         if (!gw.Animal.prototype._tb_stealth) {
-            let origAnimal = gw.Animal.prototype.checkProducts;
-            gw.Animal.prototype.checkProducts = function() {
-                if (this.old_collect_in) {
-                    let base = this.old_collect_in / (this.animals || 1);
-                    this.collect_in = Math.max(1, base - 20);
+            let origAnimalNext = gw.Animal.prototype.next_product_in;
+            gw.Animal.prototype.next_product_in = function() {
+                let t = origAnimalNext.apply(this, arguments);
+                return Math.max(0, t - offset);
+            };
+
+            let origAnimalReady = gw.Animal.prototype.isReady;
+            gw.Animal.prototype.isReady = function() {
+                if (this.start_time > 0 && this.collect_in > 0) {
+                    return gw.ServerTime.timestamp >= (this.start_time + this.collect_in - offset);
                 }
-                return origAnimal.apply(this, arguments);
+                return origAnimalReady.apply(this, arguments);
             };
             gw.Animal.prototype._tb_stealth = true;
         }
         
-        console.log("✅ [SupremeFarm] تم تفعيل كاسر الوقت الخفي للآلات والحيوانات بنجاح!");
+        console.log("✅ [SupremeFarm] تم تفعيل كاسر الوقت الخفي (-20 ثانية) للآلات والحيوانات!");
         return true;
     }
 
