@@ -2150,22 +2150,30 @@ SF.ZeroGasModule = class ZeroGasModule extends SF.ModuleBase {
                                 }
 
                                 // 🕒 Time-Spoofing for Animals (Bypass Server Timer)
-                                if (action === 'collect_product.save_data' && payload.unique_id) {
-                                    const layer = window.GF && window.GF.gameController && window.GF.gameController.gameView && window.GF.gameController.gameView.objLayer;
-                                    if (layer && layer.$children) {
-                                        const obj = layer.$children.find(c => c && c.map_unique_id == payload.unique_id);
-                                        if (obj && obj._data && obj._data.config_data && obj._data.config_data.type === 'animals') {
-                                            if (obj.old_collect_in && obj.collect_in) {
-                                                const originalTime = obj._data.config_data.collect_in / (obj.animals || 1);
-                                                const hackedTime = obj.collect_in;
-                                                const diff = originalTime - hackedTime;
-                                                if (diff > 0) {
-                                                    // Spoof opTime to make the server think the full time has passed
-                                                    const curTime = 0.001 * egret.getTimer();
-                                                    payload.opTime = curTime + diff + 1; // +1s for safety margin
-                                                    console.log(`[SF-ZeroGas] 🕒 Spoofed opTime for ${obj._data.config_data.kind}: +${diff}s`);
+                                if (action === 'collect_product.save_data') {
+                                    console.log('[SF-ZeroGas] Intercepting collect_product. Payload:', JSON.stringify(payload));
+                                    if (payload.unique_id) {
+                                        const layer = window.GF && window.GF.gameController && window.GF.gameController.gameView && window.GF.gameController.gameView.objLayer;
+                                        if (layer && layer.$children) {
+                                            const obj = layer.$children.find(c => c && c.map_unique_id == payload.unique_id);
+                                            if (obj) {
+                                                console.log(`[SF-ZeroGas] Found object in layer: ${obj.map_unique_id}, type: ${obj._data?.config_data?.type}`);
+                                                if (obj._data && obj._data.config_data && (obj._data.config_data.type === 'animals' || obj._data.config_data.type === 'gear')) {
+                                                    const originalTime = obj._data.config_data.collect_in / (obj.animals || 1);
+                                                    const hackedTime = obj.collect_in;
+                                                    const diff = originalTime - hackedTime;
+                                                    console.log(`[SF-ZeroGas] Timing check: original=${originalTime}, hacked=${hackedTime}, diff=${diff}`);
+                                                    if (diff > 0) {
+                                                        const curTime = 0.001 * egret.getTimer();
+                                                        payload.opTime = curTime + diff + 1; // +1s for safety margin
+                                                        console.log(`[SF-ZeroGas] 🕒 Spoofed opTime for ${obj._data.config_data.kind}: +${diff}s. New opTime=${payload.opTime}`);
+                                                    }
                                                 }
+                                            } else {
+                                                console.log('[SF-ZeroGas] Object not found in layer for unique_id:', payload.unique_id);
                                             }
+                                        } else {
+                                            console.log('[SF-ZeroGas] Game layer not found!');
                                         }
                                     }
                                 }
