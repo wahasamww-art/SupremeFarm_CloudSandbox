@@ -6176,8 +6176,8 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
                     if (gw.NetUtils.flush) gw.NetUtils.flush();
                     
                     const res = await fertPromise;
-                    if (res && res.raw) {
-                        this.processRewards(res);
+                    if (res && res.msg !== "used up") {
+                        this.processRewards();
                     } else {
                         await this.sleep(500); // fallback wait
                     }
