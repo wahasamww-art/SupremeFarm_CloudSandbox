@@ -6332,7 +6332,7 @@ if (window.SF && window.SF.modules) {
 
 // --- File: features/TimeBreakerModule.js ---
 (function() {
-    const OFFSET_PERCENT = 0.30;
+    const OFFSET_PERCENT = 0.35;
     const MIN_COLLECT_IN = 5;
     const hookedProtos = new WeakSet();
 
@@ -6343,25 +6343,32 @@ if (window.SF && window.SF.modules) {
     function applyHack(obj) {
         if (!obj || !obj.start_time) return;
 
-        // نستخدم start_time كمعرّف للدورة — كل دورة جديدة لها start_time مختلف
         const cycleKey = '_tb_st_' + obj.start_time;
-        if (obj[cycleKey]) return; // تم تطبيق الهاك لهذه الدورة بالفعل
+        if (obj[cycleKey]) return;
         obj[cycleKey] = true;
 
+        // القيمة الأصلية من الـ config — لا نخصم من الخصم (لا compound)
+        const originalCollectIn = (obj._data && obj._data.config_data && +obj._data.config_data.collect_in) || obj.collect_in;
+
         const animals = obj.animals || 1;
-        const offset = calcOffset(obj.collect_in);
-        const newCollectIn = Math.max(MIN_COLLECT_IN, obj.collect_in - offset);
+        const offset = Math.floor(originalCollectIn * OFFSET_PERCENT);
+        const newCollectIn = Math.max(MIN_COLLECT_IN, originalCollectIn - offset);
 
         // old_collect_in = newCollectIn × animals
-        // بحيث: checkProducts تحسب → collect_in = old_collect_in / animals = newCollectIn ✓
+        // بحيث checkProducts تحسب: collect_in = old_collect_in / animals = newCollectIn ✓
         obj.old_collect_in = newCollectIn * animals;
         obj.collect_in = newCollectIn;
+
+        // نطرح ثانية من start_time لضمان أن elapsed >= collect_in عند تشغيل المؤقت
+        if (obj.serverData && obj.serverData.start_time) {
+            obj.serverData.start_time -= 1;
+        }
 
         if (typeof obj.stopTimer === 'function') obj.stopTimer();
         if (typeof obj.startTimer === 'function') obj.startTimer();
 
         const kind = obj._data && obj._data.config_data && obj._data.config_data.kind || 'كائن';
-        console.log(`✅ [SupremeFarm] ${kind}: ${newCollectIn + offset}s → ${newCollectIn}s (-${offset}s)`);
+        console.log(`✅ [SupremeFarm] ${kind}: ${originalCollectIn}s → ${newCollectIn}s (-${offset}s = ${Math.round(OFFSET_PERCENT*100)}%)`);
     }
 
     function hookProduceOnProto(proto) {
