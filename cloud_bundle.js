@@ -6332,94 +6332,83 @@ if (window.SF && window.SF.modules) {
 
 // --- File: features/TimeBreakerModule.js ---
 (function() {
-    console.log("🚀 [SupremeFarm] جارِ حقن كاسر الوقت الجذري (عبر اصطياد الدوال)...");
+    // نسبة الخصم من وقت كل آلة/حيوان (30% = أسرع بـ 30%)
+    const OFFSET_PERCENT = 0.30;
+    // حد أدنى للوقت المتبقي بعد الخصم (لا نقل عن 5 ثوان)
+    const MIN_COLLECT_IN = 5;
 
-    function applyHack(obj, needsRestart) {
-        if (!obj || obj._tb_direct_hacked) return;
-        if (obj.old_collect_in === undefined || obj.collect_in === undefined) return;
-        
-        // إغلاق الثغرة فوراً لمنع التكرار اللانهائي
-        obj._tb_direct_hacked = true;
-        
-        let offset = 20; // 20 ثانية خصم
-        let prev_collect = obj.collect_in;
-        
-        obj.old_collect_in = Math.max(1, obj.old_collect_in - offset);
-        
-        if (typeof obj.checkProducts === 'function') obj.checkProducts();
-        
-        // للآلات: إذا لم يتغير الوقت بعد الفحص، نفرض الخصم يدوياً
-        if (obj.collect_in === prev_collect) {
-            obj.collect_in = Math.max(1, obj.collect_in - offset);
-            if (typeof obj.checkProducts === 'function') obj.checkProducts();
-        }
-        
-        if (needsRestart && obj.is_working && typeof obj.stopTimer === 'function' && typeof obj.startTimer === 'function') {
-            obj.stopTimer();
-            obj.startTimer();
-            if (typeof obj.updateStage === 'function') obj.updateStage();
-        }
-        
-        console.log("✅ [SupremeFarm] تم كسر وقت:", obj.name || obj.product_name || "آلة/حيوان");
+    const hookedProtos = new WeakSet();
+    const hookedObjects = new WeakSet();
+
+    function calcOffset(collect_in) {
+        return Math.floor(Math.max(0, collect_in * OFFSET_PERCENT));
     }
 
-    function hookClasses() {
-        let gw = (typeof unsafeWindow !== 'undefined') ? unsafeWindow : window;
-        if (!gw.egret) return false;
-        
-        let classesToHook = ["Machine", "Animal", "CollectObject", "MapObject1", "Greenhouse", "WorkShop"];
-        let successCount = 0;
-        
-        for (let i = 0; i < classesToHook.length; i++) {
-            let cls = null;
-            try {
-                cls = gw.egret.getDefinitionByName(classesToHook[i]);
-            } catch(e) {}
-            
-            if (cls && cls.prototype) {
-                // 1. اصطياد الكائن عند مرور الماوس عليه
-                if (typeof cls.prototype.next_product_in === 'function' && !cls.prototype._tb_next_hooked) {
-                    let origNext = cls.prototype.next_product_in;
-                    cls.prototype.next_product_in = function() {
-                        applyHack(this, true);
-                        return origNext.apply(this, arguments);
-                    };
-                    cls.prototype._tb_next_hooked = true;
-                    successCount++;
+    function hookProduceOnProto(proto) {
+        if (!proto || hookedProtos.has(proto)) return false;
+        if (!proto.hasOwnProperty('produce')) return false;
+
+        hookedProtos.add(proto);
+        const origProduce = proto.produce;
+
+        proto.produce = function() {
+            const result = origProduce.apply(this, arguments);
+
+            if (this.start_time > 0 && !hookedObjects.has(this)) {
+                hookedObjects.add(this);
+
+                const offset = calcOffset(this.collect_in);
+
+                // للحيوانات: old_collect_in موجود
+                if (this.old_collect_in !== undefined) {
+                    this.old_collect_in = Math.max(MIN_COLLECT_IN, this.old_collect_in - offset);
+                    if (typeof this.checkProducts === 'function') this.checkProducts();
                 }
-                
-                // 2. اصطياد الكائن عند بدء الإنتاج
-                if (typeof cls.prototype.startTimer === 'function' && !cls.prototype._tb_start_hooked) {
-                    let origStart = cls.prototype.startTimer;
-                    cls.prototype.startTimer = function() {
-                        applyHack(this, false); // لا نحتاج لإعادة التشغيل لأنه يبدأ الآن
-                        return origStart.apply(this, arguments);
-                    };
-                    cls.prototype._tb_start_hooked = true;
-                    successCount++;
+                // للآلات: collect_in مباشرة
+                if (this.collect_in !== undefined) {
+                    this.collect_in = Math.max(MIN_COLLECT_IN, this.collect_in - offset);
                 }
-                
-                // 3. اصطياد الكائن عند الفحص أو إضافة مواد
-                if (typeof cls.prototype.checkProducts === 'function' && !cls.prototype._tb_check_hooked) {
-                    let origCheck = cls.prototype.checkProducts;
-                    cls.prototype.checkProducts = function() {
-                        applyHack(this, true);
-                        return origCheck.apply(this, arguments);
-                    };
-                    cls.prototype._tb_check_hooked = true;
-                    successCount++;
+
+                // إعادة ضبط المؤقت بالوقت الجديد
+                if (typeof this.stopTimer === 'function') this.stopTimer();
+                if (typeof this.startTimer === 'function') this.startTimer();
+
+                console.log(`✅ [SupremeFarm] وقت مكسور: ${this.collect_in + offset}s → ${this.collect_in}s (خصم ${offset}s = ${Math.round(OFFSET_PERCENT*100)}%)`);
+            }
+
+            return result;
+        };
+
+        return true;
+    }
+
+    function scanAndHook() {
+        try {
+            const objLayer = GF.gameController.gameView.objLayer;
+            if (!objLayer || !objLayer.$children) return false;
+
+            let hooked = 0;
+            for (let i = 0; i < objLayer.$children.length; i++) {
+                const obj = objLayer.$children[i];
+                if (!obj || typeof obj.checkProducts !== 'function') continue;
+
+                let proto = Object.getPrototypeOf(obj);
+                while (proto) {
+                    if (hookProduceOnProto(proto)) hooked++;
+                    proto = Object.getPrototypeOf(proto);
                 }
             }
-        }
-        
-        return successCount > 0;
+
+            if (hooked > 0) {
+                console.log(`✅ [SupremeFarm] TimeBreaker جاهز! خصم ${Math.round(OFFSET_PERCENT*100)}% من وقت كل آلة/حيوان.`);
+                return true;
+            }
+        } catch(e) {}
+        return false;
     }
 
-    let interval = setInterval(() => {
-        if (hookClasses()) {
-            console.log("✅ [SupremeFarm] تم زرع شباك اصطياد الآلات بنجاح!");
-            clearInterval(interval);
-        }
+    const iv = setInterval(() => {
+        if (scanAndHook()) clearInterval(iv);
     }, 2000);
 })();
 
