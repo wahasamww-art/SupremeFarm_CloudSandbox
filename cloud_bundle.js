@@ -2149,34 +2149,7 @@ SF.ZeroGasModule = class ZeroGasModule extends SF.ModuleBase {
                                     console.log('[SF-ZeroGas] Network Intercept: Completely removed automatic keys for ' + action);
                                 }
 
-                                // 🕒 Time-Spoofing for Animals (Bypass Server Timer)
-                                if (action === 'collect_product.save_data') {
-                                    console.log('[SF-ZeroGas] Intercepting collect_product. Payload:', JSON.stringify(payload));
-                                    if (payload.unique_id) {
-                                        const layer = window.GF && window.GF.gameController && window.GF.gameController.gameView && window.GF.gameController.gameView.objLayer;
-                                        if (layer && layer.$children) {
-                                            const obj = layer.$children.find(c => c && c.map_unique_id == payload.unique_id);
-                                            if (obj) {
-                                                console.log(`[SF-ZeroGas] Found object in layer: ${obj.map_unique_id}, type: ${obj._data?.config_data?.type}`);
-                                                if (obj._data && obj._data.config_data && (obj._data.config_data.type === 'animals' || obj._data.config_data.type === 'gear')) {
-                                                    const originalTime = obj._data.config_data.collect_in / (obj.animals || 1);
-                                                    const hackedTime = obj.collect_in;
-                                                    const diff = originalTime - hackedTime;
-                                                    console.log(`[SF-ZeroGas] Timing check: original=${originalTime}, hacked=${hackedTime}, diff=${diff}`);
-                                                    if (diff > 0) {
-                                                        const curTime = 0.001 * egret.getTimer();
-                                                        payload.opTime = curTime + diff + 1; // +1s for safety margin
-                                                        console.log(`[SF-ZeroGas] 🕒 Spoofed opTime for ${obj._data.config_data.kind}: +${diff}s. New opTime=${payload.opTime}`);
-                                                    }
-                                                }
-                                            } else {
-                                                console.log('[SF-ZeroGas] Object not found in layer for unique_id:', payload.unique_id);
-                                            }
-                                        } else {
-                                            console.log('[SF-ZeroGas] Game layer not found!');
-                                        }
-                                    }
-                                }
+
                             }
 
                             // Proactively block ALL toggle_automation and shop automation endpoints
@@ -2190,7 +2163,7 @@ SF.ZeroGasModule = class ZeroGasModule extends SF.ModuleBase {
 
                         return original_enqueue.apply(this, arguments);
                     };
-                    console.log("✅ [SF-ZeroGas] NetUtils hooked with Time-Spoofing.");
+                    console.log("✅ [SF-ZeroGas] NetUtils hooked.");
                 } else {
                     setTimeout(injectNetUtils, 1000);
                 }
@@ -6360,136 +6333,6 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
 if (window.SF && window.SF.modules) {
     window.SF.modules.register(new SF.AutoMegaHarvestModule());
 }
-
-// --- File: features/TimeBreakerModule.js ---
-(function() {
-    const OFFSET_PERCENT = 0.30;
-    const MIN_COLLECT_IN = 5;
-    const hookedProtos = new WeakSet();
-    // تخزين الـ collect_in الأصلي لكل كائن (لا compound reduction)
-    const originalCollectInMap = new WeakMap();
-
-    function getOriginalCollectIn(obj) {
-        if (!originalCollectInMap.has(obj)) {
-            const ci = (obj._data && obj._data.config_data && +obj._data.config_data.collect_in) || obj.collect_in || 0;
-            originalCollectInMap.set(obj, ci);
-        }
-        return originalCollectInMap.get(obj);
-    }
-
-    function applyHack(obj) {
-        if (!obj || !obj.start_time) return;
-
-        const cycleKey = '_tb_st_' + obj.start_time;
-        if (obj[cycleKey]) return;
-        obj[cycleKey] = true;
-
-        const originalCI = getOriginalCollectIn(obj);
-        if (!originalCI) return;
-
-        const animals = obj.animals || 1;
-        const offset = Math.floor(originalCI * OFFSET_PERCENT);
-        const newCollectIn = Math.max(MIN_COLLECT_IN, originalCI - offset);
-
-        obj.old_collect_in = newCollectIn * animals;
-        obj.collect_in = newCollectIn;
-
-        // نصفّر _collTime لأنه قد يكون تراكم من دورات سابقة ويمنع الإنتاج
-        obj._collTime = 0;
-
-        if (typeof obj.stopTimer === 'function') obj.stopTimer();
-        if (typeof obj.startTimer === 'function') obj.startTimer();
-
-        const kind = obj._data && obj._data.config_data && obj._data.config_data.kind || 'كائن';
-        console.log(`✅ [SupremeFarm] ${kind}: ${originalCI}s → ${newCollectIn}s (-${offset}s = ${Math.round(OFFSET_PERCENT*100)}%)`);
-    }
-
-    function hookProto(proto) {
-        if (!proto || hookedProtos.has(proto)) return false;
-
-        let hooked = false;
-
-        // Hook على produce()
-        if (proto.hasOwnProperty('produce')) {
-            hookedProtos.add(proto);
-            const origProduce = proto.produce;
-            proto.produce = function() {
-                const result = origProduce.apply(this, arguments);
-                applyHack(this);
-                return result;
-            };
-            hooked = true;
-        }
-
-        // Hook على onProduction()
-        if (proto.hasOwnProperty('onProduction')) {
-            const origOnProd = proto.onProduction;
-            proto.onProduction = function() {
-                origOnProd.apply(this, arguments);
-                if (!this._interactiveStatus && typeof this.onProductComplete === 'function') {
-                    if (this.getRawMaterials && this.getRawMaterials() > 0) {
-                        this.onProductComplete();
-                    }
-                }
-            };
-            hooked = true;
-        }
-
-
-        // Hook على checkProducts() — نضمن إنتاج المنتج عند انتهاء الدورة
-        if (proto.hasOwnProperty('checkProducts')) {
-            const origCheck = proto.checkProducts;
-            proto.checkProducts = function() {
-                // 1) صفّر _collTime (قد يتراكم من collect أثناء الإنتاج)
-                this._collTime = 0;
-
-                // 2) اضمن أن elapsed >= collect_in + 1 لضمان e >= 1
-                //    بنحرك serverData.start_time للخلف بثانية واحدة فقط إذا لزم
-                if (this.serverData && this.serverData.start_time && this.old_collect_in) {
-                    const ci = this.old_collect_in / (this.animals || 1);
-                    const needed_st = ServerTime.timestamp - Math.ceil(ci) - 1;
-                    if (this.serverData.start_time > needed_st) {
-                        this.serverData.start_time = needed_st;
-                    }
-                }
-
-                return origCheck.apply(this, arguments);
-            };
-            hooked = true;
-        }
-
-        return hooked;
-    }
-
-    function scanAndHook() {
-        try {
-            const objLayer = GF.gameController.gameView.objLayer;
-            if (!objLayer || !objLayer.$children) return false;
-
-            let hooked = 0;
-            for (let i = 0; i < objLayer.$children.length; i++) {
-                const obj = objLayer.$children[i];
-                if (!obj || typeof obj.checkProducts !== 'function') continue;
-
-                let proto = Object.getPrototypeOf(obj);
-                while (proto) {
-                    if (hookProto(proto)) hooked++;
-                    proto = Object.getPrototypeOf(proto);
-                }
-            }
-
-            if (hooked > 0) {
-                console.log(`✅ [SupremeFarm] TimeBreaker جاهز! خصم ${Math.round(OFFSET_PERCENT * 100)}% من كل دورة إنتاج.`);
-                return true;
-            }
-        } catch(e) {}
-        return false;
-    }
-
-    const iv = setInterval(() => {
-        if (scanAndHook()) clearInterval(iv);
-    }, 2000);
-})();
 
 
 // --- File: features/SessionExtractorModule.js ---
