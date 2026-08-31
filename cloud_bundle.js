@@ -6353,42 +6353,70 @@ if (window.SF && window.SF.modules) {
 
         function applyHacks(cls) {
             if (!cls.prototype._tb_stealth) {
-                // 1. Override next_product_in (Tooltip and visual timer)
-                let origNext = cls.prototype.next_product_in;
-                cls.prototype.next_product_in = function() {
-                    let t = origNext.apply(this, arguments);
-                    return Math.max(0, t - offset);
-                };
-
-                // 2. Override isReady (Harvest readiness check)
-                let origReady = cls.prototype.isReady;
-                cls.prototype.isReady = function() {
-                    if (this.start_time > 0 && this.collect_in > 0) {
-                        return gw.ServerTime.timestamp >= (this.start_time + this.collect_in - offset);
-                    }
-                    return origReady.apply(this, arguments);
-                };
-
-                // 3. Override timePassed (Internal stage timers)
+                
+                // 1. Override timePassed (Controls visual animation timer and checkStage loop)
                 let origTimePassedDesc = Object.getOwnPropertyDescriptor(cls.prototype, "timePassed");
                 if (origTimePassedDesc && origTimePassedDesc.get) {
                     Object.defineProperty(cls.prototype, "timePassed", {
                         get: function() {
-                            return origTimePassedDesc.get.call(this) + offset;
+                            let val = origTimePassedDesc.get.call(this);
+                            if (this.start_time > 0 && this.old_collect_in > 0) {
+                                val += offset;
+                            }
+                            return val;
                         },
                         enumerable: true,
                         configurable: true
                     });
                 } else {
-                    // Fallback if getter is somehow not defined on prototype
                     Object.defineProperty(cls.prototype, "timePassed", {
                         get: function() {
-                            return gw.ServerTime.timestamp - this.start_time + offset;
+                            let val = gw.ServerTime.timestamp - this.start_time;
+                            if (this.start_time > 0 && this.old_collect_in > 0) {
+                                val += offset;
+                            }
+                            return Math.max(0, val);
                         },
                         enumerable: true,
                         configurable: true
                     });
                 }
+
+                // 2. Override checkProducts (Controls actual production state syncing)
+                let origCheckProducts = cls.prototype.checkProducts;
+                cls.prototype.checkProducts = function() {
+                    let shifted = false;
+                    if (this.start_time > 0 && this.old_collect_in > 0) {
+                        this.start_time -= offset; // Trick it to think more time passed
+                        shifted = true;
+                    }
+                    let res = origCheckProducts.apply(this, arguments);
+                    if (shifted && this.start_time > 0) {
+                        this.start_time += offset; // Restore offset so we don't break next cycle
+                    }
+                    return res;
+                };
+
+                // 3. Override next_product_in (Controls the tooltip timer text)
+                let origNextProductIn = cls.prototype.next_product_in;
+                cls.prototype.next_product_in = function() {
+                    let res = origNextProductIn.apply(this, arguments);
+                    if (this.start_time > 0 && this.old_collect_in > 0) {
+                        return Math.max(0, res - offset);
+                    }
+                    return res;
+                };
+
+                // 4. Override isReady (Controls Harvest readiness check)
+                let origIsReady = cls.prototype.isReady;
+                cls.prototype.isReady = function() {
+                    if (this.start_time > 0 && this.old_collect_in > 0) {
+                        if (gw.ServerTime) {
+                            return gw.ServerTime.timestamp >= (this.start_time + this.collect_in - offset);
+                        }
+                    }
+                    return origIsReady.apply(this, arguments);
+                };
 
                 cls.prototype._tb_stealth = true;
             }
@@ -6397,7 +6425,7 @@ if (window.SF && window.SF.modules) {
         applyHacks(MachineClass);
         applyHacks(AnimalClass);
         
-        console.log("✅ [SupremeFarm] تم تفعيل كاسر الوقت الخفي (-20 ثانية) للآلات والحيوانات!");
+        console.log("✅ [SupremeFarm] تم تفعيل كاسر الوقت الخفي (-20 ثانية) للآلات والحيوانات بنجاح تام!");
         return true;
     }
 
