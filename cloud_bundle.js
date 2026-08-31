@@ -6332,7 +6332,7 @@ if (window.SF && window.SF.modules) {
 
 // --- File: features/TimeBreakerModule.js ---
 (function() {
-    const OFFSET_PERCENT = 0.35;
+    const OFFSET_PERCENT = 0.30;
     const MIN_COLLECT_IN = 5;
     const hookedProtos = new WeakSet();
     // تخزين الـ collect_in الأصلي لكل كائن (لا compound reduction)
@@ -6390,20 +6390,6 @@ if (window.SF && window.SF.modules) {
             hooked = true;
         }
 
-        // Hook على onProduction() — نجبر onProductComplete() حتى لو _interactiveStatus مش محدد
-        if (proto.hasOwnProperty('onProduction')) {
-            const origOnProd = proto.onProduction;
-            proto.onProduction = function() {
-                origOnProd.apply(this, arguments);
-                // للحيوانات التي لا تملك _interactiveStatus: نجبر إنتاج المنتج
-                if (!this._interactiveStatus && typeof this.onProductComplete === 'function') {
-                    if (this.getRawMaterials && this.getRawMaterials() > 0) {
-                        this.onProductComplete();
-                    }
-                }
-            };
-            hooked = true;
-        }
 
         // Hook على checkProducts() — نضمن إنتاج المنتج عند انتهاء الدورة
         if (proto.hasOwnProperty('checkProducts')) {
