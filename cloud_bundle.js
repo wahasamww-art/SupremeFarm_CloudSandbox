@@ -6351,39 +6351,51 @@ if (window.SF && window.SF.modules) {
         
         let offset = 20; // 20 seconds reduction
 
-        if (!MachineClass.prototype._tb_stealth) {
-            let origMachineNext = MachineClass.prototype.next_product_in;
-            MachineClass.prototype.next_product_in = function() {
-                let t = origMachineNext.apply(this, arguments);
-                return Math.max(0, t - offset);
-            };
+        function applyHacks(cls) {
+            if (!cls.prototype._tb_stealth) {
+                // 1. Override next_product_in (Tooltip and visual timer)
+                let origNext = cls.prototype.next_product_in;
+                cls.prototype.next_product_in = function() {
+                    let t = origNext.apply(this, arguments);
+                    return Math.max(0, t - offset);
+                };
 
-            let origMachineReady = MachineClass.prototype.isReady;
-            MachineClass.prototype.isReady = function() {
-                if (this.start_time > 0 && this.collect_in > 0) {
-                    return gw.ServerTime.timestamp >= (this.start_time + this.collect_in - offset);
+                // 2. Override isReady (Harvest readiness check)
+                let origReady = cls.prototype.isReady;
+                cls.prototype.isReady = function() {
+                    if (this.start_time > 0 && this.collect_in > 0) {
+                        return gw.ServerTime.timestamp >= (this.start_time + this.collect_in - offset);
+                    }
+                    return origReady.apply(this, arguments);
+                };
+
+                // 3. Override timePassed (Internal stage timers)
+                let origTimePassedDesc = Object.getOwnPropertyDescriptor(cls.prototype, "timePassed");
+                if (origTimePassedDesc && origTimePassedDesc.get) {
+                    Object.defineProperty(cls.prototype, "timePassed", {
+                        get: function() {
+                            return origTimePassedDesc.get.call(this) + offset;
+                        },
+                        enumerable: true,
+                        configurable: true
+                    });
+                } else {
+                    // Fallback if getter is somehow not defined on prototype
+                    Object.defineProperty(cls.prototype, "timePassed", {
+                        get: function() {
+                            return gw.ServerTime.timestamp - this.start_time + offset;
+                        },
+                        enumerable: true,
+                        configurable: true
+                    });
                 }
-                return origMachineReady.apply(this, arguments);
-            };
-            MachineClass.prototype._tb_stealth = true;
+
+                cls.prototype._tb_stealth = true;
+            }
         }
 
-        if (!AnimalClass.prototype._tb_stealth) {
-            let origAnimalNext = AnimalClass.prototype.next_product_in;
-            AnimalClass.prototype.next_product_in = function() {
-                let t = origAnimalNext.apply(this, arguments);
-                return Math.max(0, t - offset);
-            };
-
-            let origAnimalReady = AnimalClass.prototype.isReady;
-            AnimalClass.prototype.isReady = function() {
-                if (this.start_time > 0 && this.collect_in > 0) {
-                    return gw.ServerTime.timestamp >= (this.start_time + this.collect_in - offset);
-                }
-                return origAnimalReady.apply(this, arguments);
-            };
-            AnimalClass.prototype._tb_stealth = true;
-        }
+        applyHacks(MachineClass);
+        applyHacks(AnimalClass);
         
         console.log("✅ [SupremeFarm] تم تفعيل كاسر الوقت الخفي (-20 ثانية) للآلات والحيوانات!");
         return true;
