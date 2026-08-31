@@ -6341,7 +6341,6 @@ if (window.SF && window.SF.modules) {
         
         let CollectObjectClass;
         try {
-            // CollectObject هو الكلاس الأب للآلات والحيوانات
             CollectObjectClass = gw.egret.getDefinitionByName("CollectObject");
         } catch (e) {
             return false;
@@ -6353,10 +6352,7 @@ if (window.SF && window.SF.modules) {
 
         if (!CollectObjectClass.prototype._tb_hacked) {
             
-            // نعرّف old_collect_in كخاصية ديناميكية على الكلاس الأب
-            // بحيث عندما يطلبها محرك اللعبة (في checkProducts وغيرها)،
-            // نعيد له الرقم الأصلي ناقص 20 ثانية!
-            // هذا يجعل المحرك يحسب كل شيء (الأنميشن، الوقت، الإنتاج) بشكل طبيعي جداً على الوقت الجديد.
+            // نعرّف old_collect_in كخاصية ديناميكية
             Object.defineProperty(CollectObjectClass.prototype, "old_collect_in", {
                 get: function() {
                     let val = this._real_old_collect_in || 0;
@@ -6370,19 +6366,27 @@ if (window.SF && window.SF.modules) {
             });
 
             // تحديث فوري للكائنات الموجودة بالفعل على الخريطة
+            // وإزالة الخصائص الخاصة (Own Properties) التي كانت تحجب الـ Prototype
             if (gw.GF && gw.GF.gameController && gw.GF.gameController.mapObjectContainer) {
                 let objects = gw.GF.gameController.mapObjectContainer.childs || [];
                 for (let i = 0; i < objects.length; i++) {
                     let obj = objects[i];
-                    if (obj.old_collect_in !== undefined && obj._real_old_collect_in === undefined) {
-                        obj._real_old_collect_in = obj.old_collect_in; // حفظ الوقت الأصلي
-                        if (typeof obj.checkProducts === 'function') obj.checkProducts();
+                    
+                    // إذا كان الكائن يمتلك الخاصية داخله مباشرة (Own Property)
+                    if (obj.hasOwnProperty("old_collect_in")) {
+                        let savedValue = obj.old_collect_in; // حفظ القيمة
+                        delete obj.old_collect_in; // حذفها لكي يعمل الـ Prototype
+                        obj.old_collect_in = savedValue; // إعادة التعيين (ستمر الآن عبر الـ Setter)
+                        
+                        if (typeof obj.checkProducts === 'function') {
+                            obj.checkProducts();
+                        }
                     }
                 }
             }
 
             CollectObjectClass.prototype._tb_hacked = true;
-            console.log("✅ [SupremeFarm] تم تفعيل كاسر الوقت الجذري للآلات والحيوانات!");
+            console.log("✅ [SupremeFarm] تم تفعيل كاسر الوقت الجذري وإزالة الحواجز للآلات والحيوانات!");
         }
         
         return true;
