@@ -5979,56 +5979,38 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
         return new Promise(resolve => setTimeout(resolve, ms));
     }
 
-    processRewards(res) {
-        if (!res || !res.raw) return;
+    processRewards() {
         try {
             let gw = (typeof unsafeWindow !== 'undefined') ? unsafeWindow : window;
-            let rData = res.raw;
-            let exp = 0, coin = 0;
             
-            if (rData.exp) exp += parseInt(rData.exp);
-            if (rData.add_exp) exp += parseInt(rData.add_exp);
-            if (rData.coin) coin += parseInt(rData.coin);
-            if (rData.add_coin) coin += parseInt(rData.add_coin);
-            if (rData.addCoins) coin += parseInt(rData.addCoins);
-            if (rData.reward && Array.isArray(rData.reward)) {
-                rData.reward.forEach(r => {
-                    if (r.id == 2 || r.type === 'exp' || r.type === 'experience') exp += parseInt(r.num || 1);
-                    if (r.id == 1 || r.type === 'coin' || r.type === 'coins') coin += parseInt(r.num || 1);
-                });
+            // Fixed rewards for 10 clicks (mega harvest)
+            let exp = 10;   // 1 xp * 10 clicks
+            let coin = 50;  // 5 coins * 10 clicks
+            
+            if (gw.GF && gw.GF.loginModel && gw.GF.loginModel.addTreasure) {
+                // This triggers the internal data update + UI event naturally
+                gw.GF.loginModel.addTreasure("experience", exp);
+                gw.GF.loginModel.addTreasure("coins", coin);
             }
-            
-            exp = exp > 0 ? exp * 10 : 20; // Default visual pop
-            coin = coin > 0 ? coin * 10 : 50; 
             
             if (gw.GF && gw.GF.gameController && gw.Animations) {
                 let startRect = gw.egret.Rectangle.create();
                 startRect.x = window.innerWidth / 2; startRect.y = window.innerHeight / 2;
                 startRect.width = 50; startRect.height = 50;
                 
-                if (exp > 0) {
-                    gw.GF.gameController.collectTopTip("exp", exp);
-                    let ep = gw.egret.Point.create(window.innerWidth / 2, 30);
-                    if (gw.GF.gameController.operArea && gw.GF.gameController.operArea.lblExp) {
-                        gw.GF.gameController.operArea.lblExp.parent.localToGlobal(0, 0, ep);
-                        // Just refresh UI, game already updated the data internally via MessageCenter
-                        if (gw.GF.loginModel && gw.GF.loginModel.AppData) {
-                            gw.GF.gameController.operArea.lblExp.textFormatNum = gw.GF.loginModel.AppData.experience;
-                        }
-                    }
-                    gw.Animations.flyItemTo("exp", startRect, ep);
+                gw.GF.gameController.collectTopTip("exp", exp);
+                let ep = gw.egret.Point.create(window.innerWidth / 2, 30);
+                if (gw.GF.gameController.operArea && gw.GF.gameController.operArea.lblExp) {
+                    gw.GF.gameController.operArea.lblExp.parent.localToGlobal(0, 0, ep);
                 }
-                if (coin > 0) {
-                    gw.GF.gameController.collectTopTip("coin", coin);
-                    let cp = gw.egret.Point.create(window.innerWidth - 100, 30);
-                    if (gw.GF.gameController.operArea && gw.GF.gameController.operArea.lblCoin) {
-                        gw.GF.gameController.operArea.lblCoin.parent.localToGlobal(0, 0, cp);
-                        if (gw.GF.loginModel && gw.GF.loginModel.AppData) {
-                            gw.GF.gameController.operArea.lblCoin.textFormatNum = gw.GF.loginModel.AppData.coin;
-                        }
-                    }
-                    gw.Animations.flyItemTo("coin", startRect, cp);
+                gw.Animations.flyItemTo("exp", startRect, ep);
+                
+                gw.GF.gameController.collectTopTip("coin", coin);
+                let cp = gw.egret.Point.create(window.innerWidth - 100, 30);
+                if (gw.GF.gameController.operArea && gw.GF.gameController.operArea.lblCoin) {
+                    gw.GF.gameController.operArea.lblCoin.parent.localToGlobal(0, 0, cp);
                 }
+                gw.Animations.flyItemTo("coin", startRect, cp);
             }
         } catch(e) { console.log("Error flying rewards:", e); }
     }
