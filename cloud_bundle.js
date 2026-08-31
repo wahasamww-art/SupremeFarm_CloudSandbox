@@ -6337,7 +6337,6 @@ if (window.SF && window.SF.modules) {
     function injectDirectTimeBreaker() {
         let gw = (typeof unsafeWindow !== 'undefined') ? unsafeWindow : window;
         
-        // الوصول الدقيق إلى المكان الذي تخفي فيه اللعبة الآلات
         if (!gw.GF || !gw.GF.gameController || !gw.GF.gameController.gameView) return;
         
         let objLayer = gw.GF.gameController.gameView.objLayer;
@@ -6345,7 +6344,6 @@ if (window.SF && window.SF.modules) {
         
         let objects = [];
         
-        // استخراج الكائنات مباشرة من محرك الطبقات الخاص باللعبة
         if (objLayer.$children && Array.isArray(objLayer.$children)) {
             objects = objLayer.$children;
         } else if (typeof objLayer.getChildAt === 'function' && objLayer.numChildren > 0) {
@@ -6354,27 +6352,30 @@ if (window.SF && window.SF.modules) {
             }
         }
         
-        let offset = 20; // 20 ثانية خصم
+        let offset = 20;
         let modified = 0;
         
         for (let i = 0; i < objects.length; i++) {
             let obj = objects[i];
             
-            // التأكد من أنه آلة أو حيوان قابل لكسر الوقت
             if (obj && obj.old_collect_in !== undefined && typeof obj.checkProducts === 'function') {
                 if (!obj._tb_direct_hacked) {
                     
-                    // التلاعب المباشر بالذاكرة الأساسية للآلة
-                    if (obj.old_collect_in > offset) {
-                        obj.old_collect_in -= offset;
-                    } else {
-                        obj.old_collect_in = 1;
-                    }
+                    let prev_collect = obj.collect_in;
                     
-                    // إعادة الحساب
+                    obj.old_collect_in = Math.max(1, obj.old_collect_in - offset);
+                    
+                    // للحيوانات: هذه الدالة تقوم بتحديث collect_in تلقائياً بناءً على old_collect_in
                     obj.checkProducts();
                     
-                    // إعادة تشغيل المؤقت الداخلي للآلة لتعمل بالوقت المخفض
+                    // للآلات: الدالة السابقة لا تحدث collect_in، لذا يجب تحديثه يدوياً
+                    if (obj.collect_in === prev_collect) {
+                        obj.collect_in = Math.max(1, obj.collect_in - offset);
+                        
+                        // إعادة الحساب مرة أخرى للآلات بعد تعديل collect_in
+                        obj.checkProducts();
+                    }
+                    
                     if (obj.is_working && typeof obj.stopTimer === 'function' && typeof obj.startTimer === 'function') {
                         obj.stopTimer();
                         obj.startTimer();
@@ -6392,7 +6393,6 @@ if (window.SF && window.SF.modules) {
         }
     }
 
-    // تكرار الفحص كل ثانيتين لاصطياد أي آلة أو حيوان يتم وضعه حديثاً
     setInterval(injectDirectTimeBreaker, 2000);
 })();
 
