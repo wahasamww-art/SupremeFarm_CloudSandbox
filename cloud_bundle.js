@@ -21,7 +21,7 @@
 
 // ===================================================================
 // SupremeFarm Modular - Cloud Distribution Bundle
-// Generated at: 2026-08-31T21:19:06.925Z
+// Generated at: 2026-08-31T21:26:05.573Z
 // ===================================================================
 
 var SF = window.SF || {};
@@ -6930,9 +6930,15 @@ if (window.SF && window.SF.modules) {
                 return name + ' x' + r.qty;
             }).join(', ');
             
-            // تحديث سجل اللعب في الشريط الخاص بنا
+            // تحديث سجل اللعب الفعلي
             if (isPlaying) {
-                logMessage('🎁 النتيجة: ' + (rewardDesc || 'لا شيء'), true);
+                completedSpins++; // زيادة العداد فقط عند التأكد من نجاح الدورة من السيرفر
+                logMessage('🎁 (' + completedSpins + '/' + targetSpins + ') النتيجة: ' + (rewardDesc || 'لا شيء'), true);
+                
+                if (completedSpins >= targetSpins) {
+                    logMessage('✅ اكتملت الدفعة (' + completedSpins + ') بنجاح!', true);
+                    stopAutoSpin();
+                }
             }
         }
 
@@ -7213,20 +7219,11 @@ if (window.SF && window.SF.modules) {
 
                 // محاكاة النقر البشري الطبيعي
                 slotPanel.btnSpin.dispatchEventWith("touchTap");
-                completedSpins++;
                 
-                logMessage('🎰 جاري التدوير... (' + completedSpins + '/' + targetSpins + ')', true);
-
-                if (completedSpins >= targetSpins) {
-                    spinLock = false;
-                    logMessage('✅ اكتملت الدفعة (' + completedSpins + ') بنجاح!', true);
-                    stopAutoSpin();
-                    return;
-                }
-
-                // ننتظر 5.5 ثانية (لضمان أن الأنميشن الداخلي للعبة انتهى تماماً لكي لا تتجاهل اللعبة الضغطة)
+                // ننتظر 1.5 ثانية. إذا كانت الضغطة حقيقية، سيتم قفل الزر تلقائياً.
+                // وإذا كانت مجرد إغلاق لنافذة جائزة، سيبقى مفتوحاً وسنضغط مجدداً بسرعة!
                 spinLock = false;
-                spinTimeout = setTimeout(executeSpinCycle, 5500);
+                spinTimeout = setTimeout(executeSpinCycle, 1500);
 
             } else {
                 spinLock = false;
