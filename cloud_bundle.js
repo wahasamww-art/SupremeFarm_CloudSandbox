@@ -6332,68 +6332,95 @@ if (window.SF && window.SF.modules) {
 
 // --- File: features/TimeBreakerModule.js ---
 (function() {
-    console.log("🚀 [SupremeFarm] جارِ حقن كاسر الوقت المباشر (-20 ثانية)...");
+    console.log("🚀 [SupremeFarm] جارِ حقن كاسر الوقت الجذري (عبر اصطياد الدوال)...");
 
-    function injectDirectTimeBreaker() {
-        let gw = (typeof unsafeWindow !== 'undefined') ? unsafeWindow : window;
+    function applyHack(obj, needsRestart) {
+        if (!obj || obj._tb_direct_hacked) return;
+        if (obj.old_collect_in === undefined || obj.collect_in === undefined) return;
         
-        if (!gw.GF || !gw.GF.gameController || !gw.GF.gameController.gameView) return;
+        // إغلاق الثغرة فوراً لمنع التكرار اللانهائي
+        obj._tb_direct_hacked = true;
         
-        let objLayer = gw.GF.gameController.gameView.objLayer;
-        if (!objLayer) return;
+        let offset = 20; // 20 ثانية خصم
+        let prev_collect = obj.collect_in;
         
-        let objects = [];
+        obj.old_collect_in = Math.max(1, obj.old_collect_in - offset);
         
-        if (objLayer.$children && Array.isArray(objLayer.$children)) {
-            objects = objLayer.$children;
-        } else if (typeof objLayer.getChildAt === 'function' && objLayer.numChildren > 0) {
-            for (let i = 0; i < objLayer.numChildren; i++) {
-                objects.push(objLayer.getChildAt(i));
-            }
+        if (typeof obj.checkProducts === 'function') obj.checkProducts();
+        
+        // للآلات: إذا لم يتغير الوقت بعد الفحص، نفرض الخصم يدوياً
+        if (obj.collect_in === prev_collect) {
+            obj.collect_in = Math.max(1, obj.collect_in - offset);
+            if (typeof obj.checkProducts === 'function') obj.checkProducts();
         }
         
-        let offset = 20;
-        let modified = 0;
+        if (needsRestart && obj.is_working && typeof obj.stopTimer === 'function' && typeof obj.startTimer === 'function') {
+            obj.stopTimer();
+            obj.startTimer();
+            if (typeof obj.updateStage === 'function') obj.updateStage();
+        }
         
-        for (let i = 0; i < objects.length; i++) {
-            let obj = objects[i];
+        console.log("✅ [SupremeFarm] تم كسر وقت:", obj.name || obj.product_name || "آلة/حيوان");
+    }
+
+    function hookClasses() {
+        let gw = (typeof unsafeWindow !== 'undefined') ? unsafeWindow : window;
+        if (!gw.egret) return false;
+        
+        let classesToHook = ["Machine", "Animal", "CollectObject", "MapObject1", "Greenhouse", "WorkShop"];
+        let successCount = 0;
+        
+        for (let i = 0; i < classesToHook.length; i++) {
+            let cls = null;
+            try {
+                cls = gw.egret.getDefinitionByName(classesToHook[i]);
+            } catch(e) {}
             
-            if (obj && obj.old_collect_in !== undefined && typeof obj.checkProducts === 'function') {
-                if (!obj._tb_direct_hacked) {
-                    
-                    let prev_collect = obj.collect_in;
-                    
-                    obj.old_collect_in = Math.max(1, obj.old_collect_in - offset);
-                    
-                    // للحيوانات: هذه الدالة تقوم بتحديث collect_in تلقائياً بناءً على old_collect_in
-                    obj.checkProducts();
-                    
-                    // للآلات: الدالة السابقة لا تحدث collect_in، لذا يجب تحديثه يدوياً
-                    if (obj.collect_in === prev_collect) {
-                        obj.collect_in = Math.max(1, obj.collect_in - offset);
-                        
-                        // إعادة الحساب مرة أخرى للآلات بعد تعديل collect_in
-                        obj.checkProducts();
-                    }
-                    
-                    if (obj.is_working && typeof obj.stopTimer === 'function' && typeof obj.startTimer === 'function') {
-                        obj.stopTimer();
-                        obj.startTimer();
-                        if (typeof obj.updateStage === 'function') obj.updateStage();
-                    }
-                    
-                    obj._tb_direct_hacked = true;
-                    modified++;
+            if (cls && cls.prototype) {
+                // 1. اصطياد الكائن عند مرور الماوس عليه
+                if (typeof cls.prototype.next_product_in === 'function' && !cls.prototype._tb_next_hooked) {
+                    let origNext = cls.prototype.next_product_in;
+                    cls.prototype.next_product_in = function() {
+                        applyHack(this, true);
+                        return origNext.apply(this, arguments);
+                    };
+                    cls.prototype._tb_next_hooked = true;
+                    successCount++;
+                }
+                
+                // 2. اصطياد الكائن عند بدء الإنتاج
+                if (typeof cls.prototype.startTimer === 'function' && !cls.prototype._tb_start_hooked) {
+                    let origStart = cls.prototype.startTimer;
+                    cls.prototype.startTimer = function() {
+                        applyHack(this, false); // لا نحتاج لإعادة التشغيل لأنه يبدأ الآن
+                        return origStart.apply(this, arguments);
+                    };
+                    cls.prototype._tb_start_hooked = true;
+                    successCount++;
+                }
+                
+                // 3. اصطياد الكائن عند الفحص أو إضافة مواد
+                if (typeof cls.prototype.checkProducts === 'function' && !cls.prototype._tb_check_hooked) {
+                    let origCheck = cls.prototype.checkProducts;
+                    cls.prototype.checkProducts = function() {
+                        applyHack(this, true);
+                        return origCheck.apply(this, arguments);
+                    };
+                    cls.prototype._tb_check_hooked = true;
+                    successCount++;
                 }
             }
         }
         
-        if (modified > 0) {
-            console.log(`✅ [SupremeFarm] تم كسر الوقت (-20 ثانية) بنجاح لـ ${modified} من الآلات والحيوانات!`);
-        }
+        return successCount > 0;
     }
 
-    setInterval(injectDirectTimeBreaker, 2000);
+    let interval = setInterval(() => {
+        if (hookClasses()) {
+            console.log("✅ [SupremeFarm] تم زرع شباك اصطياد الآلات بنجاح!");
+            clearInterval(interval);
+        }
+    }, 2000);
 })();
 
 // --- File: features/SessionExtractorModule.js ---
