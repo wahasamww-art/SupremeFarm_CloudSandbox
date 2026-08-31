@@ -6357,23 +6357,22 @@ if (window.SF && window.SF.modules) {
             if (this.start_time > 0 && !hookedObjects.has(this)) {
                 hookedObjects.add(this);
 
+                const animals = this.animals || 1;
                 const offset = calcOffset(this.collect_in);
+                const newCollectIn = Math.max(MIN_COLLECT_IN, this.collect_in - offset);
 
-                // للحيوانات: old_collect_in موجود
-                if (this.old_collect_in !== undefined) {
-                    this.old_collect_in = Math.max(MIN_COLLECT_IN, this.old_collect_in - offset);
-                    if (typeof this.checkProducts === 'function') this.checkProducts();
-                }
-                // للآلات: collect_in مباشرة
-                if (this.collect_in !== undefined) {
-                    this.collect_in = Math.max(MIN_COLLECT_IN, this.collect_in - offset);
-                }
+                // نضبط old_collect_in = newCollectIn × animals
+                // بحيث لو checkProducts استدعت: collect_in = old_collect_in / animals = newCollectIn ✓
+                this.old_collect_in = newCollectIn * animals;
 
-                // إعادة ضبط المؤقت بالوقت الجديد
+                // نضبط collect_in مباشرة للدورة الحالية
+                this.collect_in = newCollectIn;
+
+                // نوقف المؤقت القديم ونشغل جديد بالوقت المخفض
                 if (typeof this.stopTimer === 'function') this.stopTimer();
                 if (typeof this.startTimer === 'function') this.startTimer();
 
-                console.log(`✅ [SupremeFarm] وقت مكسور: ${this.collect_in + offset}s → ${this.collect_in}s (خصم ${offset}s = ${Math.round(OFFSET_PERCENT*100)}%)`);
+                console.log(`✅ [SupremeFarm] ${this._data && this._data.config_data && this._data.config_data.kind || 'كائن'}: ${this.collect_in + offset}s → ${this.collect_in}s (-${offset}s)`);
             }
 
             return result;
