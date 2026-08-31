@@ -6335,9 +6335,15 @@ if (window.SF && window.SF.modules) {
     const OFFSET_PERCENT = 0.35;
     const MIN_COLLECT_IN = 5;
     const hookedProtos = new WeakSet();
+    // تخزين الـ collect_in الأصلي لكل كائن (لا compound reduction)
+    const originalCollectInMap = new WeakMap();
 
-    function calcOffset(collect_in) {
-        return Math.floor(Math.max(0, collect_in * OFFSET_PERCENT));
+    function getOriginalCollectIn(obj) {
+        if (!originalCollectInMap.has(obj)) {
+            const ci = (obj._data && obj._data.config_data && +obj._data.config_data.collect_in) || obj.collect_in || 0;
+            originalCollectInMap.set(obj, ci);
+        }
+        return originalCollectInMap.get(obj);
     }
 
     function applyHack(obj) {
@@ -6347,44 +6353,56 @@ if (window.SF && window.SF.modules) {
         if (obj[cycleKey]) return;
         obj[cycleKey] = true;
 
-        // القيمة الأصلية من الـ config — لا نخصم من الخصم (لا compound)
-        const originalCollectIn = (obj._data && obj._data.config_data && +obj._data.config_data.collect_in) || obj.collect_in;
+        const originalCI = getOriginalCollectIn(obj);
+        if (!originalCI) return;
 
         const animals = obj.animals || 1;
-        const offset = Math.floor(originalCollectIn * OFFSET_PERCENT);
-        const newCollectIn = Math.max(MIN_COLLECT_IN, originalCollectIn - offset);
+        const offset = Math.floor(originalCI * OFFSET_PERCENT);
+        const newCollectIn = Math.max(MIN_COLLECT_IN, originalCI - offset);
 
-        // old_collect_in = newCollectIn × animals
-        // بحيث checkProducts تحسب: collect_in = old_collect_in / animals = newCollectIn ✓
         obj.old_collect_in = newCollectIn * animals;
         obj.collect_in = newCollectIn;
 
-        // نطرح ثانية من start_time لضمان أن elapsed >= collect_in عند تشغيل المؤقت
-        if (obj.serverData && obj.serverData.start_time) {
-            obj.serverData.start_time -= 1;
-        }
+        // نصفّر _collTime لأنه قد يكون تراكم من دورات سابقة ويمنع الإنتاج
+        obj._collTime = 0;
 
         if (typeof obj.stopTimer === 'function') obj.stopTimer();
         if (typeof obj.startTimer === 'function') obj.startTimer();
 
         const kind = obj._data && obj._data.config_data && obj._data.config_data.kind || 'كائن';
-        console.log(`✅ [SupremeFarm] ${kind}: ${originalCollectIn}s → ${newCollectIn}s (-${offset}s = ${Math.round(OFFSET_PERCENT*100)}%)`);
+        console.log(`✅ [SupremeFarm] ${kind}: ${originalCI}s → ${newCollectIn}s (-${offset}s = ${Math.round(OFFSET_PERCENT*100)}%)`);
     }
 
-    function hookProduceOnProto(proto) {
+    function hookProto(proto) {
         if (!proto || hookedProtos.has(proto)) return false;
-        if (!proto.hasOwnProperty('produce')) return false;
 
-        hookedProtos.add(proto);
-        const origProduce = proto.produce;
+        let hooked = false;
 
-        proto.produce = function() {
-            const result = origProduce.apply(this, arguments);
-            applyHack(this);
-            return result;
-        };
+        // Hook على produce()
+        if (proto.hasOwnProperty('produce')) {
+            hookedProtos.add(proto);
+            const origProduce = proto.produce;
+            proto.produce = function() {
+                const result = origProduce.apply(this, arguments);
+                applyHack(this);
+                return result;
+            };
+            hooked = true;
+        }
 
-        return true;
+        // Hook على checkProducts() — نصفّر _collTime قبل الحساب
+        if (proto.hasOwnProperty('checkProducts')) {
+            const origCheck = proto.checkProducts;
+            proto.checkProducts = function() {
+                // _collTime قد يتراكم من collect أثناء الإنتاج → نصفّره لكل دورة مخترقة
+                const ci = getOriginalCollectIn(this);
+                if (ci > 0) this._collTime = 0;
+                return origCheck.apply(this, arguments);
+            };
+            hooked = true;
+        }
+
+        return hooked;
     }
 
     function scanAndHook() {
@@ -6399,7 +6417,7 @@ if (window.SF && window.SF.modules) {
 
                 let proto = Object.getPrototypeOf(obj);
                 while (proto) {
-                    if (hookProduceOnProto(proto)) hooked++;
+                    if (hookProto(proto)) hooked++;
                     proto = Object.getPrototypeOf(proto);
                 }
             }
