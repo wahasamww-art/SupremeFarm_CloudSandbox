@@ -21,7 +21,7 @@
 
 // ===================================================================
 // SupremeFarm Modular - Cloud Distribution Bundle
-// Generated at: 2026-08-31T21:40:02.255Z
+// Generated at: 2026-09-01T11:45:14.612639+00:00Z
 // ===================================================================
 
 var SF = window.SF || {};
@@ -57,6 +57,8 @@ SF.bus = new SF.EventBus();
 
 
 
+
+
 // --- File: core/ModuleBase.js ---
 ﻿// --- core\ModuleBase.js ---
 window.SF = window.SF || {};
@@ -87,6 +89,8 @@ SF.ModuleBase = class ModuleBase {
     // Called when the tab becomes active, useful for refreshing data
     update() {}
 };
+
+
 
 
 
@@ -129,6 +133,8 @@ SF.ModuleManager = class ModuleManager {
 
 // Global instance
 SF.modules = new SF.ModuleManager();
+
+
 
 
 
@@ -194,6 +200,8 @@ SF.StorageManager = class StorageManager {
         });
     }
 };
+
+
 
 
 
@@ -335,6 +343,8 @@ SF.netMonitor.install();
 
 
 
+
+
 // --- File: network/GameDataExtractor.js ---
 ﻿// --- network\GameDataExtractor.js ---
 window.SF = window.SF || {};
@@ -372,6 +382,8 @@ SF.GameDataExtractor = class GameDataExtractor {
 
 // Auto-initialize
 SF.dataExtractor = new SF.GameDataExtractor();
+
+
 
 
 
@@ -634,6 +646,8 @@ SF.Styles = `
 
 
 
+
+
 // --- File: ui/SplashScreen.js ---
 // --- ui\SplashScreen.js ---
 window.SF = window.SF || {};
@@ -824,6 +838,8 @@ SF.SplashScreen = class SplashScreen {
 };
 
 
+
+
 // --- File: ui/UIManager.js ---
 ﻿// --- ui\UIManager.js ---
 window.SF = window.SF || {};
@@ -970,6 +986,8 @@ SF.UIManager = class UIManager {
         }
     }
 };
+
+
 
 
 
@@ -1981,6 +1999,8 @@ SF.modules.register(new SF.AutoFarmModule());
 
 
 
+
+
 // --- File: features/ZeroGasModule.js ---
 // --- features\ZeroGasModule.js ---
 window.SF = window.SF || {};
@@ -2148,6 +2168,35 @@ SF.ZeroGasModule = class ZeroGasModule extends SF.ModuleBase {
                                     delete payload.isAuto;
                                     console.log('[SF-ZeroGas] Network Intercept: Completely removed automatic keys for ' + action);
                                 }
+
+                                // 🕒 Time-Spoofing for Animals (Bypass Server Timer)
+                                if (action === 'collect_product.save_data') {
+                                    console.log('[SF-ZeroGas] Intercepting collect_product. Payload:', JSON.stringify(payload));
+                                    if (payload.unique_id) {
+                                        const layer = window.GF && window.GF.gameController && window.GF.gameController.gameView && window.GF.gameController.gameView.objLayer;
+                                        if (layer && layer.$children) {
+                                            const obj = layer.$children.find(c => c && c.map_unique_id == payload.unique_id);
+                                            if (obj) {
+                                                console.log(`[SF-ZeroGas] Found object in layer: ${obj.map_unique_id}, type: ${obj._data?.config_data?.type}`);
+                                                if (obj._data && obj._data.config_data && (obj._data.config_data.type === 'animals' || obj._data.config_data.type === 'gear')) {
+                                                    const originalTime = obj._data.config_data.collect_in / (obj.animals || 1);
+                                                    const hackedTime = obj.collect_in;
+                                                    const diff = originalTime - hackedTime;
+                                                    console.log(`[SF-ZeroGas] Timing check: original=${originalTime}, hacked=${hackedTime}, diff=${diff}`);
+                                                    if (diff > 0) {
+                                                        const curTime = 0.001 * egret.getTimer();
+                                                        payload.opTime = curTime + diff + 1; // +1s for safety margin
+                                                        console.log(`[SF-ZeroGas] 🕒 Spoofed opTime for ${obj._data.config_data.kind}: +${diff}s. New opTime=${payload.opTime}`);
+                                                    }
+                                                }
+                                            } else {
+                                                console.log('[SF-ZeroGas] Object not found in layer for unique_id:', payload.unique_id);
+                                            }
+                                        } else {
+                                            console.log('[SF-ZeroGas] Game layer not found!');
+                                        }
+                                    }
+                                }
                             }
 
                             // Proactively block ALL toggle_automation and shop automation endpoints
@@ -2155,11 +2204,13 @@ SF.ZeroGasModule = class ZeroGasModule extends SF.ModuleBase {
                                 console.log('[SF-ZeroGas] BLOCKED ' + action + ' to prevent server side gas deduction for automation!');
                                 return; // Block the request completely
                             }
-                        } catch(e) {}
+                        } catch(e) {
+                            console.error("[SF-ZeroGas] Intercept Error:", e);
+                        }
 
                         return original_enqueue.apply(this, arguments);
                     };
-                    console.log("✅ [SF-ZeroGas] NetUtils hooked.");
+                    console.log("✅ [SF-ZeroGas] NetUtils hooked with Time-Spoofing.");
                 } else {
                     setTimeout(injectNetUtils, 1000);
                 }
@@ -2609,6 +2660,8 @@ new SF.CropinatorModule();
 
 
 
+
+
 // --- File: config/MachineBuilderAccounts.js ---
 // ملف إعدادات حسابات بناء الآلات
 // انسخ كل المفاتيح (الكوكيز) والصقها هنا تحت بعضها مباشرة
@@ -2654,8 +2707,9 @@ window.MachineBuilderAccounts = `
 `;
 
 
+
+
 // --- File: features/MachineBuilderModule.js ---
-// --- features/MachineBuilderModule.js ---
 window.SF = window.SF || {};
 
 SF.MachineBuilderModule = class MachineBuilderModule extends SF.ModuleBase {
@@ -3589,6 +3643,7 @@ SF.MachineBuilderModule = class MachineBuilderModule extends SF.ModuleBase {
     }
 };
 SF.modules.register(new SF.MachineBuilderModule());
+
 
 
 // --- File: features/AlbumTrackerModule.js ---
@@ -4525,6 +4580,8 @@ SF.AlbumTrackerModule = class AlbumTrackerModule extends SF.ModuleBase {
 SF.modules.register(new SF.AlbumTrackerModule());
 
 
+
+
 // --- File: features/MineModule.js ---
 window.SF = window.SF || {};
 
@@ -4736,6 +4793,8 @@ SF.MineModule = class MineModule extends SF.ModuleBase {
 console.log('[SF-MineModule] ✅ MineModule class defined. Registering now...');
 SF.modules.register(new SF.MineModule());
 console.log('[SF-MineModule] ✅ Registration complete. Total modules:', SF.modules.getModules().length);
+
+
 
 
 // --- File: features/BattlePassModule.js ---
@@ -5012,6 +5071,8 @@ SF.BattlePassModule = class BattlePassModule extends SF.ModuleBase {
 };
 
 new SF.BattlePassModule();
+
+
 
 
 // --- File: features/IslandPointBuyerModule.js ---
@@ -5299,6 +5360,8 @@ SF.IslandPointBuyerModule = class IslandPointBuyerModule extends SF.ModuleBase {
 SF.modules.register(new SF.IslandPointBuyerModule());
 
 
+
+
 // --- File: features/StoreFlipFixModule.js ---
 // --- features\StoreFlipFixModule.js ---
 window.SF = window.SF || {};
@@ -5418,6 +5481,8 @@ SF.StoreFlipFixModule = class StoreFlipFixModule extends SF.ModuleBase {
 
 // Register the module
 new SF.StoreFlipFixModule();
+
+
 
 
 // --- File: features/StoreRevealModule.js ---
@@ -5637,6 +5702,8 @@ SF.StoreRevealModule = class StoreRevealModule extends SF.ModuleBase {
 new SF.StoreRevealModule();
 
 
+
+
 // --- File: features/AutoMegaHarvestModule.js ---
 window.SF = window.SF || {};
 
@@ -5700,8 +5767,8 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
 
         for (let key in store) {
             const item = store[key];
-            if (item && (item.type === "seeds" || item.type === "trees")) {
-                items.push({ id: item.id, name: item.name || `Item ${item.id}`, type: item.type });
+            if (item && item.type && !["decor", "avatar", "clothing", "material", "consumable", "coin", "cash", "mission", "coupon"].includes(item.type.toLowerCase())) {
+                items.push({ id: item.id, name: item.name || `Item ${item.id}`, type: item.type, kind: item.kind });
             }
         }
         return items;
@@ -5721,8 +5788,14 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
             try {
                 if (event === "HTTP_SUCCESS") {
                     const data = args[1];
+                    let updates = null;
                     if (data && data.objects_to_update) {
-                        const updates = Array.isArray(data.objects_to_update) ? data.objects_to_update : Object.values(data.objects_to_update);
+                        updates = Array.isArray(data.objects_to_update) ? data.objects_to_update : Object.values(data.objects_to_update);
+                    } else if (data && Array.isArray(data)) {
+                        updates = data;
+                    }
+
+                    if (updates) {
                         
                         let found = false;
                         let product = null;
@@ -5732,15 +5805,15 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
 
                         for (let obj of updates) {
                             if (obj && obj.needResponse && obj.needResponse.data) {
-                                const ch = obj.needResponse.channel;
-                                if (ch === "friend_collect" || ch === "friend_collect_trees" || ch === "friend_fertilize" || ch === "friend_water") {
-                                    found = true;
-                                    const rData = obj.needResponse.data;
-                                    
-                                    if (rData.msg === "ok" && rData.product) {
-                                        product = rData.product;
-                                        totalAdded += (rData.product_num || 1);
+                                const rData = obj.needResponse.data;
+                                if (rData) {
+                                    if (rData.msg === "ok") {
+                                        if (rData.product) {
+                                            product = rData.product;
+                                            totalAdded += (rData.product_num || 1);
+                                        }
                                         msg = "ok";
+                                        self.lastValidRData = rData;
                                     } else if (rData.msg === "used up") {
                                         usedUpFound = true;
                                     } else if (!msg) {
@@ -5750,10 +5823,11 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
                             }
                         }
 
-                        if (found && self.activeCallback) {
+                        if (self.activeCallback) {
                             if (usedUpFound) msg = "used up";
-                            self.activeCallback({ product, msg, totalAdded });
+                            self.activeCallback({ product, msg, totalAdded, raw: self.lastValidRData });
                             self.activeCallback = null;
+                            self.lastValidRData = null;
                         }
                     }
                 }
@@ -5834,6 +5908,7 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
                     <select id="sf-harvest-mode" style="width: 140px; margin-bottom: 0;">
                         <option value="harvest">حصاد (تجميع ثمار)</option>
                         <option value="fertilize">تسميد / ساقية (مساعدة)</option>
+                        <option value="building">حصاد أبنية (بركة الملح وغيرها)</option>
                     </select>
                 </div>
 
@@ -5876,9 +5951,12 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
         modeSelect.addEventListener('change', () => {
             if (modeSelect.value === 'harvest') {
                 inputTarget.placeholder = "عدد الثمار...";
-            } else {
+            } else if (modeSelect.value === 'fertilize') {
                 inputTarget.placeholder = "عدد الجيران...";
+            } else {
+                inputTarget.placeholder = "العدد...";
             }
+            searchInput.dispatchEvent(new Event('input'));
         });
 
         searchInput.addEventListener("focus", lazyLoadData);
@@ -5891,12 +5969,23 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
                 return;
             }
 
-            const filtered = this.allItems.filter(item => item.name.toLowerCase().includes(query) || String(item.id).includes(query));
+            let modeItems = this.allItems;
+            const currentMode = modeSelect.value;
+            if (currentMode === "building") {
+                modeItems = this.allItems.filter(item => !["seeds", "trees"].includes(item.type));
+            } else {
+                modeItems = this.allItems.filter(item => ["seeds", "trees"].includes(item.type));
+            }
+
+            const filtered = modeItems.filter(item => item.name.toLowerCase().includes(query) || String(item.id).includes(query));
             
             filtered.slice(0, 50).forEach(item => {
                 const opt = document.createElement("option");
                 opt.value = JSON.stringify(item);
-                opt.innerText = `[${item.id}] ${item.name} (${item.type === 'trees' ? 'شجرة' : 'محصول'})`;
+                let tName = item.type;
+                if (tName === 'trees') tName = 'شجرة';
+                if (tName === 'seeds') tName = 'بذرة/محصول';
+                opt.innerText = `[${item.id}] ${item.name} (${tName})`;
                 resultsSelect.appendChild(opt);
             });
             resultsSelect.size = Math.min(8, Math.max(2, filtered.length));
@@ -5929,7 +6018,7 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
             const item = JSON.parse(selectedOpt.value);
             this.currentMode = modeSelect.value;
             this.targetLimit = limit;
-            this.startHarvest(item.id, item.type);
+            this.startHarvest(item.id, item.type, item.kind);
         });
 
         btnStop.addEventListener('click', () => {
@@ -5957,6 +6046,51 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
 
     sleep(ms) {
         return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+    processRewards() {
+        try {
+            let gw = (typeof unsafeWindow !== 'undefined') ? unsafeWindow : window;
+            
+            // Fixed rewards for 10 clicks (mega harvest)
+            let exp = 10;   // 1 xp * 10 clicks
+            let coin = 50;  // 5 coins * 10 clicks
+            
+            if (gw.GF && gw.GF.loginModel && gw.GF.loginModel.addTreasure) {
+                // This triggers the internal data update + UI event naturally
+                gw.GF.loginModel.addTreasure("experience", exp);
+                gw.GF.loginModel.addTreasure("coins", coin);
+                if (typeof this.log === 'function') {
+                    this.log(`💸 إضافة لحظية: +${exp} خبرة | +${coin} ذهب`);
+                }
+            }
+            
+            if (gw.GF && gw.GF.gameController && gw.Animations) {
+                let startRect = gw.egret.Rectangle.create();
+                startRect.x = window.innerWidth / 2; startRect.y = window.innerHeight / 2;
+                startRect.width = 50; startRect.height = 50;
+                
+                gw.GF.gameController.collectTopTip("exp", exp);
+                let ep = gw.egret.Point.create(window.innerWidth / 2, 30);
+                if (gw.GF.gameController.operArea && gw.GF.gameController.operArea.lblExp) {
+                    gw.GF.gameController.operArea.lblExp.parent.localToGlobal(0, 0, ep);
+                    if (gw.GF.loginModel && gw.GF.loginModel.AppData) {
+                        gw.GF.gameController.operArea.lblExp.textFormatNum = gw.GF.loginModel.AppData.experience;
+                    }
+                }
+                gw.Animations.flyItemTo("exp", startRect, ep);
+                
+                gw.GF.gameController.collectTopTip("coins", coin);
+                let cp = gw.egret.Point.create(window.innerWidth - 100, 30);
+                if (gw.GF.gameController.operArea && gw.GF.gameController.operArea.lblCoin) {
+                    gw.GF.gameController.operArea.lblCoin.parent.localToGlobal(0, 0, cp);
+                    if (gw.GF.loginModel && gw.GF.loginModel.AppData) {
+                        gw.GF.gameController.operArea.lblCoin.textFormatNum = gw.GF.loginModel.AppData.coins;
+                    }
+                }
+                gw.Animations.flyItemTo("coin", startRect, cp);
+            }
+        } catch(e) { console.log("Error flying rewards:", e); }
     }
 
     randomJitter() {
@@ -6022,7 +6156,7 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
         }
     }
 
-    async startHarvest(itemId, itemType) {
+    async startHarvest(itemId, itemType, itemKind) {
         const gw = (typeof unsafeWindow !== 'undefined') ? unsafeWindow : window;
         if (!gw.GF || !gw.GF.loginModel) {
             this.log("⚠️ اللعبة لم تحمل بالكامل.");
@@ -6037,14 +6171,20 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
         if(this.btnStart) this.btnStart.style.display = 'none';
         if(this.btnStop) this.btnStop.style.display = 'block';
 
-        const isFertilize = (this.currentMode === "fertilize");
-        const modeName = isFertilize ? "التسميد/الساقية" : "الحصاد";
-        const targetName = isFertilize ? "جار" : "ثمرة";
+        let modeName = "الحصاد";
+        let targetName = "ثمرة";
+        if (this.currentMode === "fertilize") { modeName = "التسميد/الساقية"; targetName = "جار"; }
+        else if (this.currentMode === "building") { modeName = "حصاد الأبنية"; targetName = "ثمرة"; }
 
         this.log(`🔥 انطلاق وضع [${modeName}] لمحصول [${itemId}]! الهدف: ${this.targetLimit} ${targetName}`);
 
-        const harvestCmd = (itemType === "trees") ? "friend_collect_trees" : "friend_collect";
+        let harvestCmd = (itemType === "trees") ? "friend_collect_trees" : "friend_collect";
         const fertCmd = (itemType === "trees") ? "friend_water.save_data" : "friend_fertilize.save_data";
+        
+        if (this.currentMode === "building") {
+            let kindStr = (itemKind || "saltpond").toLowerCase();
+            harvestCmd = "friend_collect_" + kindStr;
+        }
         
         let friendsList = [];
         if (gw.GF.friendsModel && gw.GF.friendsModel.allNeighbors) {
@@ -6086,13 +6226,30 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
                 if (this.currentMode === "fertilize") {
                     const payloadToUse = { friend_id: friendId, plant_x: 0, plant_y: 0, plant_id: itemId };
                     
+                    const fertPromise = new Promise(resolve => {
+                        this.activeCallback = resolve;
+                        setTimeout(() => { if (this.activeCallback) { this.activeCallback(null); } }, 5000);
+                    });
+
                     let burst = 10;
                     for (let b = 0; b < burst; b++) {
                         gw.NetUtils.enqueue(fertCmd, payloadToUse);
                     }
+                    // الضربة الـ 11 لاستلام مكافأة الجار في نفس الدفعة
+                    gw.NetUtils.enqueue("water_plants", {
+                        id: friendId,
+                        needResponse: "water_plants",
+                        cur_sceneid: 0
+                    });
+                    
                     if (gw.NetUtils.flush) gw.NetUtils.flush();
                     
-                    await this.sleep(1000); // إعطاء السيرفر ثانية لمعالجة الطلبات
+                    const res = await fertPromise;
+                    if (res && res.msg !== "used up") {
+                        this.processRewards();
+                    } else {
+                        await this.sleep(500); // fallback wait
+                    }
                     
                     this.log(`⛔ الجار [${friendId}] تم توجيه 10 نقرات تسميد مدمجة له بنجاح.`);
                     this.blacklist[friendId] = true;
@@ -6107,7 +6264,7 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
                     break; // الانتقال للجار التالي
                 }
 
-                if (this.currentMode === "harvest") {
+                if (this.currentMode === "harvest" || this.currentMode === "building") {
                     let harvestPayload;
                     if (itemType === "trees") {
                         harvestPayload = { 
@@ -6117,6 +6274,13 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
                             cur_sceneid: 1, 
                             id: itemId, 
                             achievement_add: "social_1825_9758" 
+                        };
+                    } else if (this.currentMode === "building") {
+                        harvestPayload = { 
+                            friend_id: friendId, 
+                            itemid: itemId,
+                            friendName: neighbor.name || "",
+                            cur_sceneid: 0
                         };
                     } else {
                         harvestPayload = { friend_id: friendId, itemid: itemId };
@@ -6136,6 +6300,13 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
                     for (let b = 0; b < burst; b++) {
                         gw.NetUtils.enqueue(harvestCmd, harvestPayload);
                     }
+                    // الضربة الـ 11 لاستلام مكافأة الجار في نفس الدفعة
+                    gw.NetUtils.enqueue("water_plants", {
+                        id: friendId,
+                        needResponse: "water_plants",
+                        cur_sceneid: 0
+                    });
+
                     if (gw.NetUtils.flush) gw.NetUtils.flush();
 
                     const res = await harvestPromise;
@@ -6146,13 +6317,15 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
                     } else {
                         if (res.totalAdded > 0) {
                             this.totalFruits += res.totalAdded;
-                            this.totalHarvested += res.totalAdded; // إضافة الثمار للعداد الرئيسي
+                            this.totalHarvested += res.totalAdded; // استرجاع عداد الثمار
                             this.log(`✅ الضربة القاضية (10 نقرات مدمجة): تم حصد ${res.totalAdded} ثمرة! إجمالي الثمار: ${this.totalHarvested}/${this.targetLimit}`);
 
                             if (gw.GF && gw.GF.loginModel && gw.GF.loginModel.AppData && gw.GF.loginModel.AppData.storage) {
                                 let curQty = gw.GF.loginModel.AppData.storage[res.product] || 0;
                                 gw.GF.loginModel.AppData.storage[res.product] = curQty + res.totalAdded;
                             }
+                            
+                            this.processRewards(res);
 
                             try {
                                 if (gw.GF && gw.GF.gameController && gw.Animations) {
@@ -6171,22 +6344,30 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
                             } catch(e) {}
                         }
                         
-                        if (res.msg === "used up") {
-                            this.log(`⛔ استنفدت طاقة الجار [${friendId}]. إضافته للقائمة السوداء.`);
+                        if (res.msg === "used up" || res.totalAdded === 0) {
+                            if (res.msg === "used up") {
+                                this.log(`⛔ استنفدت طاقة الجار [${friendId}]. إضافته للقائمة السوداء.`);
+                            } else {
+                                this.log(`⚠️ حصيلة فارغة للجار [${friendId}] بعد 10 نقرات. الجار فارغ، ننتقل للتالي.`);
+                            }
                             this.blacklist[friendId] = true;
                             this.saveBlacklist();
                             neighborHasEnergy = false;
                         } else {
-                            if (res.totalAdded === 0) {
-                                this.log(`⚠️ نقرة فارغة للجار [${friendId}]. مستمرون بالضرب حتى نفاذ طاقته...`);
-                            }
-                            await this.sleep(this.randomJitter());
+                            await this.sleep(this.randomJitter()); // تأخير عشوائي لتجنب الحظر من السيرفر (Rate Limit)
                         }
                     }
 
+                    this.blacklist[friendId] = true;
+                    this.saveBlacklist();
                     this.update(); 
                     updateStatsUI();
+                    break;
                 }
+            }
+            // تأخير قبل الانتقال للجار التالي لتجنب حظر السيرفر
+            if (this.isRunning) {
+                await this.sleep(150); // تأخير قصير جداً لجعل التسميد صاروخياً
             }
         }
 
@@ -6215,6 +6396,141 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
 if (window.SF && window.SF.modules) {
     window.SF.modules.register(new SF.AutoMegaHarvestModule());
 }
+
+
+
+
+// --- File: features/TimeBreakerModule.js ---
+(function() {
+    const OFFSET_PERCENT = 0.30;
+    const MIN_COLLECT_IN = 5;
+    const hookedProtos = new WeakSet();
+    // تخزين الـ collect_in الأصلي لكل كائن (لا compound reduction)
+    const originalCollectInMap = new WeakMap();
+
+    function getOriginalCollectIn(obj) {
+        if (!originalCollectInMap.has(obj)) {
+            const ci = (obj._data && obj._data.config_data && +obj._data.config_data.collect_in) || obj.collect_in || 0;
+            originalCollectInMap.set(obj, ci);
+        }
+        return originalCollectInMap.get(obj);
+    }
+
+    function applyHack(obj) {
+        if (!obj || !obj.start_time) return;
+
+        const cycleKey = '_tb_st_' + obj.start_time;
+        if (obj[cycleKey]) return;
+        obj[cycleKey] = true;
+
+        const originalCI = getOriginalCollectIn(obj);
+        if (!originalCI) return;
+
+        const animals = obj.animals || 1;
+        const offset = Math.floor(originalCI * OFFSET_PERCENT);
+        const newCollectIn = Math.max(MIN_COLLECT_IN, originalCI - offset);
+
+        obj.old_collect_in = newCollectIn * animals;
+        obj.collect_in = newCollectIn;
+
+        // نصفّر _collTime لأنه قد يكون تراكم من دورات سابقة ويمنع الإنتاج
+        obj._collTime = 0;
+
+        if (typeof obj.stopTimer === 'function') obj.stopTimer();
+        if (typeof obj.startTimer === 'function') obj.startTimer();
+
+        const kind = obj._data && obj._data.config_data && obj._data.config_data.kind || 'كائن';
+        console.log(`✅ [SupremeFarm] ${kind}: ${originalCI}s → ${newCollectIn}s (-${offset}s = ${Math.round(OFFSET_PERCENT*100)}%)`);
+    }
+
+    function hookProto(proto) {
+        if (!proto || hookedProtos.has(proto)) return false;
+
+        let hooked = false;
+
+        // Hook على produce()
+        if (proto.hasOwnProperty('produce')) {
+            hookedProtos.add(proto);
+            const origProduce = proto.produce;
+            proto.produce = function() {
+                const result = origProduce.apply(this, arguments);
+                applyHack(this);
+                return result;
+            };
+            hooked = true;
+        }
+
+        // Hook على onProduction()
+        if (proto.hasOwnProperty('onProduction')) {
+            const origOnProd = proto.onProduction;
+            proto.onProduction = function() {
+                origOnProd.apply(this, arguments);
+                if (!this._interactiveStatus && typeof this.onProductComplete === 'function') {
+                    if (this.getRawMaterials && this.getRawMaterials() > 0) {
+                        this.onProductComplete();
+                    }
+                }
+            };
+            hooked = true;
+        }
+
+
+        // Hook على checkProducts() — نضمن إنتاج المنتج عند انتهاء الدورة
+        if (proto.hasOwnProperty('checkProducts')) {
+            const origCheck = proto.checkProducts;
+            proto.checkProducts = function() {
+                // 1) صفّر _collTime (قد يتراكم من collect أثناء الإنتاج)
+                this._collTime = 0;
+
+                // 2) اضمن أن elapsed >= collect_in + 1 لضمان e >= 1
+                //    بنحرك serverData.start_time للخلف بثانية واحدة فقط إذا لزم
+                if (this.serverData && this.serverData.start_time && this.old_collect_in) {
+                    const ci = this.old_collect_in / (this.animals || 1);
+                    const needed_st = ServerTime.timestamp - Math.ceil(ci) - 1;
+                    if (this.serverData.start_time > needed_st) {
+                        this.serverData.start_time = needed_st;
+                    }
+                }
+
+                return origCheck.apply(this, arguments);
+            };
+            hooked = true;
+        }
+
+        return hooked;
+    }
+
+    function scanAndHook() {
+        try {
+            const objLayer = GF.gameController.gameView.objLayer;
+            if (!objLayer || !objLayer.$children) return false;
+
+            let hooked = 0;
+            for (let i = 0; i < objLayer.$children.length; i++) {
+                const obj = objLayer.$children[i];
+                if (!obj || typeof obj.checkProducts !== 'function') continue;
+
+                let proto = Object.getPrototypeOf(obj);
+                while (proto) {
+                    if (hookProto(proto)) hooked++;
+                    proto = Object.getPrototypeOf(proto);
+                }
+            }
+
+            if (hooked > 0) {
+                console.log(`✅ [SupremeFarm] TimeBreaker جاهز! خصم ${Math.round(OFFSET_PERCENT * 100)}% من كل دورة إنتاج.`);
+                return true;
+            }
+        } catch(e) {}
+        return false;
+    }
+
+    const iv = setInterval(() => {
+        if (scanAndHook()) clearInterval(iv);
+    }, 2000);
+})();
+
+
 
 
 // --- File: features/SessionExtractorModule.js ---
@@ -6372,6 +6688,8 @@ SF.SessionExtractorModule = class SessionExtractorModule extends SF.ModuleBase {
 if (window.SF && window.SF.modules) {
     window.SF.modules.register(new SF.SessionExtractorModule());
 }
+
+
 
 
 // --- File: features/MonopolySmartHelper.js ---
@@ -6793,6 +7111,8 @@ if (window.SF && window.SF.modules) {
     // Start Interceptor
     setupInterceptor();
 })();
+
+
 
 
 // --- File: features/MiniSlot2AutoModule.js ---
@@ -7288,6 +7608,8 @@ if (window.SF && window.SF.modules) {
     console.log('[MiniSlot2Auto] ✅ جاهز للعمل. الشريط سيظهر تلقائياً داخل اللوحة فقط.');
 
 })();
+
+
 
 
 // --- System Initialization ---
