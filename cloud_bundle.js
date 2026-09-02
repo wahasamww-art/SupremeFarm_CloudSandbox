@@ -19,14 +19,11 @@
 // @run-at       document-end
 // ==/UserScript==
 
-// ===================================================================
-// SupremeFarm Modular - Cloud Distribution Bundle
-// Generated at: 2026-09-02T10:35:14.757Z
-// ===================================================================
-
 var SF = window.SF || {};
+window.SF = SF;
+
 // --- File: core/EventBus.js ---
-﻿// --- core\EventBus.js ---
+// --- core\EventBus.js ---
 window.SF = window.SF || {};
 
 SF.EventBus = class EventBus {
@@ -56,7 +53,7 @@ SF.bus = new SF.EventBus();
 
 
 // --- File: core/ModuleBase.js ---
-﻿// --- core\ModuleBase.js ---
+// --- core\ModuleBase.js ---
 window.SF = window.SF || {};
 
 SF.ModuleBase = class ModuleBase {
@@ -90,7 +87,7 @@ SF.ModuleBase = class ModuleBase {
 
 
 // --- File: core/ModuleManager.js ---
-﻿// --- core\ModuleManager.js ---
+// --- core\ModuleManager.js ---
 window.SF = window.SF || {};
 
 SF.ModuleManager = class ModuleManager {
@@ -132,7 +129,7 @@ SF.modules = new SF.ModuleManager();
 
 
 // --- File: core/StorageManager.js ---
-﻿// --- core\StorageManager.js ---
+// --- core\StorageManager.js ---
 window.SF = window.SF || {};
 
 SF.StorageManager = class StorageManager {
@@ -334,7 +331,7 @@ SF.netMonitor.install();
 
 
 // --- File: network/GameDataExtractor.js ---
-﻿// --- network\GameDataExtractor.js ---
+// --- network\GameDataExtractor.js ---
 window.SF = window.SF || {};
 
 SF.GameDataExtractor = class GameDataExtractor {
@@ -823,7 +820,7 @@ SF.SplashScreen = class SplashScreen {
 
 
 // --- File: ui/UIManager.js ---
-﻿// --- ui\UIManager.js ---
+// --- ui\UIManager.js ---
 window.SF = window.SF || {};
 
 SF.UIManager = class UIManager {
@@ -2080,7 +2077,7 @@ SF.ZeroGasModule = class ZeroGasModule extends SF.ModuleBase {
 };
 
 // Register the module
-new SF.ZeroGasModule();
+SF.modules.register(new SF.ZeroGasModule());
 
 
 // --- File: features/CropinatorModule.js ---
