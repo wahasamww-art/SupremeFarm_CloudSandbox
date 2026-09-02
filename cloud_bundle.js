@@ -7372,18 +7372,16 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
         this.loopSpeed = 2000;
         this._logLines = [];
         this._overlayContainer = null;
+        this._autoInitTimer = null;
+        this._autoInitAttempts = 0;
     }
 
     render() {
         return `
         <div class="sf-card">
-            <p style="color:var(--sf-text-muted); font-size:12px; text-align:center; margin-bottom:10px;">
-                يعرض بطاقات التحكم مباشرة فوق كل آلة وحيوان على الخريطة.
+            <p style="color:#2ecc71; font-size:12px; text-align:center; margin-bottom:10px;">
+                ✅ البطاقات تظهر تلقائياً فوق كل آلة وحيوان على الخريطة
             </p>
-            <div style="display:flex; gap:8px; margin-bottom:10px; align-items:center;">
-                <button id="sf-ps-scan" class="sf-btn" style="flex:1;">🔍 إظهار على الخريطة</button>
-                <button id="sf-ps-hide" class="sf-btn" style="background:#c0392b; flex:0.5;">إخفاء</button>
-            </div>
             <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px; background:rgba(0,0,0,0.3); padding:8px; border-radius:6px;">
                 <span style="font-size:12px; color:#aaa;">⏱️ سرعة:</span>
                 <select id="sf-ps-speed" style="flex:1; background:#1a1a2e; color:#fff; border:1px solid #333; border-radius:4px; padding:4px;">
@@ -7393,42 +7391,69 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
                     <option value="5000">🐌 عادي (5 ث)</option>
                 </select>
             </div>
-            <div style="display:flex; gap:8px;">
+            <div style="display:flex; gap:8px; margin-bottom:8px;">
                 <button id="sf-ps-start-all" class="sf-btn" style="flex:1; background:#27ae60;">▶️ تشغيل الكل</button>
                 <button id="sf-ps-stop-all" class="sf-btn" style="flex:1; background:#c0392b;">⏹️ إيقاف الكل</button>
             </div>
-            <div id="sf-ps-log" style="max-height:100px; overflow-y:auto; margin-top:8px; font-size:10px; color:#666; background:rgba(0,0,0,0.2); padding:4px; border-radius:4px; direction:rtl;"></div>
+            <div style="display:flex; gap:8px; margin-bottom:8px;">
+                <button id="sf-ps-refresh" class="sf-btn" style="flex:1; background:#2980b9;">🔄 تحديث البطاقات</button>
+                <button id="sf-ps-hide" class="sf-btn" style="flex:1; background:#7f8c8d;">👁 إخفاء/إظهار</button>
+            </div>
+            <div id="sf-ps-info" style="font-size:11px; color:#888; text-align:center;"></div>
+            <div id="sf-ps-log" style="max-height:80px; overflow-y:auto; margin-top:6px; font-size:10px; color:#666; background:rgba(0,0,0,0.2); padding:4px; border-radius:4px; direction:rtl;"></div>
         </div>`;
     }
 
     bindEvents() {
         const c = this.container;
         if (!c) return;
-        c.querySelector('#sf-ps-scan')?.addEventListener('click', () => this.showOverlays());
-        c.querySelector('#sf-ps-hide')?.addEventListener('click', () => this.hideOverlays());
         c.querySelector('#sf-ps-speed')?.addEventListener('change', (e) => {
             this.loopSpeed = parseInt(e.target.value) || 2000;
             if (this.loopTimer) { this._stopLoop(); this._startLoop(); }
         });
         c.querySelector('#sf-ps-start-all')?.addEventListener('click', () => this._startAll());
         c.querySelector('#sf-ps-stop-all')?.addEventListener('click', () => this._stopAll());
+        c.querySelector('#sf-ps-refresh')?.addEventListener('click', () => this._autoInit());
+        c.querySelector('#sf-ps-hide')?.addEventListener('click', () => {
+            if (this._overlayContainer) {
+                const vis = this._overlayContainer.style.display !== 'none';
+                this._overlayContainer.style.display = vis ? 'none' : '';
+            }
+        });
+
+        // AUTO-INIT: Start showing overlays automatically
+        this._scheduleAutoInit();
     }
 
     // ═══════════════════════════════════════
-    // OVERLAY SYSTEM (In-Game Floating Cards)
+    // AUTO-INIT (No button needed)
     // ═══════════════════════════════════════
-    _ensureContainer() {
-        if (this._overlayContainer && document.body.contains(this._overlayContainer)) return;
-        this._overlayContainer = document.createElement('div');
-        this._overlayContainer.id = 'sf-ps-overlay-root';
-        this._overlayContainer.style.cssText = 'position:fixed; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index:9000;';
-        document.body.appendChild(this._overlayContainer);
+    _scheduleAutoInit() {
+        this._autoInitAttempts = 0;
+        // Try every 3 seconds until we find items (max 20 attempts)
+        this._autoInitTimer = setInterval(() => {
+            this._autoInitAttempts++;
+            const gw = unsafeWindow;
+            const dict = gw.GameGridData?.uidDictionary;
+            if (dict && Object.keys(dict).length > 0) {
+                clearInterval(this._autoInitTimer);
+                this._autoInitTimer = null;
+                this._autoInit();
+            } else if (this._autoInitAttempts >= 20) {
+                clearInterval(this._autoInitTimer);
+                this._autoInitTimer = null;
+                this._log('⚠️ تعذر العثور على بيانات الخريطة');
+            }
+        }, 3000);
     }
 
-    showOverlays() {
-        this.hideOverlays();
+    _autoInit() {
         this._ensureContainer();
         this._scanItems();
+
+        // Clear old overlays
+        if (this._overlayContainer) this._overlayContainer.innerHTML = '';
+        this.overlays = {};
 
         this.items.forEach(item => {
             const el = this._createOverlayCard(item);
@@ -7439,43 +7464,68 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
         });
 
         this._startPositionUpdater();
+
+        const info = this.container?.querySelector('#sf-ps-info');
+        if (info) info.textContent = `🏭 ${this.items.filter(i=>i.type==='Machine').length} آلة | 🐄 ${this.items.filter(i=>i.type==='Animal').length} حيوان`;
         this._log(`📍 ${this.items.length} عنصر على الخريطة`);
     }
 
-    hideOverlays() {
-        this._stopPositionUpdater();
-        if (this._overlayContainer) {
-            this._overlayContainer.innerHTML = '';
-        }
-        this.overlays = {};
+    // ═══════════════════════════════════════
+    // OVERLAY CONTAINER
+    // ═══════════════════════════════════════
+    _ensureContainer() {
+        if (this._overlayContainer && document.body.contains(this._overlayContainer)) return;
+        this._overlayContainer = document.createElement('div');
+        this._overlayContainer.id = 'sf-ps-overlay-root';
+        this._overlayContainer.style.cssText = 'position:fixed; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index:9000;';
+        document.body.appendChild(this._overlayContainer);
     }
 
+    // ═══════════════════════════════════════
+    // SCAN — finds all machines & animals
+    // ═══════════════════════════════════════
     _scanItems() {
         const gw = unsafeWindow;
         this.items = [];
         try {
-            const moList = gw.GameGridData?.uidDictionary
-                ? Object.values(gw.GameGridData.uidDictionary) : [];
+            const dict = gw.GameGridData?.uidDictionary;
+            if (!dict) return;
+            const moList = Object.values(dict);
 
             moList.forEach(mo => {
-                if (!mo?.configData) return;
-                const cn = mo.className || mo.configData?.className || '';
-                if (cn !== 'Machine' && cn !== 'Animal') return;
+                if (!mo) return;
 
-                const cd = mo.configData;
+                // Egret stores class name in __class__, not className
+                const cn = mo.__class__ || '';
+                const cd = mo.configData || {};
+
+                const isMachine = cn === 'Machine'
+                    && cd.raw_material && cd.product; // only real production machines
+
+                const isAnimal = cn === 'Animal'
+                    || (cd.type === 'animals' && cd.sub_type === 'working');
+
+                if (!isMachine && !isAnimal) return;
+
                 const sd = mo.serverData || {};
-                const key = `${cn === 'Machine' ? 'M' : 'A'}_${cd.id}_${sd.x || sd.map_x}_${sd.y || sd.map_y}`;
+                const objType = isMachine ? 'Machine' : 'Animal';
+                const key = `${objType[0]}_${cd.id || mo.id}_${sd.x || sd.map_x || 0}_${sd.y || sd.map_y || 0}`;
+
+                // Skip if already added (same position)
+                if (this.items.some(i => i.key === key)) return;
 
                 const item = {
-                    key, type: cn, id: cd.id,
-                    name: cd.name_ar || cd.name || `${cn} ${cd.id}`,
+                    key, type: objType,
+                    id: cd.id || mo.id,
+                    name: cd.name_ar || cd.name || `${objType} ${cd.id || mo.id}`,
                     x: parseInt(sd.x || sd.map_x) || 0,
                     y: parseInt(sd.y || sd.map_y) || 0,
                     mo, products: []
                 };
 
-                if (cn === 'Machine' && cd.raw_material && cd.product) {
-                    const rawMats = cd.raw_material[0];
+                // Discover products for machines
+                if (isMachine && cd.raw_material && cd.product) {
+                    const rawMats = Array.isArray(cd.raw_material[0]) ? cd.raw_material[0] : cd.raw_material;
                     const prods = cd.product;
                     if (Array.isArray(rawMats) && Array.isArray(prods)) {
                         for (let i = 0; i < Math.min(rawMats.length, prods.length); i++) {
@@ -7493,9 +7543,14 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
                 }
                 this.items.push(item);
             });
-        } catch(e) {}
+        } catch(e) {
+            this._log(`❌ خطأ الفحص: ${e.message}`);
+        }
     }
 
+    // ═══════════════════════════════════════
+    // OVERLAY CARDS (on the map)
+    // ═══════════════════════════════════════
     _createOverlayCard(item) {
         const div = document.createElement('div');
         div.dataset.key = item.key;
@@ -7503,80 +7558,73 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
         const icon = item.type === 'Machine' ? '🏭' : '🐄';
 
         div.style.cssText = `
-            position:absolute; pointer-events:auto; background:rgba(15,15,30,0.92);
-            border:2px solid ${color}; border-radius:8px; padding:6px 8px;
-            min-width:160px; max-width:220px; font-family:sans-serif; direction:rtl;
-            box-shadow: 0 2px 12px rgba(0,0,0,0.6); transform:translate(-50%, -100%);
-            transition: opacity 0.2s;
+            position:absolute; pointer-events:auto; background:rgba(10,10,25,0.93);
+            border:2px solid ${color}; border-radius:8px; padding:5px 7px;
+            min-width:145px; max-width:200px; font-family:sans-serif; direction:rtl;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.7); transform:translate(-50%, -100%);
+            cursor:default; font-size:10px;
         `;
 
-        let innerHtml = `
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
-                <span style="font-size:11px; font-weight:bold; color:${color}; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:120px;">${icon} ${item.name}</span>
-                <div style="display:flex; gap:3px;">
-                    <button class="sf-ps-o-start" data-key="${item.key}" style="background:#27ae60; border:none; color:#fff; width:22px; height:20px; border-radius:3px; cursor:pointer; font-size:10px;">▶</button>
-                    <button class="sf-ps-o-stop" data-key="${item.key}" style="background:#c0392b; border:none; color:#fff; width:22px; height:20px; border-radius:3px; cursor:pointer; font-size:10px;">⏹</button>
+        let html = `
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:3px;">
+                <span style="font-weight:bold; color:${color}; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:100px;">${icon} ${item.name}</span>
+                <div style="display:flex; gap:2px;">
+                    <button class="sf-ps-o-start" data-key="${item.key}" style="background:#27ae60; border:none; color:#fff; width:20px; height:18px; border-radius:3px; cursor:pointer; font-size:9px;">▶</button>
+                    <button class="sf-ps-o-stop" data-key="${item.key}" style="background:#c0392b; border:none; color:#fff; width:20px; height:18px; border-radius:3px; cursor:pointer; font-size:9px;">⏹</button>
                 </div>
             </div>`;
 
         if (item.type === 'Machine' && item.products.length > 1) {
-            // Product selector + quantity for machines with multiple products
             let opts = item.products.map((p, i) =>
-                `<option value="${i}" style="font-size:10px;">${p.name}</option>`
+                `<option value="${i}">${p.name}</option>`
             ).join('');
-            innerHtml += `
-            <div style="display:flex; gap:4px; align-items:center; margin-bottom:3px;">
-                <select class="sf-ps-o-product" data-key="${item.key}" style="flex:1; background:#1a1a2e; color:#fff; border:1px solid #444; border-radius:3px; padding:2px; font-size:10px; max-width:110px;">
+            html += `
+            <div style="display:flex; gap:3px; align-items:center; margin-bottom:2px;">
+                <select class="sf-ps-o-product" data-key="${item.key}" style="flex:1; background:#1a1a2e; color:#fff; border:1px solid #444; border-radius:3px; padding:1px; font-size:9px; max-width:90px;">
                     ${opts}
                 </select>
-                <span style="color:#888; font-size:9px;">×</span>
+                <span style="color:#666;">×</span>
                 <input type="number" min="0" value="0" class="sf-ps-o-qty" data-key="${item.key}"
-                    style="width:35px; background:#1a1a2e; color:#fff; border:1px solid #444; border-radius:3px; padding:2px; text-align:center; font-size:10px;">
-                <button class="sf-ps-o-add" data-key="${item.key}" style="background:#8e44ad; border:none; color:#fff; width:20px; height:20px; border-radius:3px; cursor:pointer; font-size:10px;">+</button>
+                    style="width:30px; background:#1a1a2e; color:#fff; border:1px solid #444; border-radius:3px; padding:1px; text-align:center; font-size:9px;">
+                <button class="sf-ps-o-add" data-key="${item.key}" style="background:#8e44ad; border:none; color:#fff; width:18px; height:18px; border-radius:3px; cursor:pointer; font-size:9px;">+</button>
             </div>
-            <div class="sf-ps-o-queue" data-key="${item.key}" style="font-size:9px; color:#aaa; max-height:50px; overflow-y:auto;"></div>`;
+            <div class="sf-ps-o-queue" data-key="${item.key}" style="font-size:9px; color:#aaa; max-height:40px; overflow-y:auto;"></div>`;
         } else if (item.type === 'Machine') {
-            // Single product machine
-            innerHtml += `
-            <div style="display:flex; gap:4px; align-items:center; font-size:10px; margin-bottom:3px;">
+            html += `
+            <div style="display:flex; gap:3px; align-items:center;">
                 <span style="color:#aaa;">العدد:</span>
                 <input type="number" min="0" value="0" class="sf-ps-o-qty" data-key="${item.key}" data-pidx="0"
-                    style="width:40px; background:#1a1a2e; color:#fff; border:1px solid #444; border-radius:3px; padding:2px; text-align:center; font-size:10px;">
-                <span style="color:#666; font-size:9px;">(0=∞)</span>
+                    style="width:35px; background:#1a1a2e; color:#fff; border:1px solid #444; border-radius:3px; padding:1px; text-align:center; font-size:9px;">
+                <span style="color:#555;">(0=∞)</span>
             </div>`;
         } else {
-            // Animal
-            innerHtml += `
-            <div style="display:flex; gap:4px; align-items:center; font-size:10px; margin-bottom:3px;">
+            html += `
+            <div style="display:flex; gap:3px; align-items:center;">
                 <span style="color:#aaa;">الدورات:</span>
                 <input type="number" min="0" value="0" class="sf-ps-o-cycles" data-key="${item.key}"
-                    style="width:40px; background:#1a1a2e; color:#fff; border:1px solid #444; border-radius:3px; padding:2px; text-align:center; font-size:10px;">
-                <span style="color:#666; font-size:9px;">(0=∞)</span>
+                    style="width:35px; background:#1a1a2e; color:#fff; border:1px solid #444; border-radius:3px; padding:1px; text-align:center; font-size:9px;">
+                <span style="color:#555;">(0=∞)</span>
             </div>`;
         }
 
-        innerHtml += `<div class="sf-ps-o-status" data-key="${item.key}" style="font-size:10px; color:#666; margin-top:2px;">● متوقف</div>`;
-        div.innerHTML = innerHtml;
+        html += `<div class="sf-ps-o-status" data-key="${item.key}" style="color:#666; margin-top:2px;">● متوقف</div>`;
+        // Arrow pointer
+        html += `<div style="position:absolute; bottom:-8px; left:50%; transform:translateX(-50%); width:0; height:0; border-left:8px solid transparent; border-right:8px solid transparent; border-top:8px solid ${color};"></div>`;
 
-        // Bind events
-        div.querySelector('.sf-ps-o-start')?.addEventListener('click', () => this._startOne(item.key));
-        div.querySelector('.sf-ps-o-stop')?.addEventListener('click', () => this._stopOne(item.key));
+        div.innerHTML = html;
 
-        // Queue add button for multi-product machines
-        const addBtn = div.querySelector('.sf-ps-o-add');
-        if (addBtn) {
-            addBtn.addEventListener('click', () => this._addToQueue(item.key));
-        }
+        // Events
+        div.querySelector('.sf-ps-o-start')?.addEventListener('click', (e) => { e.stopPropagation(); this._startOne(item.key); });
+        div.querySelector('.sf-ps-o-stop')?.addEventListener('click', (e) => { e.stopPropagation(); this._stopOne(item.key); });
+        div.querySelector('.sf-ps-o-add')?.addEventListener('click', (e) => { e.stopPropagation(); this._addToQueue(item.key); });
 
         return div;
     }
 
     _addToQueue(key) {
         const item = this.items.find(i => i.key === key);
-        if (!item) return;
-
         const overlay = this.overlays[key];
-        if (!overlay) return;
+        if (!item || !overlay) return;
 
         const selEl = overlay.querySelector(`.sf-ps-o-product[data-key="${key}"]`);
         const qtyEl = overlay.querySelector(`.sf-ps-o-qty[data-key="${key}"]`);
@@ -7592,10 +7640,8 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
 
         const prod = item.products[pidx];
         this.schedules[key].queue.push({
-            productIndex: pidx,
-            rawMaterialId: prod?.rawMaterialId,
-            productId: prod?.productId,
-            name: prod?.name || `#${pidx}`,
+            productIndex: pidx, rawMaterialId: prod?.rawMaterialId,
+            productId: prod?.productId, name: prod?.name || `#${pidx}`,
             target: qty, done: 0
         });
 
@@ -7612,21 +7658,18 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
         const queueDiv = overlay.querySelector(`.sf-ps-o-queue[data-key="${key}"]`);
         if (!queueDiv) return;
 
-        if (sched.queue.length === 0) {
-            queueDiv.innerHTML = '';
-            return;
-        }
+        if (sched.queue.length === 0) { queueDiv.innerHTML = ''; return; }
 
-        let html = sched.queue.map((q, i) => {
+        queueDiv.innerHTML = sched.queue.map((q, i) => {
             const active = i === sched.currentQueueIdx && sched.running;
-            const color = active ? '#2ecc71' : (q.done >= q.target && q.target > 0 ? '#27ae60' : '#888');
-            return `<div style="color:${color};">${active ? '▶' : '•'} ${q.name} ${q.done}/${q.target}</div>`;
+            const done = q.target > 0 && q.done >= q.target;
+            const color = active ? '#2ecc71' : (done ? '#27ae60' : '#888');
+            return `<div style="color:${color};">${active ? '▶' : (done ? '✓' : '•')} ${q.name} ${q.done}/${q.target}</div>`;
         }).join('');
-        queueDiv.innerHTML = html;
     }
 
     // ═══════════════════════════════════════
-    // POSITION TRACKING
+    // POSITION TRACKING (follows game objects)
     // ═══════════════════════════════════════
     _startPositionUpdater() {
         this._stopPositionUpdater();
@@ -7638,10 +7681,7 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
     }
 
     _stopPositionUpdater() {
-        if (this.posTimer) {
-            cancelAnimationFrame(this.posTimer);
-            this.posTimer = null;
-        }
+        if (this.posTimer) { cancelAnimationFrame(this.posTimer); this.posTimer = null; }
     }
 
     _updatePositions() {
@@ -7652,12 +7692,13 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
         const canvasRect = canvas.getBoundingClientRect();
         let stageW, stageH;
         try {
-            const stage = gw.egret?.lifecycle?.stage || gw.egret?.MainContext?.instance?.stage;
+            const stage = gw.egret?.lifecycle?.stage
+                || gw.egret?.MainContext?.instance?.stage
+                || gw.egret?.sys?.$TempStage;
             stageW = stage?.stageWidth || canvas.width;
             stageH = stage?.stageHeight || canvas.height;
         } catch(e) {
-            stageW = canvas.width;
-            stageH = canvas.height;
+            stageW = canvas.width; stageH = canvas.height;
         }
         const scaleX = canvasRect.width / stageW;
         const scaleY = canvasRect.height / stageH;
@@ -7667,7 +7708,8 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
             if (!el) return;
 
             const pos = this._getScreenPos(item, gw, scaleX, scaleY, canvasRect);
-            if (pos) {
+            if (pos && pos.x > canvasRect.left - 50 && pos.x < canvasRect.right + 50
+                && pos.y > canvasRect.top - 50 && pos.y < canvasRect.bottom + 100) {
                 el.style.left = pos.x + 'px';
                 el.style.top = pos.y + 'px';
                 el.style.display = '';
@@ -7680,32 +7722,16 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
     _getScreenPos(item, gw, scaleX, scaleY, canvasRect) {
         try {
             const mo = this._getFreshMO(item);
-            if (!mo) return null;
+            if (!mo || typeof mo.localToGlobal !== 'function') return null;
 
-            // Try Egret localToGlobal on the display object
-            const view = mo.view || mo._view || mo.display || mo.sprite;
-            if (view && typeof view.localToGlobal === 'function') {
-                const p = view.localToGlobal(0, 0);
-                return {
-                    x: canvasRect.left + p.x * scaleX,
-                    y: canvasRect.top + p.y * scaleY - 20
-                };
-            }
+            // MO itself IS the Egret DisplayObject — call localToGlobal directly
+            const p = new gw.egret.Point(0, 0);
+            mo.localToGlobal(0, 0, p);
 
-            // Fallback: traverse parent chain
-            if (view && typeof view.x === 'number') {
-                let x = view.x, y = view.y;
-                let parent = view.parent;
-                while (parent) {
-                    x = x * (parent.scaleX || 1) + parent.x;
-                    y = y * (parent.scaleY || 1) + parent.y;
-                    parent = parent.parent;
-                }
-                return {
-                    x: canvasRect.left + x * scaleX,
-                    y: canvasRect.top + y * scaleY - 20
-                };
-            }
+            return {
+                x: canvasRect.left + p.x * scaleX,
+                y: canvasRect.top + p.y * scaleY - 10
+            };
         } catch(e) {}
         return null;
     }
@@ -7723,7 +7749,6 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
         const sched = this.schedules[key];
 
         if (item.type === 'Machine') {
-            // Read from queue (already added via + button) or read single qty
             if (sched.queue.length === 0) {
                 const overlay = this.overlays[key];
                 const qtyEl = overlay?.querySelector(`.sf-ps-o-qty[data-key="${key}"]`);
@@ -7735,14 +7760,12 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
                     const p = item.products[pidx];
                     sched.queue = [{ productIndex: pidx, rawMaterialId: p.rawMaterialId, productId: p.productId, name: p.name, target: qty, done: 0 }];
                 } else {
-                    // Run current product infinitely
-                    sched.queue = [{ productIndex: -1, name: 'المنتج الحالي', target: 0, done: 0 }];
+                    sched.queue = [{ productIndex: -1, name: 'الحالي', target: qty, done: 0 }];
                 }
             }
             sched.currentQueueIdx = sched.queue.findIndex(q => q.done < q.target || q.target === 0);
             if (sched.currentQueueIdx < 0) sched.currentQueueIdx = 0;
         } else {
-            // Animal
             const overlay = this.overlays[key];
             const cycEl = overlay?.querySelector(`.sf-ps-o-cycles[data-key="${key}"]`);
             sched.targetCycles = parseInt(cycEl?.value) || 0;
@@ -7752,7 +7775,7 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
         sched.running = true;
         this._updateOverlayStatus(key);
         this._renderQueue(key);
-        this._log(`✅ بدأ: ${item.name}`);
+        this._log(`✅ ${item.name}`);
         this._startLoop();
     }
 
@@ -7771,33 +7794,28 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
     _updateOverlayStatus(key) {
         const sched = this.schedules[key];
         const item = this.items.find(i => i.key === key);
-
-        // Update overlay status
         const overlay = this.overlays[key];
         if (!overlay) return;
-        const statusEl = overlay.querySelector(`.sf-ps-o-status[data-key="${key}"]`);
-        if (!statusEl) return;
+        const el = overlay.querySelector(`.sf-ps-o-status[data-key="${key}"]`);
+        if (!el) return;
 
         if (!sched?.running) {
-            statusEl.style.color = '#666';
-            statusEl.textContent = '● متوقف';
+            el.style.color = '#666'; el.textContent = '● متوقف';
+            overlay.style.borderColor = item?.type === 'Machine' ? '#3498db' : '#e67e22';
             return;
         }
 
-        statusEl.style.color = '#2ecc71';
+        el.style.color = '#2ecc71';
+        overlay.style.borderColor = '#2ecc71';
+
         if (item?.type === 'Machine') {
             const cur = sched.queue[sched.currentQueueIdx];
-            if (!cur) { statusEl.textContent = '✅ اكتمل!'; return; }
-            if (cur.target === 0) statusEl.textContent = `🔄 ${cur.name} — ${cur.done}`;
-            else statusEl.textContent = `🔄 ${cur.name} ${cur.done}/${cur.target}`;
+            if (!cur) { el.textContent = '✅ اكتمل!'; return; }
+            el.textContent = cur.target === 0 ? `🔄 ${cur.name} — ${cur.done}` : `🔄 ${cur.name} ${cur.done}/${cur.target}`;
         } else {
             const t = sched.targetCycles === 0 ? '∞' : sched.targetCycles;
-            statusEl.textContent = `🔄 ${sched.completedCycles}/${t}`;
+            el.textContent = `🔄 ${sched.completedCycles}/${t}`;
         }
-
-        // Also update the panel status
-        const panelEl = this.container?.querySelector(`.sf-ps-status[data-key="${key}"]`);
-        if (panelEl) panelEl.textContent = statusEl.textContent;
     }
 
     // ═══════════════════════════════════════
@@ -7868,7 +7886,7 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
             if (cur && cur.productIndex >= 0) {
                 const curSel = parseInt(sd.selected_raw_material) || 0;
                 if (curSel !== cur.productIndex && curSel !== cur.productIndex + 1) {
-                    this._log(`🔄 تبديل: ${item.name} → ${cur.name}`);
+                    this._log(`🔄 ${item.name} → ${cur.name}`);
                     try { gw.NetUtils.enqueue('save_selected_material.save_data', { id: item.id, x: item.x, y: item.y, flip: 0, material: cur.productIndex }); } catch(e) {}
                     return;
                 }
@@ -7916,12 +7934,13 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
     // ═══════════════════════════════════════
     _getFreshMO(item) {
         try {
-            const moList = unsafeWindow.GameGridData?.uidDictionary
-                ? Object.values(unsafeWindow.GameGridData.uidDictionary) : [];
-            return moList.find(mo => {
-                if (!mo?.configData) return false;
+            const dict = unsafeWindow.GameGridData?.uidDictionary;
+            if (!dict) return null;
+            return Object.values(dict).find(mo => {
+                if (!mo) return false;
+                const cd = mo.configData || {};
                 const sd = mo.serverData || {};
-                return mo.configData.id === item.id &&
+                return (cd.id || mo.id) === item.id &&
                     (parseInt(sd.x || sd.map_x) || 0) === item.x &&
                     (parseInt(sd.y || sd.map_y) || 0) === item.y;
             }) || null;
