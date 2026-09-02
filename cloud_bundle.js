@@ -8059,27 +8059,32 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
     // ═══════════════════════════════════════
     _getInventoryCount(id) {
         if (!id) return 0;
+        let count = 0;
         const gw = unsafeWindow;
-        try {
-            const bag = gw.App?.ControllerManager?.getControllerModel("Bag");
-            if (bag && typeof bag.getItemCount === 'function') {
-                const c = bag.getItemCount(id);
-                if (c !== undefined && c !== null) return parseInt(c);
-            }
-        } catch(e) {}
         
+        // 1. Check AppData first (contains crops, products, etc.)
         try {
             const sd = gw.GF?.loginModel?.AppData?.items;
             if (sd) {
                 if (Array.isArray(sd)) {
                     const it = sd.find(i => String(i.id) === String(id));
-                    if (it) return parseInt(it.count) || 0;
+                    if (it) count = Math.max(count, parseInt(it.count) || 0);
                 } else if (sd[id]) {
-                    return parseInt(sd[id].count || sd[id]) || 0;
+                    count = Math.max(count, parseInt(sd[id].count || sd[id]) || 0);
                 }
             }
         } catch(e) {}
-        return 0; // If it's not found in the bag or AppData, the user doesn't have it!
+        
+        // 2. Check Bag (contains tools, tickets, etc.)
+        try {
+            const bag = gw.App?.ControllerManager?.getControllerModel("Bag");
+            if (bag && typeof bag.getItemCount === 'function') {
+                const c = bag.getItemCount(id);
+                if (c !== undefined && c !== null) count = Math.max(count, parseInt(c) || 0);
+            }
+        } catch(e) {}
+        
+        return count;
     }
 
     _getItemSourceHint(id) {
