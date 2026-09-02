@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         حصاد مظبوط المدمج
+// @name         SupremeFarm Elite Bundle
 // @namespace    https://supreme-farm.local
-// @version      2.1.0
-// @description  نظام المزرعة الذكي - معمارية التوسعة اللانهائية
+// @version      2.1.1
+// @description  Supreme Farm Modular Bot - Cloud Distributed Version
 // @author       Supreme Farm Team
 // @match        *://*.centurygames.com/*
 // @match        *://*.apps.fbsbx.com/*
@@ -21,7 +21,7 @@
 
 // ===================================================================
 // SupremeFarm Modular - Cloud Distribution Bundle
-// Generated at: 2026-09-02T09:42:54.551Z
+// Generated at: 2026-09-02T09:48:44.680Z
 // ===================================================================
 
 var SF = window.SF || {};
@@ -1322,10 +1322,16 @@ SF.TargetProductionModule = class TargetProductionModule extends SF.ModuleBase {
                 headOrDoc.appendChild(script);
                 script.remove();
             } else {
-                setTimeout(tryInject, 100);
+                // If head isn't available yet, wait for DOMContentLoaded
+                window.addEventListener('DOMContentLoaded', tryInject, { once: true });
             }
         };
-        tryInject();
+        
+        if (document.readyState === 'loading') {
+            window.addEventListener('DOMContentLoaded', tryInject, { once: true });
+        } else {
+            tryInject();
+        }
     }
 };
 
