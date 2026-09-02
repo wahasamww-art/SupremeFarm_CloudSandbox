@@ -7963,16 +7963,40 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
                     q.rawMaterialId = matId; // Auto-fix legacy schedules
                 }
             }
-            
             let hasStock = true;
-            if (matId) {
+            let missingName = null;
+            
+            if (item && item.products) {
+                const p = item.products.find(prod => prod.index === q.productIndex);
+                if (p && p.reqMats && p.reqMats.length > 0) {
+                    for (let rm of p.reqMats) {
+                        const invCount = this._getInventoryCount(rm.id);
+                        if (invCount < 1) {
+                            hasStock = false;
+                            missingName = rm.name || this._getItemSourceHint(rm.id);
+                            break;
+                        }
+                    }
+                } else if (matId) {
+                    // Fallback to legacy matId if reqMats not available
+                    const invCount = this._getInventoryCount(matId);
+                    if (invCount < 1) {
+                        hasStock = false;
+                        missingName = this._getItemSourceHint(matId);
+                    }
+                }
+            } else if (matId) {
                 const invCount = this._getInventoryCount(matId);
                 if (invCount < 1) {
                     hasStock = false;
-                    q.error = `ينقصك: ${this._getItemSourceHint(matId)}`;
-                } else {
-                    q.error = null;
+                    missingName = this._getItemSourceHint(matId);
                 }
+            }
+
+            if (!hasStock) {
+                q.error = `ينقصك: ${missingName}`;
+            } else {
+                q.error = null;
             }
 
             if (hasStock && (q.target === 0 || q.done < q.target)) {
@@ -8207,10 +8231,18 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
                         gc._refillMapObject(mo, matId, slot, false); 
                         this._updateBadge(key); 
                         this._log(`▶ بدء ${item.name}: ${next.name}`);
-                    } else if (!matId) {
-                        this._log(`⚠️ تعذر معرفة مكون ${next.name}`);
+                        
+                        // Fallback: sometimes machines need a click to fully start if they require multiple materials
+                        setTimeout(() => { if (mo.serverData && (mo.serverData.raw_materials === 0 || mo.serverData.raw_materials === '0')) { try { gc._clickMapObject(mo); } catch(e) {} } }, 500);
+                    } else {
+                        // Machine might not need a specific raw material or uses a different start mechanism
+                        if (gc._clickMapObject) gc._clickMapObject(mo);
+                        this._updateBadge(key);
+                        this._log(`▶ بدء (نقرة) ${item.name}: ${next.name}`);
                     }
-                } catch(e) {}
+                } catch(e) {
+                    this._log(`⚠️ خطأ في تشغيل ${item.name}`);
+                }
             }
         }
     }
