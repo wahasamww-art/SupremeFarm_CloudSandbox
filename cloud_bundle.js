@@ -7375,6 +7375,7 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
         this._autoInitAttempts = 0;
         this._waitingProductChange = {};
         this.activeMachineKey = null;
+        this.activeFilter = 'all';
     }
 
     _normalizeArabic(text) {
@@ -7393,11 +7394,17 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
     render() {
         return `
         <div class="sf-card" style="padding: 20px; display:flex; flex-direction:column; height: 100%; box-sizing: border-box;">
-            <div style="display:flex; gap:10px; margin-bottom:15px;">
+            <div style="display:flex; gap:10px; margin-bottom:10px;">
                 <button id="sf-ps-tab-machines" class="sf-btn" style="flex:1;background:#3498db;font-size:16px;padding:12px;border-radius:8px;font-weight:bold;box-shadow:0 0 10px rgba(52,152,219,0.5);color:#fff;">⚙ الآلات</button>
                 <button id="sf-ps-tab-animals" class="sf-btn" style="flex:1;background:#333;font-size:16px;padding:12px;border-radius:8px;font-weight:bold;color:#bbb;">🐄 الحيوانات</button>
             </div>
             
+            <div style="display:flex; gap:5px; margin-bottom:10px; background:#1a1a2e; padding:5px; border-radius:6px; border:1px solid #333;">
+                <button class="sf-ps-filter-btn sf-btn" data-filter="all" style="flex:1;background:#8e44ad;font-size:13px;padding:8px;border-radius:4px;color:#fff;font-weight:bold;">الكل</button>
+                <button class="sf-ps-filter-btn sf-btn" data-filter="running" style="flex:1;background:transparent;font-size:13px;padding:8px;border-radius:4px;color:#aaa;font-weight:bold;">🟢 تعمل حالياً</button>
+                <button class="sf-ps-filter-btn sf-btn" data-filter="idle" style="flex:1;background:transparent;font-size:13px;padding:8px;border-radius:4px;color:#aaa;font-weight:bold;">⚪ متوقفة</button>
+            </div>
+
             <div id="sf-ps-view-machines" style="flex:1; display:flex; flex-direction:column;">
                 <div id="sf-ps-machine-header-wrap">
                     <input id="sf-ps-search-machine" type="text" placeholder="🔍 ابحث عن آلة..." style="width:100%;background:#1a1a2e;color:#fff;border:1px solid #444;border-radius:6px;padding:12px;font-size:14px;margin-bottom:12px;box-sizing:border-box;">
@@ -7441,6 +7448,20 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
 
         c.querySelector('#sf-ps-search-animal')?.addEventListener('input', (e) => this._filterList('animal', e.target.value));
         c.querySelector('#sf-ps-search-machine')?.addEventListener('input', (e) => this._filterList('machine', e.target.value));
+        
+        c.querySelectorAll('.sf-ps-filter-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                c.querySelectorAll('.sf-ps-filter-btn').forEach(b => {
+                    b.style.background = 'transparent';
+                    b.style.color = '#aaa';
+                });
+                e.target.style.background = '#8e44ad';
+                e.target.style.color = '#fff';
+                this.activeFilter = e.target.dataset.filter;
+                this._renderMachines();
+                this._renderAnimals();
+            });
+        });
         
         c.addEventListener('click', (e) => {
             const tgt = e.target;
@@ -7664,7 +7685,7 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
         const animals = this.items.filter(i => i.type === 'Animal');
         if (animals.length === 0) { container.innerHTML = '<div style="color:#777;font-size:13px;text-align:center;padding:10px;">لا يوجد حيوانات على الأرض</div>'; return; }
 
-        container.innerHTML = animals.map(item => {
+        const renderAnimal = (item) => {
             const sched = this.schedules[item.key];
             const running = sched?.running;
             const cycles = sched?.targetCycles || 0;
@@ -7677,7 +7698,7 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
             
             const prodCount = item.productId ? this._getInventoryCount(item.productId) : 0;
             
-            return `<div class="sf-ps-item" data-key="${item.key}" data-name="${item.name}" style="background:rgba(230,126,34,0.1);border:1px solid #e67e2244;border-radius:8px;padding:8px 12px;margin-bottom:6px;box-shadow:0 2px 4px rgba(0,0,0,0.2);">
+            return `<div class="sf-ps-item sf-ps-item-animal" data-key="${item.key}" data-name="${item.name}" style="background:rgba(230,126,34,0.1);border:1px solid #e67e2244;border-radius:8px;padding:8px 12px;margin-bottom:6px;box-shadow:0 2px 4px rgba(0,0,0,0.2);">
                 <div style="display:flex;align-items:center;justify-content:space-between;">
                     <div style="display:flex;flex-direction:column;gap:4px;">
                         <span style="color:#e67e22;font-size:14px;font-weight:bold;display:flex;align-items:center;gap:6px;">🐄 <span>${item.name}</span></span>
@@ -7700,8 +7721,28 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
                 ${sched?.error ? `<div style="color:#e74c3c;font-size:12px;margin-top:6px;background:rgba(231,76,60,0.1);padding:4px;border-radius:4px;text-align:center;">⚠️ ${sched.error}</div>` : ''}
                 ${running && !sched?.error ? `<div style="color:#2ecc71;font-size:12px;margin-top:6px;background:rgba(46,204,113,0.1);padding:4px;border-radius:4px;text-align:center;">🔄 تم إنجاز: ${done} ${cycles ? `من أصل ${cycles}` : 'دورة'}</div>` : ''}
             </div>`;
-        }).join('');
-        
+        };
+
+        const running = animals.filter(item => this.schedules[item.key]?.running);
+        const idle = animals.filter(item => !this.schedules[item.key]?.running);
+
+        let html = '';
+        if (this.activeFilter === 'all' || this.activeFilter === 'running') {
+            if (running.length > 0) {
+                html += `<div class="sf-ps-section-header" style="font-size:14px;color:#e67e22;margin:10px 0 5px 0;font-weight:bold;border-bottom:1px solid #e67e22;padding-bottom:4px;">🐄 حيوانات تعمل حالياً (${running.length})</div>`;
+                html += running.map(renderAnimal).join('');
+            }
+        }
+        if (this.activeFilter === 'all' || this.activeFilter === 'idle') {
+            if (idle.length > 0) {
+                html += `<div class="sf-ps-section-header" style="font-size:14px;color:#aaa;margin:15px 0 5px 0;font-weight:bold;border-bottom:1px solid #444;padding-bottom:4px;">🐄 حيوانات متوقفة (${idle.length})</div>`;
+                html += idle.map(renderAnimal).join('');
+            }
+        }
+
+        if (!html) html = '<div style="color:#777;font-size:13px;text-align:center;padding:10px;">لا يوجد عناصر تطابق الفلتر الحالي</div>';
+
+        container.innerHTML = html;
     }
 
     // ═══════════════════════════════════════
@@ -7821,12 +7862,12 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
         const machines = this.items.filter(i => i.type === 'Machine');
         if (machines.length === 0) { container.innerHTML = '<div style="color:#777;font-size:13px;text-align:center;padding:10px;">لا يوجد آلات على الأرض</div>'; return; }
 
-        container.innerHTML = machines.map(item => {
+        const renderMachine = (item) => {
             const sched = this.schedules[item.key];
             const running = sched?.running;
             const queue = sched?.queue || [];
             
-            return `<div class="sf-ps-item" data-key="${item.key}" data-name="${item.name}" style="background:rgba(52,152,219,0.1);border:1px solid #3498db44;border-radius:8px;padding:8px 12px;margin-bottom:6px;box-shadow:0 2px 4px rgba(0,0,0,0.2);">
+            return `<div class="sf-ps-item sf-ps-item-machine" data-key="${item.key}" data-name="${item.name}" style="background:rgba(52,152,219,0.1);border:1px solid #3498db44;border-radius:8px;padding:8px 12px;margin-bottom:6px;box-shadow:0 2px 4px rgba(0,0,0,0.2);">
                 <div style="display:flex;align-items:center;justify-content:space-between;">
                     <div style="display:flex;flex-direction:column;gap:4px;">
                         <span style="color:#3498db;font-size:14px;font-weight:bold;display:flex;align-items:center;gap:6px;">⚙ <span>${item.name}</span></span>
@@ -7841,7 +7882,28 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
                     </div>
                 </div>
             </div>`;
-        }).join('');
+        };
+
+        const running = machines.filter(item => this.schedules[item.key]?.running);
+        const idle = machines.filter(item => !this.schedules[item.key]?.running);
+
+        let html = '';
+        if (this.activeFilter === 'all' || this.activeFilter === 'running') {
+            if (running.length > 0) {
+                html += `<div class="sf-ps-section-header" style="font-size:14px;color:#2ecc71;margin:10px 0 5px 0;font-weight:bold;border-bottom:1px solid #2ecc71;padding-bottom:4px;">⚙ آلات تعمل حالياً (${running.length})</div>`;
+                html += running.map(renderMachine).join('');
+            }
+        }
+        if (this.activeFilter === 'all' || this.activeFilter === 'idle') {
+            if (idle.length > 0) {
+                html += `<div class="sf-ps-section-header" style="font-size:14px;color:#aaa;margin:15px 0 5px 0;font-weight:bold;border-bottom:1px solid #444;padding-bottom:4px;">⚙ آلات متوقفة (${idle.length})</div>`;
+                html += idle.map(renderMachine).join('');
+            }
+        }
+
+        if (!html) html = '<div style="color:#777;font-size:13px;text-align:center;padding:10px;">لا يوجد عناصر تطابق الفلتر الحالي</div>';
+
+        container.innerHTML = html;
     }
 
     _filterList(type, query) {
