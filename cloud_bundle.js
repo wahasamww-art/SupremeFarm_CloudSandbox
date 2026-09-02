@@ -7555,65 +7555,52 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
         const div = document.createElement('div');
         div.dataset.key = item.key;
         const color = item.type === 'Machine' ? '#3498db' : '#e67e22';
-        const icon = item.type === 'Machine' ? '🏭' : '🐄';
+        const icon = item.type === 'Machine' ? '⚙' : '🐄';
 
         div.style.cssText = `
-            position:absolute; pointer-events:auto; background:rgba(10,10,25,0.93);
-            border:2px solid ${color}; border-radius:8px; padding:5px 7px;
-            min-width:145px; max-width:200px; font-family:sans-serif; direction:rtl;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.7); transform:translate(-50%, -100%);
-            cursor:default; font-size:10px;
+            position:absolute; pointer-events:auto; background:rgba(5,5,18,0.9);
+            border:1px solid ${color}; border-radius:5px; padding:2px 4px;
+            font-family:sans-serif; direction:rtl; font-size:8px; line-height:1.3;
+            box-shadow:0 1px 6px rgba(0,0,0,0.6); transform:translate(-50%,-100%);
+            white-space:nowrap; cursor:default;
         `;
 
-        let html = `
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:3px;">
-                <span style="font-weight:bold; color:${color}; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:100px;">${icon} ${item.name}</span>
-                <div style="display:flex; gap:2px;">
-                    <button class="sf-ps-o-start" data-key="${item.key}" style="background:#27ae60; border:none; color:#fff; width:20px; height:18px; border-radius:3px; cursor:pointer; font-size:9px;">▶</button>
-                    <button class="sf-ps-o-stop" data-key="${item.key}" style="background:#c0392b; border:none; color:#fff; width:20px; height:18px; border-radius:3px; cursor:pointer; font-size:9px;">⏹</button>
-                </div>
-            </div>`;
+        let html = `<div style="display:flex;align-items:center;gap:2px;">
+            <span style="color:${color};font-weight:bold;font-size:8px;max-width:65px;overflow:hidden;text-overflow:ellipsis;">${icon}${item.name}</span>
+            <button class="sf-ps-o-start" data-key="${item.key}" style="background:#27ae60;border:none;color:#fff;width:14px;height:13px;border-radius:2px;cursor:pointer;font-size:7px;padding:0;">▶</button>
+            <button class="sf-ps-o-stop" data-key="${item.key}" style="background:#c0392b;border:none;color:#fff;width:14px;height:13px;border-radius:2px;cursor:pointer;font-size:7px;padding:0;">⏹</button>
+        </div>`;
 
         if (item.type === 'Machine' && item.products.length > 1) {
-            let opts = item.products.map((p, i) =>
-                `<option value="${i}">${p.name}</option>`
-            ).join('');
-            html += `
-            <div style="display:flex; gap:3px; align-items:center; margin-bottom:2px;">
-                <select class="sf-ps-o-product" data-key="${item.key}" style="flex:1; background:#1a1a2e; color:#fff; border:1px solid #444; border-radius:3px; padding:1px; font-size:9px; max-width:90px;">
+            let opts = item.products.map((p, i) => `<option value="${i}">${p.name}</option>`).join('');
+            html += `<div style="display:flex;gap:2px;align-items:center;margin-top:1px;">
+                <select class="sf-ps-o-product" data-key="${item.key}" style="background:#111;color:#fff;border:1px solid #333;border-radius:2px;font-size:7px;padding:0 1px;max-width:60px;">
                     ${opts}
                 </select>
-                <span style="color:#666;">×</span>
                 <input type="number" min="0" value="0" class="sf-ps-o-qty" data-key="${item.key}"
-                    style="width:30px; background:#1a1a2e; color:#fff; border:1px solid #444; border-radius:3px; padding:1px; text-align:center; font-size:9px;">
-                <button class="sf-ps-o-add" data-key="${item.key}" style="background:#8e44ad; border:none; color:#fff; width:18px; height:18px; border-radius:3px; cursor:pointer; font-size:9px;">+</button>
+                    style="width:22px;background:#111;color:#fff;border:1px solid #333;border-radius:2px;text-align:center;font-size:7px;padding:0;">
+                <button class="sf-ps-o-add" data-key="${item.key}" style="background:#8e44ad;border:none;color:#fff;width:13px;height:13px;border-radius:2px;cursor:pointer;font-size:7px;padding:0;">+</button>
             </div>
-            <div class="sf-ps-o-queue" data-key="${item.key}" style="font-size:9px; color:#aaa; max-height:40px; overflow-y:auto;"></div>`;
+            <div class="sf-ps-o-queue" data-key="${item.key}" style="font-size:7px;color:#aaa;max-height:25px;overflow-y:auto;"></div>`;
         } else if (item.type === 'Machine') {
-            html += `
-            <div style="display:flex; gap:3px; align-items:center;">
-                <span style="color:#aaa;">العدد:</span>
+            html += `<div style="display:flex;gap:2px;align-items:center;margin-top:1px;">
+                <span style="color:#888;font-size:7px;">×</span>
                 <input type="number" min="0" value="0" class="sf-ps-o-qty" data-key="${item.key}" data-pidx="0"
-                    style="width:35px; background:#1a1a2e; color:#fff; border:1px solid #444; border-radius:3px; padding:1px; text-align:center; font-size:9px;">
-                <span style="color:#555;">(0=∞)</span>
+                    style="width:22px;background:#111;color:#fff;border:1px solid #333;border-radius:2px;text-align:center;font-size:7px;padding:0;">
             </div>`;
         } else {
-            html += `
-            <div style="display:flex; gap:3px; align-items:center;">
-                <span style="color:#aaa;">الدورات:</span>
+            html += `<div style="display:flex;gap:2px;align-items:center;margin-top:1px;">
+                <span style="color:#888;font-size:7px;">🔄</span>
                 <input type="number" min="0" value="0" class="sf-ps-o-cycles" data-key="${item.key}"
-                    style="width:35px; background:#1a1a2e; color:#fff; border:1px solid #444; border-radius:3px; padding:1px; text-align:center; font-size:9px;">
-                <span style="color:#555;">(0=∞)</span>
+                    style="width:22px;background:#111;color:#fff;border:1px solid #333;border-radius:2px;text-align:center;font-size:7px;padding:0;">
             </div>`;
         }
 
-        html += `<div class="sf-ps-o-status" data-key="${item.key}" style="color:#666; margin-top:2px;">● متوقف</div>`;
-        // Arrow pointer
-        html += `<div style="position:absolute; bottom:-8px; left:50%; transform:translateX(-50%); width:0; height:0; border-left:8px solid transparent; border-right:8px solid transparent; border-top:8px solid ${color};"></div>`;
+        html += `<div class="sf-ps-o-status" data-key="${item.key}" style="color:#555;font-size:7px;">●</div>`;
+        html += `<div style="position:absolute;bottom:-5px;left:50%;transform:translateX(-50%);width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-top:5px solid ${color};"></div>`;
 
         div.innerHTML = html;
 
-        // Events
         div.querySelector('.sf-ps-o-start')?.addEventListener('click', (e) => { e.stopPropagation(); this._startOne(item.key); });
         div.querySelector('.sf-ps-o-stop')?.addEventListener('click', (e) => { e.stopPropagation(); this._stopOne(item.key); });
         div.querySelector('.sf-ps-o-add')?.addEventListener('click', (e) => { e.stopPropagation(); this._addToQueue(item.key); });
