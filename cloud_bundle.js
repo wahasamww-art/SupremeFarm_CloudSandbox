@@ -2015,12 +2015,23 @@ SF.ZeroGasModule = class ZeroGasModule extends SF.ModuleBase {
             const initZeroGas = function() {
                 if (window.GF && window.GF.loginModel && window.GF.loginModel.AppData && window.TreasureType) {
                     
-                    // 1. Block costTreasure (visual deduction)
+                    // Helper: robust OP type check (handles 'op', 'OP', TreasureType.OP, TreasureType.op)
+                    const isOpType = function(type) {
+                        if (!type) return false;
+                        let tLow = (typeof type === 'string') ? type.toLowerCase() : '';
+                        if (tLow === 'op') return true;
+                        try { if (type === window.TreasureType.OP) return true; } catch(e) {}
+                        try { if (type === window.TreasureType.op) return true; } catch(e) {}
+                        try { if (type === window.TreasureType.Op) return true; } catch(e) {}
+                        return false;
+                    };
+
+                    // 1. Block costTreasure (visual deduction) for ALL OP operations
                     const orig_cost = window.GF.loginModel.costTreasure;
                     window.GF.loginModel.costTreasure = function(type, amount, ...args) {
                         try {
-                            if (type === window.TreasureType.OP) {
-                                return; // Block visual OP deduction
+                            if (isOpType(type)) {
+                                return; // Block OP deduction (auto-run animals/machines/crops)
                             }
                         } catch(e) {}
                         return orig_cost.apply(this, arguments);
@@ -2031,7 +2042,7 @@ SF.ZeroGasModule = class ZeroGasModule extends SF.ModuleBase {
                     
                     const orig_treasureIsMeet = window.GF.loginModel.treasureIsMeet;
                     window.GF.loginModel.treasureIsMeet = function(type, amount) {
-                        if (type === window.TreasureType.OP) return true;
+                        if (isOpType(type)) return true;
                         return orig_treasureIsMeet.apply(this, arguments);
                     };
 
