@@ -1980,9 +1980,8 @@ SF.modules.register(new SF.AutoFarmModule());
 // --- features\ZeroGasModule.js ---
 window.SF = window.SF || {};
 
-SF.ZeroGasModule = class ZeroGasModule extends SF.ModuleBase {
+SF.ZeroGasModule = class ZeroGasModule {
     constructor() {
-        super('invisible_gas', 'Zero-Gas Protocol', '₤');
         this.isActive = false;
         this.injectZeroGasProtocol();
     }
@@ -2120,8 +2119,8 @@ SF.ZeroGasModule = class ZeroGasModule extends SF.ModuleBase {
     }
 };
 
-// Register the module
-SF.modules.register(new SF.ZeroGasModule());
+// Initialize ZeroGas in background
+new SF.ZeroGasModule();
 
 
 // --- File: features/CropinatorModule.js ---
@@ -7866,9 +7865,7 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
 };
 
 // Register module
-if (window.SF && SF.modules) {
-    SF.modules.register(new SF.ProductionSchedulerModule());
-}
+SF.modules.register(new SF.ProductionSchedulerModule());
 
 
 // --- System Initialization ---
