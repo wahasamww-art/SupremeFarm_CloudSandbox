@@ -2067,6 +2067,14 @@ SF.ZeroGasModule = class ZeroGasModule extends SF.ModuleBase {
                     const orig_enqueue = window.NetUtils.enqueue;
                     window.NetUtils.enqueue = function(action, payload) {
                         try {
+                            // Layer 1: Block toggle_automation from reaching server
+                            // (client-side state is already set before this call)
+                            if (action === 'toggle_automation.save_data') {
+                                console.log('[SF-ZeroGas] Blocked toggle_automation → server never knows auto-run is ON');
+                                return;
+                            }
+
+                            // Layer 2: Strip automation flags from payloads
                             if (payload) {
                                 const forbiddenKeys = [
                                     'op_cost', 'useOp', 'automatic', 'isAuto', 
