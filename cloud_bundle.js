@@ -1,5 +1,5 @@
 // ==UserScript==
-// @name         حصاد مظبوط المدمج
+// @name         حصاد مٸبوֈ المدمج
 // @namespace    https://supreme-farm.local
 // @version      2.1.0
 // @description  نظام المزرعة الذكي - معمارية التوسعة اللانهائية
@@ -19,10 +19,10 @@
 // @run-at       document-end
 // ==/UserScript==
 
-// ===================================================================
+// =====================================================================
 // SupremeFarm Modular - Cloud Distribution Bundle
-// Generated at: 2026-09-02T09:52:26.580Z
-// ===================================================================
+// Generated at: 2026-09-02T10:00:10.642Z
+// =====================================================================
 
 var SF = window.SF || {};
 ﻿// --- core\EventBus.js ---
@@ -1156,11 +1156,24 @@ SF.ZeroGasModule = class ZeroGasModule extends SF.ModuleBase {
             injectNetUtils();
         };
 
-        const script = document.createElement('script');
-        script.textContent = '(' + fnStr + ')();';
-        (document.head || document.documentElement).appendChild(script);
-        script.remove();
-        console.log('[SupremeFarm Modular] Injected ZeroGas Ghost Protocol');
+        const tryInject = () => {
+            const headOrDoc = document.head || document.documentElement;
+            if (headOrDoc) {
+                const script = document.createElement('script');
+                script.textContent = '(' + fnStr + ')();';
+                headOrDoc.appendChild(script);
+                script.remove();
+                console.log('[SupremeFarm Modular] Injected ZeroGas Ghost Protocol');
+            } else {
+                window.addEventListener('DOMContentLoaded', tryInject, { once: true });
+            }
+        };
+
+        if (document.readyState === 'loading') {
+            window.addEventListener('DOMContentLoaded', tryInject, { once: true });
+        } else {
+            tryInject();
+        }
     }
 };
 
@@ -2585,18 +2598,30 @@ SF.CropinatorModule = class CropinatorModule extends SF.ModuleBase {
             setTimeout(initZeroGasMachine, 3000);
         };
 
-        const script = document.createElement('script');
-        script.textContent = '(' + fnStr + ')();';
-        (document.head || document.documentElement).appendChild(script);
-        script.remove();
-        console.log('[SupremeFarm Modular] Injected Cropinator Fix Protocol');
+        const tryInject = () => {
+            const headOrDoc = document.head || document.documentElement;
+            if (headOrDoc) {
+                const script = document.createElement('script');
+                script.textContent = '(' + fnStr + ')();';
+                headOrDoc.appendChild(script);
+                script.remove();
+                console.log('[SupremeFarm Modular] Injected Cropinator Ghost Protocol');
+            } else {
+                window.addEventListener('DOMContentLoaded', tryInject, { once: true });
+            }
+        };
+
+        if (document.readyState === 'loading') {
+            window.addEventListener('DOMContentLoaded', tryInject, { once: true });
+        } else {
+            tryInject();
+        }
     }
 };
 
 // Register the module
+
 new SF.CropinatorModule();
-
-
 
 
 // ملف إعدادات حسابات بناء الآلات
