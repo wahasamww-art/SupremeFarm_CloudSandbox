@@ -8118,10 +8118,11 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
         
         let hideAll = false;
         try {
-            if (gw.GF && gw.GF.windowManager && typeof gw.GF.windowManager.getOpenWindows === 'function') {
-                const wins = gw.GF.windowManager.getOpenWindows();
-                if (wins && wins.length > 0) hideAll = true;
-            }
+            if (gw.GF?.windowManager?.getOpenWindows && gw.GF.windowManager.getOpenWindows().length > 0) hideAll = true;
+            if (gw.App?.PopUpManager?.getPopUps && gw.App.PopUpManager.getPopUps().length > 0) hideAll = true;
+            if (gw.PopUpManager?.getPopUps && gw.PopUpManager.getPopUps().length > 0) hideAll = true;
+            if (gw.App?.ControllerManager?.getControllerModel("WindowManager")?.getOpenWindows && gw.App.ControllerManager.getControllerModel("WindowManager").getOpenWindows().length > 0) hideAll = true;
+            if (gw.GF?.guiManager?.getOpenWindows && gw.GF.guiManager.getOpenWindows().length > 0) hideAll = true;
         } catch(e) {}
 
         const rect = canvas.getBoundingClientRect();
