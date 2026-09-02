@@ -21,7 +21,7 @@
 
 // ===================================================================
 // SupremeFarm Modular - Cloud Distribution Bundle
-// Generated at: 2026-09-02T09:30:33.108Z
+// Generated at: 2026-09-02T09:33:45.821Z
 // ===================================================================
 
 var SF = window.SF || {};
@@ -1235,13 +1235,14 @@ SF.TargetProductionModule = class TargetProductionModule extends SF.ModuleBase {
         if (this.isActive) return;
         this.isActive = true;
         const self = this;
+        const gw = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
 
         // 1. Hooking UI Toggle Click (Gear Icon)
         const initToggleHook = function() {
-            if (window.App && window.App.ControllerManager) {
-                const orig_applyFunc = window.App.ControllerManager.applyFunc;
-                window.App.ControllerManager.applyFunc = function(controller, funcId, param) {
-                    if (funcId === window.GameConst.MAPOBJECT_TOGGLE_AUTOMATION && param) {
+            if (gw.App && gw.App.ControllerManager) {
+                const orig_applyFunc = gw.App.ControllerManager.applyFunc;
+                gw.App.ControllerManager.applyFunc = function(controller, funcId, param) {
+                    if (funcId === gw.GameConst.MAPOBJECT_TOGGLE_AUTOMATION && param) {
                         let objName = param.configData ? (param.configData.name_ar || param.configData.name) : "الآلة";
                         let uid = param.map_unique_id || param.unique_id || param.id;
 
@@ -1257,7 +1258,7 @@ SF.TargetProductionModule = class TargetProductionModule extends SF.ModuleBase {
                                         name: objName,
                                         objRef: param
                                     };
-                                    if (window.SF.ui && window.SF.ui.showToast) {
+                                    if (window.SF && window.SF.ui && window.SF.ui.showToast) {
                                         window.SF.ui.showToast(`✅ تم برمجة ${objName} لإنتاج ${count} عنصر.`, 'success');
                                     }
                                     self.updateUI();
@@ -1278,13 +1279,13 @@ SF.TargetProductionModule = class TargetProductionModule extends SF.ModuleBase {
                 setTimeout(initToggleHook, 2000);
             }
         };
-        setTimeout(initToggleHook, 4000); // Delayed slightly to ensure ZeroGas runs first
+        setTimeout(initToggleHook, 4000);
 
         // 2. Hooking AMF network payload to decrement count on each production
         const initNetHook = function() {
-            if (window.NetUtils && window.NetUtils.enqueue) {
-                const orig_enqueue = window.NetUtils.enqueue;
-                window.NetUtils.enqueue = function(action, payload) {
+            if (gw.NetUtils && gw.NetUtils.enqueue) {
+                const orig_enqueue = gw.NetUtils.enqueue;
+                gw.NetUtils.enqueue = function(action, payload) {
                     try {
                         const targetActions = ['feed_animal', 'add_material', 'start_produce', 'produce', 'gear_start', 'collect_product', 'harvest'];
                         if (payload && action && targetActions.some(a => action.includes(a))) {
@@ -1310,7 +1311,7 @@ SF.TargetProductionModule = class TargetProductionModule extends SF.ModuleBase {
                                     delete self.targets[uid];
                                     self.updateUI();
                                     
-                                    if (window.SF.ui && window.SF.ui.showToast) {
+                                    if (window.SF && window.SF.ui && window.SF.ui.showToast) {
                                         window.SF.ui.showToast(`🛑 اكتمل العدد المطلوب لـ [${objName}] وتوقفت تلقائياً!`, 'warning');
                                     }
                                 }
