@@ -21,7 +21,7 @@
 
 // ===================================================================
 // SupremeFarm Modular - Cloud Distribution Bundle
-// Generated at: 2026-09-02T09:33:45.821Z
+// Generated at: 2026-09-02T09:39:12.161Z
 // ===================================================================
 
 var SF = window.SF || {};
@@ -1188,7 +1188,6 @@ SF.TargetProductionModule = class TargetProductionModule extends SF.ModuleBase {
     constructor() {
         super('target_production', 'الإنتاج الذكي (محدد)', '🎯');
         this.isActive = false;
-        this.targets = {}; // map_unique_id -> { count, name, objRef }
         this.injectHooks();
     }
 
@@ -1208,126 +1207,124 @@ SF.TargetProductionModule = class TargetProductionModule extends SF.ModuleBase {
     }
 
     bindEvents() {
-        this.updateUI();
-    }
-
-    updateUI() {
-        const listContainer = document.getElementById('sf-target-prod-list');
-        if (!listContainer) return;
-        
-        let html = '';
-        for (let uid in this.targets) {
-            let data = this.targets[uid];
-            html += `<div style="display:flex; justify-content:space-between; margin-bottom:5px; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:5px;">
-                        <span>⚙️ ${data.name}</span>
-                        <span style="color:#f1c40f; font-weight:bold;">متبقي: ${data.count}</span>
-                     </div>`;
-        }
-        
-        if (html === '') {
-            listContainer.innerHTML = '<i>لا توجد آلات تعمل بعدد محدد حالياً...</i>';
-        } else {
-            listContainer.innerHTML = html;
-        }
+        // تحديث الواجهة بشكل مستمر بقراءة البيانات من الذاكرة الحقيقية للعبة
+        setInterval(() => {
+            const listContainer = document.getElementById('sf-target-prod-list');
+            if (!listContainer) return;
+            
+            let dataStr = null;
+            if (typeof unsafeWindow !== 'undefined' && unsafeWindow._sf_target_prod) {
+                dataStr = JSON.stringify(unsafeWindow._sf_target_prod);
+            } else if (window._sf_target_prod) {
+                dataStr = JSON.stringify(window._sf_target_prod);
+            }
+            if (!dataStr) return;
+            
+            let targets = JSON.parse(dataStr);
+            let html = '';
+            for (let uid in targets) {
+                let data = targets[uid];
+                html += `<div style="display:flex; justify-content:space-between; margin-bottom:5px; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:5px;">
+                            <span>⚙️ ${data.name}</span>
+                            <span style="color:#f1c40f; font-weight:bold;">متبقي: ${data.count}</span>
+                         </div>`;
+            }
+            
+            if (html === '') {
+                listContainer.innerHTML = '<i>لا توجد آلات تعمل بعدد محدد حالياً...</i>';
+            } else {
+                listContainer.innerHTML = html;
+            }
+        }, 1000);
     }
 
     injectHooks() {
         if (this.isActive) return;
         this.isActive = true;
-        const self = this;
-        const gw = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
 
-        // 1. Hooking UI Toggle Click (Gear Icon)
-        const initToggleHook = function() {
-            if (gw.App && gw.App.ControllerManager) {
-                const orig_applyFunc = gw.App.ControllerManager.applyFunc;
-                gw.App.ControllerManager.applyFunc = function(controller, funcId, param) {
-                    if (funcId === gw.GameConst.MAPOBJECT_TOGGLE_AUTOMATION && param) {
-                        let objName = param.configData ? (param.configData.name_ar || param.configData.name) : "الآلة";
-                        let uid = param.map_unique_id || param.unique_id || param.id;
+        // وضع الكود بالكامل داخل دالة سيتم حقنها في الصفحة الأصلية
+        const fnStr = function() {
+            window._sf_target_prod = window._sf_target_prod || {};
 
-                        // إذا كانت الآلة مغلقة وسيتم تشغيلها الآن
-                        if (!param.automatic) {
-                            let userInput = prompt(`🎯 التشغيل الذكي لـ [${objName}]\n\nكم عدد المنتجات المطلوبة؟\n(اتركه فارغاً واضغط موافق للتشغيل المستمر اللانهائي)`, "");
-                            
-                            if (userInput !== null && userInput.trim() !== "") {
-                                let count = parseInt(userInput);
-                                if (!isNaN(count) && count > 0) {
-                                    self.targets[uid] = {
-                                        count: count,
-                                        name: objName,
-                                        objRef: param
-                                    };
-                                    if (window.SF && window.SF.ui && window.SF.ui.showToast) {
-                                        window.SF.ui.showToast(`✅ تم برمجة ${objName} لإنتاج ${count} عنصر.`, 'success');
+            const initToggleHook = function() {
+                if (window.App && window.App.ControllerManager && window.GameConst) {
+                    const orig_applyFunc = window.App.ControllerManager.applyFunc;
+                    window.App.ControllerManager.applyFunc = function(controller, funcId, param) {
+                        if (funcId === window.GameConst.MAPOBJECT_TOGGLE_AUTOMATION && param) {
+                            let objName = param.configData ? (param.configData.name_ar || param.configData.name) : "الآلة";
+                            let uid = param.map_unique_id || param.unique_id || param.id;
+
+                            // إذا كانت الآلة متوقفة وسيتم تشغيلها الآن
+                            if (!param.automatic) {
+                                let userInput = prompt(`🎯 التشغيل الذكي لـ [${objName}]\n\nكم عدد المنتجات المطلوبة؟\n(اتركه فارغاً واضغط موافق للتشغيل المستمر اللانهائي)`, "");
+                                
+                                if (userInput !== null && userInput.trim() !== "") {
+                                    let count = parseInt(userInput);
+                                    if (!isNaN(count) && count > 0) {
+                                        window._sf_target_prod[uid] = { count: count, name: objName };
                                     }
-                                    self.updateUI();
+                                }
+                            } else {
+                                // إزالة العداد إذا أوقف المستخدم الآلة بيده
+                                if (window._sf_target_prod[uid]) {
+                                    delete window._sf_target_prod[uid];
                                 }
                             }
-                        } else {
-                            // إذا أوقف المستخدم الآلة بيده، نمسحها من العداد
-                            if (self.targets[uid]) {
-                                delete self.targets[uid];
-                                self.updateUI();
-                            }
                         }
-                    }
-                    return orig_applyFunc.apply(this, arguments);
-                };
-                console.log("✅ [TargetProduction] Hooked MAPOBJECT_TOGGLE_AUTOMATION");
-            } else {
-                setTimeout(initToggleHook, 2000);
-            }
-        };
-        setTimeout(initToggleHook, 4000);
+                        return orig_applyFunc.apply(this, arguments);
+                    };
+                    console.log("✅ [TargetProduction] Main Context Hooked: MAPOBJECT_TOGGLE_AUTOMATION");
+                } else {
+                    setTimeout(initToggleHook, 2000);
+                }
+            };
+            setTimeout(initToggleHook, 3000);
 
-        // 2. Hooking AMF network payload to decrement count on each production
-        const initNetHook = function() {
-            if (gw.NetUtils && gw.NetUtils.enqueue) {
-                const orig_enqueue = gw.NetUtils.enqueue;
-                gw.NetUtils.enqueue = function(action, payload) {
-                    try {
-                        const targetActions = ['feed_animal', 'add_material', 'start_produce', 'produce', 'gear_start', 'collect_product', 'harvest'];
-                        if (payload && action && targetActions.some(a => action.includes(a))) {
-                            let uid = payload.unique_id || payload.machine_id || payload.id;
-                            if (uid && self.targets[uid]) {
-                                // الخصم من العداد
-                                self.targets[uid].count--;
-                                self.updateUI();
-                                
-                                // إذا انتهى العدد
-                                if (self.targets[uid].count <= 0) {
-                                    let objName = self.targets[uid].name;
-                                    let mapObj = self.targets[uid].objRef;
+            const initNetHook = function() {
+                if (window.NetUtils && window.NetUtils.enqueue) {
+                    const orig_enqueue = window.NetUtils.enqueue;
+                    window.NetUtils.enqueue = function(action, payload) {
+                        try {
+                            const targetActions = ['feed_animal', 'add_material', 'start_produce', 'produce', 'gear_start', 'collect_product', 'harvest'];
+                            if (payload && action && targetActions.some(a => action.includes(a))) {
+                                let uid = payload.unique_id || payload.machine_id || payload.id;
+                                if (uid && window._sf_target_prod[uid]) {
+                                    window._sf_target_prod[uid].count--;
                                     
-                                    // إيقاف الترس برمجياً وبصرياً
-                                    if (mapObj) {
-                                        mapObj.automatic = false;
-                                        if (typeof mapObj.automation_turn === 'function') {
-                                            mapObj.automation_turn();
+                                    // عند اكتمال العدد
+                                    if (window._sf_target_prod[uid].count <= 0) {
+                                        delete window._sf_target_prod[uid];
+                                        
+                                        // البحث عن الآلة في الخريطة لإيقافها
+                                        const layer = window.GF && window.GF.gameController && window.GF.gameController.gameView && window.GF.gameController.gameView.objLayer;
+                                        if (layer && layer.$children) {
+                                            const obj = layer.$children.find(c => c && (c.map_unique_id == uid || c.unique_id == uid || c.id == uid));
+                                            if (obj) {
+                                                obj.automatic = false;
+                                                if (typeof obj.automation_turn === 'function') {
+                                                    obj.automation_turn();
+                                                }
+                                            }
                                         }
                                     }
-                                    
-                                    delete self.targets[uid];
-                                    self.updateUI();
-                                    
-                                    if (window.SF && window.SF.ui && window.SF.ui.showToast) {
-                                        window.SF.ui.showToast(`🛑 اكتمل العدد المطلوب لـ [${objName}] وتوقفت تلقائياً!`, 'warning');
-                                    }
                                 }
                             }
-                        }
-                    } catch(e) {
-                        console.error("[TargetProduction] Error in net hook:", e);
-                    }
-                    return orig_enqueue.apply(this, arguments);
-                };
-                console.log("✅ [TargetProduction] Hooked NetUtils.enqueue");
-            } else {
-                setTimeout(initNetHook, 2000);
-            }
+                        } catch(e) {}
+                        return orig_enqueue.apply(this, arguments);
+                    };
+                    console.log("✅ [TargetProduction] Main Context Hooked: NetUtils.enqueue");
+                } else {
+                    setTimeout(initNetHook, 2000);
+                }
+            };
+            setTimeout(initNetHook, 3500);
         };
-        setTimeout(initNetHook, 4500);
+
+        // حقن الكود مباشرة في رأس الصفحة كسكربت نقي
+        const script = document.createElement('script');
+        script.textContent = '(' + fnStr + ')();';
+        (document.head || document.documentElement).appendChild(script);
+        script.remove();
     }
 };
 
