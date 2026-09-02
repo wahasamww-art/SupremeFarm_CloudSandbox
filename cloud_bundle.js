@@ -7752,6 +7752,7 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
                 </div>
             </div>`;
         }).join('');
+    }
 
     _filterList(type, query) {
         const listId = type === 'animal' ? '#sf-ps-animals-list' : '#sf-ps-machines-list';
