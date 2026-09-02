@@ -7756,15 +7756,27 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
         if (this.activeMachineKey === key) this._renderMachines();
     }
 
+    _recalcQueueIdx(sched) {
+        if (!sched || !sched.queue) return;
+        let found = false;
+        for (let i = 0; i < sched.queue.length; i++) {
+            const q = sched.queue[i];
+            if (q.target === 0 || q.done < q.target) {
+                sched.currentQueueIdx = i;
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            sched.currentQueueIdx = sched.queue.length;
+        }
+    }
+
     _removeFromQueue(key, idx) {
         if (!this.schedules[key]) return;
         this.schedules[key].queue.splice(idx, 1);
-        if (this.schedules[key].currentQueueIdx > idx) {
-            this.schedules[key].currentQueueIdx--;
-        } else if (this.schedules[key].currentQueueIdx >= this.schedules[key].queue.length) {
-            this.schedules[key].currentQueueIdx = 0; // Reset if we deleted the last item
-            if (this.schedules[key].queue.length === 0) this.schedules[key].running = false;
-        }
+        this._recalcQueueIdx(this.schedules[key]);
+        if (this.schedules[key].queue.length === 0) this.schedules[key].running = false;
         this._saveSchedules();
         this._renderMachines();
     }
@@ -7780,10 +7792,7 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
         q[idx] = q[targetIdx];
         q[targetIdx] = temp;
 
-        // Fix currentQueueIdx
-        const cur = this.schedules[key].currentQueueIdx;
-        if (cur === idx) this.schedules[key].currentQueueIdx = targetIdx;
-        else if (cur === targetIdx) this.schedules[key].currentQueueIdx = idx;
+        this._recalcQueueIdx(this.schedules[key]);
 
         this._saveSchedules();
         if (this.activeMachineKey === key) this._renderMachines();
@@ -7924,32 +7933,20 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
         const hasProducts = sd.products && ((Array.isArray(sd.products) && sd.products.length > 0) || (typeof sd.products === 'number' && sd.products > 0));
         if (hasProducts) {
             try { gc._collectMapObject(mo); } catch(e) {}
-            const cur = sched.queue[sched.currentQueueIdx];
-            if (cur) {
-                cur.done++;
-                this._log(`📦 ${item.name}: ${cur.name} ${cur.done}/${cur.target||'∞'}`);
-                if (cur.target > 0 && cur.done >= cur.target) {
-                    sched.currentQueueIdx++;
-                    if (sched.currentQueueIdx >= sched.queue.length) {
-                        sched.running = false;
-                        this._log(`🎉 ${item.name}: اكتمل!`);
-                        this._renderMachines(); this._updateBadge(key);
-                        try { gw.NetUtils.flush(); } catch(e) {}
-                        return;
-                    }
-                    const next = sched.queue[sched.currentQueueIdx];
-                    if (next && next.productIndex >= 0) {
-                        const curSel = parseInt(sd.selected_raw_material) || 0;
-                        if (curSel !== next.productIndex) {
-                            this._log(`🔄 ${item.name} → ${next.name}`);
-                            try { gw.NetUtils.enqueue('save_selected_material.save_data', { id: item.id, x: item.x, y: item.y, flip: 0, material: next.productIndex }); } catch(e) {}
-                            // Update locally to bypass waiting
-                            sd.selected_raw_material = next.productIndex;
-                            if (mo.selected_raw_material !== undefined) mo.selected_raw_material = next.productIndex;
-                            if (typeof mo.setRawMaterial === 'function') { try { mo.setRawMaterial(next.productIndex); } catch(e) {} }
-                        }
-                    }
-                }
+            
+            const curSel = parseInt(sd.selected_raw_material) || 0;
+            let collectedItem = sched.queue.find(q => q.productIndex === curSel && (q.target === 0 || q.done < q.target));
+            if (!collectedItem) collectedItem = sched.queue[sched.currentQueueIdx];
+            
+            if (collectedItem) {
+                collectedItem.done++;
+                this._log(`📦 ${item.name}: ${collectedItem.name} ${collectedItem.done}/${collectedItem.target||'∞'}`);
+            }
+
+            this._recalcQueueIdx(sched);
+            if (sched.currentQueueIdx >= sched.queue.length) {
+                sched.running = false;
+                this._log(`🎉 ${item.name}: اكتمل!`);
             }
             try { gw.NetUtils.flush(); } catch(e) {}
             this._updateBadge(key); this._renderMachines(); return;
@@ -7959,24 +7956,29 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
         const rawMats = sd.raw_materials;
         const isIdle = !rawMats || (Array.isArray(rawMats) && rawMats.every(r => !r || (Array.isArray(r) && r.length === 0)));
         if (isIdle) {
-            const cur = sched.queue[sched.currentQueueIdx];
-            if (!cur) { sched.running = false; this._updateBadge(key); return; }
+            this._recalcQueueIdx(sched);
+            if (sched.currentQueueIdx >= sched.queue.length) {
+                sched.running = false; this._updateBadge(key); this._renderMachines(); return;
+            }
 
-            if (cur.productIndex >= 0) {
+            const next = sched.queue[sched.currentQueueIdx];
+            if (next && next.productIndex >= 0) {
                 const curSel = parseInt(sd.selected_raw_material) || 0;
-                if (curSel !== cur.productIndex) {
-                    this._log(`🔄 ${item.name} → ${cur.name}`);
-                    try { gw.NetUtils.enqueue('save_selected_material.save_data', { id: item.id, x: item.x, y: item.y, flip: 0, material: cur.productIndex }); } catch(e) {}
-                    
+                if (curSel !== next.productIndex) {
+                    this._log(`🔄 ${item.name} إلى ${next.name}`);
+                    try { gw.NetUtils.enqueue('save_selected_material.save_data', { id: item.id, x: item.x, y: item.y, flip: 0, material: next.productIndex }); } catch(e) {}
                     // Update locally to bypass waiting
-                    sd.selected_raw_material = cur.productIndex;
-                    if (mo.selected_raw_material !== undefined) mo.selected_raw_material = cur.productIndex;
-                    if (typeof mo.setRawMaterial === 'function') { try { mo.setRawMaterial(cur.productIndex); } catch(e) {} }
-                    
-                    // Flush immediately so it can be refilled on next tick
+                    sd.selected_raw_material = next.productIndex;
+                    if (mo.selected_raw_material !== undefined) mo.selected_raw_material = next.productIndex;
+                    if (typeof mo.setRawMaterial === 'function') { try { mo.setRawMaterial(next.productIndex); } catch(e) {} }
                     try { gw.NetUtils.flush(); } catch(e) {}
-                    return;
                 }
+                
+                try {
+                    gw.NetUtils.enqueue('execute_batch', { map_unique_id: [mo.map_unique_id], action: 'Manufacture_fillRawMaterial' });
+                    gw.NetUtils.flush();
+                    this._log(`▶ بدء ${item.name}: ${next.name}`);
+                } catch(e) {}
             }
 
             try {
