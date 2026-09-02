@@ -7879,9 +7879,13 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
                 }
             }
             try {
-                if (gc?._refillMapObject) gc._refillMapObject(mo);
-                else if (gc?.refillMapObject) gc.refillMapObject(mo);
-                else if (gc?._feedMapObject) gc._feedMapObject(mo);
+                // _refillMapObject(mo, rawMaterialId, slotIndex, isAuto)
+                // slot is 1-based, getRawMaterialId gets the material for that slot
+                const slot = 1;
+                const matId = mo.getRawMaterialId ? mo.getRawMaterialId(slot) : null;
+                if (matId && gc?._refillMapObject) {
+                    gc._refillMapObject(mo, matId, slot, false);
+                }
             } catch(e) {}
             this._updateOverlayStatus(key);
         }
@@ -7910,8 +7914,11 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
         const needsFeed = sd.raw_materials === 0 || sd.raw_materials === '0' || sd.raw_materials === false;
         if (needsFeed) {
             try {
-                if (gc?._feedMapObject) gc._feedMapObject(mo);
-                else if (gc?.feedMapObject) gc.feedMapObject(mo);
+                // _feedMapObject(mo, rawMaterialId, isAuto)
+                const matId = mo.raw_material_id;
+                if (matId && gc?._feedMapObject && (!mo.canFeed || mo.canFeed())) {
+                    gc._feedMapObject(mo, matId, false);
+                }
             } catch(e) {}
         }
     }
