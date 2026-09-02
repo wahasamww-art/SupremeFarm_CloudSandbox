@@ -7865,6 +7865,11 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
     }
 };
 
+// Register module
+if (window.SF && SF.modules) {
+    SF.modules.register(new SF.ProductionSchedulerModule());
+}
+
 
 // --- System Initialization ---
 (function() {
