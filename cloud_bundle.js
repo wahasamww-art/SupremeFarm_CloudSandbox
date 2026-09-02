@@ -7678,7 +7678,7 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
 
         if (!this.badges[key]) {
             const b = document.createElement('div');
-            b.style.cssText = 'position:absolute;background:rgba(0,0,0,0.9);color:#fff;padding:4px 8px;border-radius:5px;font-size:14px;font-weight:bold;font-family:sans-serif;white-space:nowrap;transform:translate(-50%,-100%);border:2px solid #2ecc71;box-shadow:0 2px 5px rgba(0,0,0,0.5);pointer-events:none;text-shadow:1px 1px 1px #000;';
+            b.style.cssText = 'position:absolute;background:rgba(0,0,0,0.4);color:rgba(255,255,255,0.9);padding:4px 8px;border-radius:5px;font-size:14px;font-weight:bold;font-family:sans-serif;white-space:nowrap;transform:translate(-50%,-50%);border:1px solid rgba(46, 204, 113, 0.6);box-shadow:0 1px 3px rgba(0,0,0,0.3);pointer-events:none;text-shadow:1px 1px 1px #000;';
             this._ensureBadgeContainer();
             this._badgeContainer.appendChild(b);
             this.badges[key] = b;
@@ -7715,7 +7715,7 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
                 if (!mo || typeof mo.localToGlobal !== 'function') { badge.style.display = 'none'; return; }
                 const p = new gw.egret.Point(0, 0);
                 mo.localToGlobal(0, 0, p);
-                const sx = rect.left + p.x * scX, sy = rect.top + p.y * scY - 30;
+                const sx = rect.left + p.x * scX, sy = rect.top + p.y * scY - 20;
                 if (sx > rect.left - 30 && sx < rect.right + 30 && sy > rect.top - 30 && sy < rect.bottom + 30) {
                     badge.style.left = sx + 'px'; badge.style.top = sy + 'px'; badge.style.display = '';
                 } else { badge.style.display = 'none'; }
