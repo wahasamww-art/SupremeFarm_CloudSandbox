@@ -7392,30 +7392,28 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
 
     render() {
         return `
-        <div class="sf-card" style="padding: 20px;">
-            <div style="margin-bottom:15px;">
-                <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
-                    <span style="font-size:16px;">🐄</span>
-                    <span style="font-weight:bold;color:#e67e22;font-size:16px;">الحيوانات</span>
-                </div>
-                <input id="sf-ps-search-animal" type="text" placeholder="🔍 ابحث عن حيوان..." style="width:100%;background:#1a1a2e;color:#fff;border:1px solid #444;border-radius:6px;padding:8px 12px;font-size:14px;margin-bottom:8px;box-sizing:border-box;">
-                <div id="sf-ps-animals-list" style="max-height:200px;overflow-y:auto;padding-right:5px;"></div>
+        <div class="sf-card" style="padding: 20px; display:flex; flex-direction:column; height: 100%; box-sizing: border-box;">
+            <div style="display:flex; gap:10px; margin-bottom:15px;">
+                <button id="sf-ps-tab-machines" class="sf-btn" style="flex:1;background:#3498db;font-size:16px;padding:12px;border-radius:8px;font-weight:bold;box-shadow:0 0 10px rgba(52,152,219,0.5);color:#fff;">⚙ الآلات</button>
+                <button id="sf-ps-tab-animals" class="sf-btn" style="flex:1;background:#333;font-size:16px;padding:12px;border-radius:8px;font-weight:bold;color:#bbb;">🐄 الحيوانات</button>
             </div>
-            <div style="margin-bottom:15px;">
+            
+            <div id="sf-ps-view-machines" style="flex:1; display:flex; flex-direction:column;">
                 <div id="sf-ps-machine-header-wrap">
-                    <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
-                        <span style="font-size:16px;">⚙</span>
-                        <span style="font-weight:bold;color:#3498db;font-size:16px;">الآلات</span>
-                    </div>
-                    <input id="sf-ps-search-machine" type="text" placeholder="🔍 ابحث عن آلة..." style="width:100%;background:#1a1a2e;color:#fff;border:1px solid #444;border-radius:6px;padding:8px 12px;font-size:14px;margin-bottom:8px;box-sizing:border-box;">
+                    <input id="sf-ps-search-machine" type="text" placeholder="🔍 ابحث عن آلة..." style="width:100%;background:#1a1a2e;color:#fff;border:1px solid #444;border-radius:6px;padding:12px;font-size:14px;margin-bottom:12px;box-sizing:border-box;">
                 </div>
-                <div id="sf-ps-machines-list" style="max-height:300px;overflow-y:auto;padding-right:5px;"></div>
+                <div id="sf-ps-machines-list" style="flex:1; overflow-y:auto; padding-right:5px; min-height:350px;"></div>
             </div>
-            <div style="display:flex;gap:10px;margin-bottom:10px;margin-top:20px;">
-                <button id="sf-ps-start-all" class="sf-btn" style="flex:1;background:#27ae60;font-size:15px;padding:10px;border-radius:8px;">▶ تشغيل كل الجداول</button>
-                <button id="sf-ps-stop-all" class="sf-btn" style="flex:1;background:#c0392b;font-size:15px;padding:10px;border-radius:8px;">⏹ إيقاف كل الجداول</button>
+
+            <div id="sf-ps-view-animals" style="flex:1; display:none; flex-direction:column;">
+                <input id="sf-ps-search-animal" type="text" placeholder="🔍 ابحث عن حيوان..." style="width:100%;background:#1a1a2e;color:#fff;border:1px solid #444;border-radius:6px;padding:12px;font-size:14px;margin-bottom:12px;box-sizing:border-box;">
+                <div id="sf-ps-animals-list" style="flex:1; overflow-y:auto; padding-right:5px; min-height:350px;"></div>
             </div>
-            <div id="sf-ps-log" style="max-height:100px;overflow-y:auto;font-size:12px;color:#bbb;background:rgba(0,0,0,0.3);padding:8px;border-radius:6px;direction:rtl;border:1px solid #333;"></div>
+
+            <div style="display:flex;gap:10px;margin-top:20px;">
+                <button id="sf-ps-start-all" class="sf-btn" style="flex:1;background:#27ae60;font-size:15px;padding:12px;border-radius:8px;font-weight:bold;color:#fff;">▶ تشغيل الكل</button>
+                <button id="sf-ps-stop-all" class="sf-btn" style="flex:1;background:#c0392b;font-size:15px;padding:12px;border-radius:8px;font-weight:bold;color:#fff;">⏹ إيقاف الكل</button>
+            </div>
         </div>`;
     }
 
@@ -7424,6 +7422,23 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
         if (!c) return;
         c.querySelector('#sf-ps-start-all')?.addEventListener('click', () => this._startAll());
         c.querySelector('#sf-ps-stop-all')?.addEventListener('click', () => this._stopAll());
+        
+        c.querySelector('#sf-ps-tab-machines')?.addEventListener('click', (e) => {
+            e.target.style.background = '#3498db'; e.target.style.color = '#fff'; e.target.style.boxShadow = '0 0 10px rgba(52,152,219,0.5)';
+            const animTab = c.querySelector('#sf-ps-tab-animals');
+            animTab.style.background = '#333'; animTab.style.color = '#bbb'; animTab.style.boxShadow = 'none';
+            c.querySelector('#sf-ps-view-machines').style.display = 'flex';
+            c.querySelector('#sf-ps-view-animals').style.display = 'none';
+        });
+        
+        c.querySelector('#sf-ps-tab-animals')?.addEventListener('click', (e) => {
+            e.target.style.background = '#e67e22'; e.target.style.color = '#fff'; e.target.style.boxShadow = '0 0 10px rgba(230,126,34,0.5)';
+            const machTab = c.querySelector('#sf-ps-tab-machines');
+            machTab.style.background = '#333'; machTab.style.color = '#bbb'; machTab.style.boxShadow = 'none';
+            c.querySelector('#sf-ps-view-machines').style.display = 'none';
+            c.querySelector('#sf-ps-view-animals').style.display = 'flex';
+        });
+
         c.querySelector('#sf-ps-search-animal')?.addEventListener('input', (e) => this._filterList('animal', e.target.value));
         c.querySelector('#sf-ps-search-machine')?.addEventListener('input', (e) => this._filterList('machine', e.target.value));
         
@@ -8235,11 +8250,7 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
     }
 
     _log(msg) {
-        const t = new Date().toLocaleTimeString('ar-EG', { hour12: false });
-        this._logLines.unshift(`[${t}] ${msg}`);
-        if (this._logLines.length > 30) this._logLines.length = 30;
-        const el = this.container?.querySelector('#sf-ps-log');
-        if (el) el.innerHTML = this._logLines.map(l => `<div>${l}</div>`).join('');
+        console.log(`[Scheduler] ${msg}`);
     }
 };
 
