@@ -7366,19 +7366,25 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
         super('production_scheduler', 'جدولة الإنتاج', '🏭');
         this.items = [];
         this.schedules = {};
+        this.overlays = {};
         this.loopTimer = null;
+        this.posTimer = null;
         this.loopSpeed = 2000;
         this._logLines = [];
+        this._overlayContainer = null;
     }
 
     render() {
         return `
         <div class="sf-card">
-            <div style="display:flex; gap:8px; margin-bottom:12px; flex-wrap:wrap; justify-content:center;">
-                <button id="sf-ps-scan" class="sf-btn" style="flex:1; min-width:140px;">🔍 فحص الخريطة</button>
+            <p style="color:var(--sf-text-muted); font-size:12px; text-align:center; margin-bottom:10px;">
+                يعرض بطاقات التحكم مباشرة فوق كل آلة وحيوان على الخريطة.
+            </p>
+            <div style="display:flex; gap:8px; margin-bottom:10px; align-items:center;">
+                <button id="sf-ps-scan" class="sf-btn" style="flex:1;">🔍 إظهار على الخريطة</button>
+                <button id="sf-ps-hide" class="sf-btn" style="background:#c0392b; flex:0.5;">إخفاء</button>
             </div>
-
-            <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px; background:rgba(0,0,0,0.3); padding:8px; border-radius:6px;">
+            <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px; background:rgba(0,0,0,0.3); padding:8px; border-radius:6px;">
                 <span style="font-size:12px; color:#aaa;">⏱️ سرعة:</span>
                 <select id="sf-ps-speed" style="flex:1; background:#1a1a2e; color:#fff; border:1px solid #333; border-radius:4px; padding:4px;">
                     <option value="500">⚡ فوري (0.5 ث)</option>
@@ -7387,47 +7393,72 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
                     <option value="5000">🐌 عادي (5 ث)</option>
                 </select>
             </div>
-
-            <div id="sf-ps-items" style="max-height:400px; overflow-y:auto;"></div>
-
-            <div style="display:flex; gap:8px; margin-top:12px;">
+            <div style="display:flex; gap:8px;">
                 <button id="sf-ps-start-all" class="sf-btn" style="flex:1; background:#27ae60;">▶️ تشغيل الكل</button>
                 <button id="sf-ps-stop-all" class="sf-btn" style="flex:1; background:#c0392b;">⏹️ إيقاف الكل</button>
             </div>
-
-            <div id="sf-ps-log" style="max-height:120px; overflow-y:auto; margin-top:10px; font-size:11px; color:#888; background:rgba(0,0,0,0.3); padding:6px; border-radius:4px; direction:rtl;"></div>
+            <div id="sf-ps-log" style="max-height:100px; overflow-y:auto; margin-top:8px; font-size:10px; color:#666; background:rgba(0,0,0,0.2); padding:4px; border-radius:4px; direction:rtl;"></div>
         </div>`;
     }
 
     bindEvents() {
         const c = this.container;
         if (!c) return;
-        c.querySelector('#sf-ps-scan')?.addEventListener('click', () => this.scanMap());
+        c.querySelector('#sf-ps-scan')?.addEventListener('click', () => this.showOverlays());
+        c.querySelector('#sf-ps-hide')?.addEventListener('click', () => this.hideOverlays());
         c.querySelector('#sf-ps-speed')?.addEventListener('change', (e) => {
             this.loopSpeed = parseInt(e.target.value) || 2000;
             if (this.loopTimer) { this._stopLoop(); this._startLoop(); }
-            this._log(`سرعة الفحص: ${this.loopSpeed}ms`);
         });
         c.querySelector('#sf-ps-start-all')?.addEventListener('click', () => this._startAll());
         c.querySelector('#sf-ps-stop-all')?.addEventListener('click', () => this._stopAll());
     }
 
     // ═══════════════════════════════════════
-    // SCAN
+    // OVERLAY SYSTEM (In-Game Floating Cards)
     // ═══════════════════════════════════════
-    scanMap() {
-        const gw = unsafeWindow;
-        const itemsDiv = this.container?.querySelector('#sf-ps-items');
-        if (!itemsDiv) return;
-        itemsDiv.innerHTML = '⏳ جاري الفحص...';
-        this.items = [];
+    _ensureContainer() {
+        if (this._overlayContainer && document.body.contains(this._overlayContainer)) return;
+        this._overlayContainer = document.createElement('div');
+        this._overlayContainer.id = 'sf-ps-overlay-root';
+        this._overlayContainer.style.cssText = 'position:fixed; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index:9000;';
+        document.body.appendChild(this._overlayContainer);
+    }
 
+    showOverlays() {
+        this.hideOverlays();
+        this._ensureContainer();
+        this._scanItems();
+
+        this.items.forEach(item => {
+            const el = this._createOverlayCard(item);
+            if (el) {
+                this._overlayContainer.appendChild(el);
+                this.overlays[item.key] = el;
+            }
+        });
+
+        this._startPositionUpdater();
+        this._log(`📍 ${this.items.length} عنصر على الخريطة`);
+    }
+
+    hideOverlays() {
+        this._stopPositionUpdater();
+        if (this._overlayContainer) {
+            this._overlayContainer.innerHTML = '';
+        }
+        this.overlays = {};
+    }
+
+    _scanItems() {
+        const gw = unsafeWindow;
+        this.items = [];
         try {
             const moList = gw.GameGridData?.uidDictionary
                 ? Object.values(gw.GameGridData.uidDictionary) : [];
 
             moList.forEach(mo => {
-                if (!mo || !mo.configData) return;
+                if (!mo?.configData) return;
                 const cn = mo.className || mo.configData?.className || '';
                 if (cn !== 'Machine' && cn !== 'Animal') return;
 
@@ -7450,8 +7481,8 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
                         for (let i = 0; i < Math.min(rawMats.length, prods.length); i++) {
                             let pName = '';
                             try {
-                                const pConfig = gw.Config?.Store_GetItemData(prods[i]);
-                                pName = pConfig ? (pConfig.name_ar || pConfig.name) : '';
+                                const pc = gw.Config?.Store_GetItemData(prods[i]);
+                                pName = pc ? (pc.name_ar || pc.name) : '';
                             } catch(e) {}
                             item.products.push({
                                 index: i, rawMaterialId: rawMats[i],
@@ -7462,149 +7493,274 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
                 }
                 this.items.push(item);
             });
-            this._renderItems(itemsDiv);
-        } catch(e) {
-            itemsDiv.innerHTML = `<span style="color:#ff6b6b">خطأ: ${e.message}</span>`;
-        }
+        } catch(e) {}
     }
 
-    _renderItems(container) {
-        if (this.items.length === 0) {
-            container.innerHTML = '<span style="color:#f39c12">لم يتم العثور على آلات أو حيوانات.</span>';
-            return;
-        }
-        let html = '';
-        const machines = this.items.filter(i => i.type === 'Machine');
-        const animals = this.items.filter(i => i.type === 'Animal');
+    _createOverlayCard(item) {
+        const div = document.createElement('div');
+        div.dataset.key = item.key;
+        const color = item.type === 'Machine' ? '#3498db' : '#e67e22';
+        const icon = item.type === 'Machine' ? '🏭' : '🐄';
 
-        if (machines.length > 0) {
-            html += '<div style="color:#3498db; font-weight:bold; margin-bottom:6px; font-size:13px;">🏭 الآلات</div>';
-            machines.forEach(m => { html += this._renderMachineCard(m); });
-        }
-        if (animals.length > 0) {
-            html += '<div style="color:#e67e22; font-weight:bold; margin:10px 0 6px; font-size:13px;">🐄 الحيوانات</div>';
-            animals.forEach(a => { html += this._renderAnimalCard(a); });
-        }
-        container.innerHTML = html;
+        div.style.cssText = `
+            position:absolute; pointer-events:auto; background:rgba(15,15,30,0.92);
+            border:2px solid ${color}; border-radius:8px; padding:6px 8px;
+            min-width:160px; max-width:220px; font-family:sans-serif; direction:rtl;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.6); transform:translate(-50%, -100%);
+            transition: opacity 0.2s;
+        `;
 
-        container.querySelectorAll('.sf-ps-start-btn').forEach(btn => {
-            btn.addEventListener('click', () => this._startOne(btn.dataset.key));
-        });
-        container.querySelectorAll('.sf-ps-stop-btn').forEach(btn => {
-            btn.addEventListener('click', () => this._stopOne(btn.dataset.key));
-        });
-    }
+        let innerHtml = `
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                <span style="font-size:11px; font-weight:bold; color:${color}; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:120px;">${icon} ${item.name}</span>
+                <div style="display:flex; gap:3px;">
+                    <button class="sf-ps-o-start" data-key="${item.key}" style="background:#27ae60; border:none; color:#fff; width:22px; height:20px; border-radius:3px; cursor:pointer; font-size:10px;">▶</button>
+                    <button class="sf-ps-o-stop" data-key="${item.key}" style="background:#c0392b; border:none; color:#fff; width:22px; height:20px; border-radius:3px; cursor:pointer; font-size:10px;">⏹</button>
+                </div>
+            </div>`;
 
-    _renderMachineCard(item) {
-        const sched = this.schedules[item.key];
-        const running = sched?.running || false;
-        let productsHtml = '';
-
-        if (item.products.length > 1) {
-            item.products.forEach((p, idx) => {
-                const qty = sched?.queue?.find(q => q.productIndex === idx)?.target || 0;
-                productsHtml += `
-                <div style="display:flex; align-items:center; gap:6px; margin:3px 0; font-size:11px;">
-                    <span style="flex:1; color:#ccc; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${p.name}">${p.name}</span>
-                    <input type="number" min="0" value="${qty}" data-key="${item.key}" data-pidx="${idx}"
-                        class="sf-ps-qty" style="width:50px; background:#1a1a2e; color:#fff; border:1px solid #444; border-radius:3px; padding:2px 4px; text-align:center; font-size:11px;">
-                </div>`;
-            });
+        if (item.type === 'Machine' && item.products.length > 1) {
+            // Product selector + quantity for machines with multiple products
+            let opts = item.products.map((p, i) =>
+                `<option value="${i}" style="font-size:10px;">${p.name}</option>`
+            ).join('');
+            innerHtml += `
+            <div style="display:flex; gap:4px; align-items:center; margin-bottom:3px;">
+                <select class="sf-ps-o-product" data-key="${item.key}" style="flex:1; background:#1a1a2e; color:#fff; border:1px solid #444; border-radius:3px; padding:2px; font-size:10px; max-width:110px;">
+                    ${opts}
+                </select>
+                <span style="color:#888; font-size:9px;">×</span>
+                <input type="number" min="0" value="0" class="sf-ps-o-qty" data-key="${item.key}"
+                    style="width:35px; background:#1a1a2e; color:#fff; border:1px solid #444; border-radius:3px; padding:2px; text-align:center; font-size:10px;">
+                <button class="sf-ps-o-add" data-key="${item.key}" style="background:#8e44ad; border:none; color:#fff; width:20px; height:20px; border-radius:3px; cursor:pointer; font-size:10px;">+</button>
+            </div>
+            <div class="sf-ps-o-queue" data-key="${item.key}" style="font-size:9px; color:#aaa; max-height:50px; overflow-y:auto;"></div>`;
+        } else if (item.type === 'Machine') {
+            // Single product machine
+            innerHtml += `
+            <div style="display:flex; gap:4px; align-items:center; font-size:10px; margin-bottom:3px;">
+                <span style="color:#aaa;">العدد:</span>
+                <input type="number" min="0" value="0" class="sf-ps-o-qty" data-key="${item.key}" data-pidx="0"
+                    style="width:40px; background:#1a1a2e; color:#fff; border:1px solid #444; border-radius:3px; padding:2px; text-align:center; font-size:10px;">
+                <span style="color:#666; font-size:9px;">(0=∞)</span>
+            </div>`;
         } else {
-            productsHtml = `<div style="font-size:11px; color:#888;">منتج واحد — أدخل العدد:
-                <input type="number" min="0" value="0" data-key="${item.key}" data-pidx="0"
-                    class="sf-ps-qty" style="width:50px; background:#1a1a2e; color:#fff; border:1px solid #444; border-radius:3px; padding:2px 4px; text-align:center; font-size:11px; margin-right:6px;">
+            // Animal
+            innerHtml += `
+            <div style="display:flex; gap:4px; align-items:center; font-size:10px; margin-bottom:3px;">
+                <span style="color:#aaa;">الدورات:</span>
+                <input type="number" min="0" value="0" class="sf-ps-o-cycles" data-key="${item.key}"
+                    style="width:40px; background:#1a1a2e; color:#fff; border:1px solid #444; border-radius:3px; padding:2px; text-align:center; font-size:10px;">
+                <span style="color:#666; font-size:9px;">(0=∞)</span>
             </div>`;
         }
 
-        return `
-        <div class="sf-ps-card" style="background:rgba(52,152,219,0.1); border:1px solid #2c3e50; border-radius:6px; padding:8px; margin-bottom:6px;">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-                <span style="font-weight:bold; font-size:12px; color:#3498db;">🏭 ${item.name}</span>
-                <div style="display:flex; gap:4px;">
-                    <button class="sf-ps-start-btn" data-key="${item.key}" style="background:#27ae60; border:none; color:#fff; padding:3px 8px; border-radius:3px; cursor:pointer; font-size:11px;">▶️</button>
-                    <button class="sf-ps-stop-btn" data-key="${item.key}" style="background:#c0392b; border:none; color:#fff; padding:3px 8px; border-radius:3px; cursor:pointer; font-size:11px;">⏹️</button>
-                </div>
-            </div>
-            <div class="sf-ps-products" style="max-height:150px; overflow-y:auto;">${productsHtml}</div>
-            <div class="sf-ps-status" data-key="${item.key}" style="font-size:11px; color:${running ? '#2ecc71' : '#666'}; margin-top:4px;">● ${running ? this._getStatus(item.key) : 'متوقف'}</div>
-        </div>`;
+        innerHtml += `<div class="sf-ps-o-status" data-key="${item.key}" style="font-size:10px; color:#666; margin-top:2px;">● متوقف</div>`;
+        div.innerHTML = innerHtml;
+
+        // Bind events
+        div.querySelector('.sf-ps-o-start')?.addEventListener('click', () => this._startOne(item.key));
+        div.querySelector('.sf-ps-o-stop')?.addEventListener('click', () => this._stopOne(item.key));
+
+        // Queue add button for multi-product machines
+        const addBtn = div.querySelector('.sf-ps-o-add');
+        if (addBtn) {
+            addBtn.addEventListener('click', () => this._addToQueue(item.key));
+        }
+
+        return div;
     }
 
-    _renderAnimalCard(item) {
-        const sched = this.schedules[item.key];
-        const running = sched?.running || false;
-        const cycles = sched?.targetCycles || 0;
+    _addToQueue(key) {
+        const item = this.items.find(i => i.key === key);
+        if (!item) return;
 
-        return `
-        <div class="sf-ps-card" style="background:rgba(230,126,34,0.1); border:1px solid #2c3e50; border-radius:6px; padding:8px; margin-bottom:6px;">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-                <span style="font-weight:bold; font-size:12px; color:#e67e22;">🐄 ${item.name}</span>
-                <div style="display:flex; gap:4px;">
-                    <button class="sf-ps-start-btn" data-key="${item.key}" style="background:#27ae60; border:none; color:#fff; padding:3px 8px; border-radius:3px; cursor:pointer; font-size:11px;">▶️</button>
-                    <button class="sf-ps-stop-btn" data-key="${item.key}" style="background:#c0392b; border:none; color:#fff; padding:3px 8px; border-radius:3px; cursor:pointer; font-size:11px;">⏹️</button>
-                </div>
-            </div>
-            <div style="display:flex; align-items:center; gap:6px; font-size:12px;">
-                <span style="color:#aaa;">عدد الدورات:</span>
-                <input type="number" min="0" value="${cycles}" data-key="${item.key}"
-                    class="sf-ps-cycles" style="width:55px; background:#1a1a2e; color:#fff; border:1px solid #444; border-radius:3px; padding:2px 4px; text-align:center; font-size:11px;">
-                <span style="color:#666; font-size:10px;">(0 = لا نهائي)</span>
-            </div>
-            <div class="sf-ps-status" data-key="${item.key}" style="font-size:11px; color:${running ? '#2ecc71' : '#666'}; margin-top:4px;">● ${running ? this._getStatus(item.key) : 'متوقف'}</div>
-        </div>`;
+        const overlay = this.overlays[key];
+        if (!overlay) return;
+
+        const selEl = overlay.querySelector(`.sf-ps-o-product[data-key="${key}"]`);
+        const qtyEl = overlay.querySelector(`.sf-ps-o-qty[data-key="${key}"]`);
+        if (!selEl || !qtyEl) return;
+
+        const pidx = parseInt(selEl.value);
+        const qty = parseInt(qtyEl.value) || 0;
+        if (qty <= 0) return;
+
+        if (!this.schedules[key]) {
+            this.schedules[key] = { queue: [], currentQueueIdx: 0, running: false, completedCycles: 0, targetCycles: 0 };
+        }
+
+        const prod = item.products[pidx];
+        this.schedules[key].queue.push({
+            productIndex: pidx,
+            rawMaterialId: prod?.rawMaterialId,
+            productId: prod?.productId,
+            name: prod?.name || `#${pidx}`,
+            target: qty, done: 0
+        });
+
+        qtyEl.value = '0';
+        this._renderQueue(key);
+        this._log(`➕ ${item.name}: ${prod?.name} × ${qty}`);
+    }
+
+    _renderQueue(key) {
+        const sched = this.schedules[key];
+        const overlay = this.overlays[key];
+        if (!overlay || !sched) return;
+
+        const queueDiv = overlay.querySelector(`.sf-ps-o-queue[data-key="${key}"]`);
+        if (!queueDiv) return;
+
+        if (sched.queue.length === 0) {
+            queueDiv.innerHTML = '';
+            return;
+        }
+
+        let html = sched.queue.map((q, i) => {
+            const active = i === sched.currentQueueIdx && sched.running;
+            const color = active ? '#2ecc71' : (q.done >= q.target && q.target > 0 ? '#27ae60' : '#888');
+            return `<div style="color:${color};">${active ? '▶' : '•'} ${q.name} ${q.done}/${q.target}</div>`;
+        }).join('');
+        queueDiv.innerHTML = html;
+    }
+
+    // ═══════════════════════════════════════
+    // POSITION TRACKING
+    // ═══════════════════════════════════════
+    _startPositionUpdater() {
+        this._stopPositionUpdater();
+        const update = () => {
+            this._updatePositions();
+            this.posTimer = requestAnimationFrame(update);
+        };
+        this.posTimer = requestAnimationFrame(update);
+    }
+
+    _stopPositionUpdater() {
+        if (this.posTimer) {
+            cancelAnimationFrame(this.posTimer);
+            this.posTimer = null;
+        }
+    }
+
+    _updatePositions() {
+        const gw = unsafeWindow;
+        const canvas = document.querySelector('canvas');
+        if (!canvas) return;
+
+        const canvasRect = canvas.getBoundingClientRect();
+        let stageW, stageH;
+        try {
+            const stage = gw.egret?.lifecycle?.stage || gw.egret?.MainContext?.instance?.stage;
+            stageW = stage?.stageWidth || canvas.width;
+            stageH = stage?.stageHeight || canvas.height;
+        } catch(e) {
+            stageW = canvas.width;
+            stageH = canvas.height;
+        }
+        const scaleX = canvasRect.width / stageW;
+        const scaleY = canvasRect.height / stageH;
+
+        this.items.forEach(item => {
+            const el = this.overlays[item.key];
+            if (!el) return;
+
+            const pos = this._getScreenPos(item, gw, scaleX, scaleY, canvasRect);
+            if (pos) {
+                el.style.left = pos.x + 'px';
+                el.style.top = pos.y + 'px';
+                el.style.display = '';
+            } else {
+                el.style.display = 'none';
+            }
+        });
+    }
+
+    _getScreenPos(item, gw, scaleX, scaleY, canvasRect) {
+        try {
+            const mo = this._getFreshMO(item);
+            if (!mo) return null;
+
+            // Try Egret localToGlobal on the display object
+            const view = mo.view || mo._view || mo.display || mo.sprite;
+            if (view && typeof view.localToGlobal === 'function') {
+                const p = view.localToGlobal(0, 0);
+                return {
+                    x: canvasRect.left + p.x * scaleX,
+                    y: canvasRect.top + p.y * scaleY - 20
+                };
+            }
+
+            // Fallback: traverse parent chain
+            if (view && typeof view.x === 'number') {
+                let x = view.x, y = view.y;
+                let parent = view.parent;
+                while (parent) {
+                    x = x * (parent.scaleX || 1) + parent.x;
+                    y = y * (parent.scaleY || 1) + parent.y;
+                    parent = parent.parent;
+                }
+                return {
+                    x: canvasRect.left + x * scaleX,
+                    y: canvasRect.top + y * scaleY - 20
+                };
+            }
+        } catch(e) {}
+        return null;
     }
 
     // ═══════════════════════════════════════
     // SCHEDULE MANAGEMENT
     // ═══════════════════════════════════════
-    _readFromUI(key) {
+    _startOne(key) {
         const item = this.items.find(i => i.key === key);
-        if (!item) return null;
+        if (!item) return;
+
+        if (!this.schedules[key]) {
+            this.schedules[key] = { queue: [], currentQueueIdx: 0, running: false, completedCycles: 0, targetCycles: 0 };
+        }
+        const sched = this.schedules[key];
 
         if (item.type === 'Machine') {
-            const queue = [];
-            const inputs = this.container?.querySelectorAll(`.sf-ps-qty[data-key="${key}"]`) || [];
-            inputs.forEach(inp => {
-                const idx = parseInt(inp.dataset.pidx);
-                const target = parseInt(inp.value) || 0;
-                if (target > 0 && item.products[idx]) {
-                    queue.push({
-                        productIndex: idx,
-                        rawMaterialId: item.products[idx].rawMaterialId,
-                        productId: item.products[idx].productId,
-                        name: item.products[idx].name,
-                        target, done: 0
-                    });
+            // Read from queue (already added via + button) or read single qty
+            if (sched.queue.length === 0) {
+                const overlay = this.overlays[key];
+                const qtyEl = overlay?.querySelector(`.sf-ps-o-qty[data-key="${key}"]`);
+                const qty = parseInt(qtyEl?.value) || 0;
+                const selEl = overlay?.querySelector(`.sf-ps-o-product[data-key="${key}"]`);
+                const pidx = parseInt(selEl?.value) || 0;
+
+                if (qty > 0 && item.products[pidx]) {
+                    const p = item.products[pidx];
+                    sched.queue = [{ productIndex: pidx, rawMaterialId: p.rawMaterialId, productId: p.productId, name: p.name, target: qty, done: 0 }];
+                } else {
+                    // Run current product infinitely
+                    sched.queue = [{ productIndex: -1, name: 'المنتج الحالي', target: 0, done: 0 }];
                 }
-            });
-            return { queue, currentQueueIdx: 0, running: true, completedCycles: 0, targetCycles: 0 };
+            }
+            sched.currentQueueIdx = sched.queue.findIndex(q => q.done < q.target || q.target === 0);
+            if (sched.currentQueueIdx < 0) sched.currentQueueIdx = 0;
         } else {
-            const inp = this.container?.querySelector(`.sf-ps-cycles[data-key="${key}"]`);
-            return { queue: [], currentQueueIdx: 0, running: true, completedCycles: 0, targetCycles: parseInt(inp?.value) || 0 };
-        }
-    }
-
-    _startOne(key) {
-        const sched = this._readFromUI(key);
-        if (!sched) return;
-        const item = this.items.find(i => i.key === key);
-
-        if (item?.type === 'Machine' && sched.queue.length === 0) {
-            sched.queue = [{ productIndex: -1, name: 'المنتج الحالي', target: 0, done: 0 }];
+            // Animal
+            const overlay = this.overlays[key];
+            const cycEl = overlay?.querySelector(`.sf-ps-o-cycles[data-key="${key}"]`);
+            sched.targetCycles = parseInt(cycEl?.value) || 0;
+            sched.completedCycles = 0;
         }
 
-        this.schedules[key] = sched;
-        this._updateStatus(key, '▶️ يعمل...');
-        this._log(`✅ بدأ: ${item?.name || key}`);
+        sched.running = true;
+        this._updateOverlayStatus(key);
+        this._renderQueue(key);
+        this._log(`✅ بدأ: ${item.name}`);
         this._startLoop();
     }
 
     _stopOne(key) {
         if (this.schedules[key]) {
             this.schedules[key].running = false;
-            this._updateStatus(key, '⏹️ متوقف');
-            this._log(`⏹️ توقف: ${this.items.find(i => i.key === key)?.name || key}`);
+            this._updateOverlayStatus(key);
+            this._renderQueue(key);
         }
         if (!Object.values(this.schedules).some(s => s.running)) this._stopLoop();
     }
@@ -7612,31 +7768,36 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
     _startAll() { this.items.forEach(item => this._startOne(item.key)); }
     _stopAll() { Object.keys(this.schedules).forEach(k => this._stopOne(k)); this._stopLoop(); }
 
-    _getStatus(key) {
+    _updateOverlayStatus(key) {
         const sched = this.schedules[key];
-        if (!sched?.running) return 'متوقف';
         const item = this.items.find(i => i.key === key);
 
+        // Update overlay status
+        const overlay = this.overlays[key];
+        if (!overlay) return;
+        const statusEl = overlay.querySelector(`.sf-ps-o-status[data-key="${key}"]`);
+        if (!statusEl) return;
+
+        if (!sched?.running) {
+            statusEl.style.color = '#666';
+            statusEl.textContent = '● متوقف';
+            return;
+        }
+
+        statusEl.style.color = '#2ecc71';
         if (item?.type === 'Machine') {
-            if (sched.queue.length === 0) return 'لا منتجات';
             const cur = sched.queue[sched.currentQueueIdx];
-            if (!cur) return '✅ اكتمل!';
-            if (cur.target === 0) return `🔄 ${cur.name} (لا نهائي) — ${cur.done} تم`;
-            const done = sched.queue.reduce((s, q) => s + q.done, 0);
-            const total = sched.queue.reduce((s, q) => s + q.target, 0);
-            return `🔄 ${cur.name} ${cur.done}/${cur.target} | ${done}/${total}`;
+            if (!cur) { statusEl.textContent = '✅ اكتمل!'; return; }
+            if (cur.target === 0) statusEl.textContent = `🔄 ${cur.name} — ${cur.done}`;
+            else statusEl.textContent = `🔄 ${cur.name} ${cur.done}/${cur.target}`;
         } else {
             const t = sched.targetCycles === 0 ? '∞' : sched.targetCycles;
-            return `🔄 دورة ${sched.completedCycles}/${t}`;
+            statusEl.textContent = `🔄 ${sched.completedCycles}/${t}`;
         }
-    }
 
-    _updateStatus(key, text) {
-        const el = this.container?.querySelector(`.sf-ps-status[data-key="${key}"]`);
-        if (el) {
-            el.style.color = this.schedules[key]?.running ? '#2ecc71' : '#666';
-            el.textContent = `● ${text || this._getStatus(key)}`;
-        }
+        // Also update the panel status
+        const panelEl = this.container?.querySelector(`.sf-ps-status[data-key="${key}"]`);
+        if (panelEl) panelEl.textContent = statusEl.textContent;
     }
 
     // ═══════════════════════════════════════
@@ -7644,7 +7805,6 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
     // ═══════════════════════════════════════
     _startLoop() {
         if (this.loopTimer) return;
-        this._log(`🔄 حلقة الفحص (${this.loopSpeed}ms)`);
         this.loopTimer = setInterval(() => this._checkAll(), this.loopSpeed);
     }
 
@@ -7682,23 +7842,21 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
             (typeof sd.products === 'number' && sd.products > 0));
 
         if (hasProducts) {
-            this._log(`📦 حصاد: ${item.name}`);
             try { if (gc?._collectMapObject) gc._collectMapObject(mo); } catch(e) {}
-
             const cur = sched.queue[sched.currentQueueIdx];
             if (cur) {
                 cur.done++;
+                this._log(`📦 ${item.name}: ${cur.name} ${cur.done}/${cur.target || '∞'}`);
                 if (cur.target > 0 && cur.done >= cur.target) {
                     sched.currentQueueIdx++;
                     if (sched.currentQueueIdx >= sched.queue.length) {
                         sched.running = false;
-                        this._updateStatus(key, '✅ اكتمل!');
-                        this._log(`🎉 ${item.name}: اكتمل الجدول!`);
-                        return;
+                        this._log(`🎉 ${item.name}: اكتمل!`);
                     }
                 }
             }
-            this._updateStatus(key);
+            this._updateOverlayStatus(key);
+            this._renderQueue(key);
             return;
         }
 
@@ -7711,22 +7869,16 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
                 const curSel = parseInt(sd.selected_raw_material) || 0;
                 if (curSel !== cur.productIndex && curSel !== cur.productIndex + 1) {
                     this._log(`🔄 تبديل: ${item.name} → ${cur.name}`);
-                    try {
-                        gw.NetUtils.enqueue('save_selected_material.save_data', {
-                            id: item.id, x: item.x, y: item.y, flip: 0, material: cur.productIndex
-                        });
-                    } catch(e) {}
+                    try { gw.NetUtils.enqueue('save_selected_material.save_data', { id: item.id, x: item.x, y: item.y, flip: 0, material: cur.productIndex }); } catch(e) {}
                     return;
                 }
             }
-
-            this._log(`🔧 تعبئة: ${item.name}`);
             try {
                 if (gc?._refillMapObject) gc._refillMapObject(mo);
                 else if (gc?.refillMapObject) gc.refillMapObject(mo);
                 else if (gc?._feedMapObject) gc._feedMapObject(mo);
             } catch(e) {}
-            this._updateStatus(key);
+            this._updateOverlayStatus(key);
         }
     }
 
@@ -7735,30 +7887,27 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
 
         if (sched.targetCycles > 0 && sched.completedCycles >= sched.targetCycles) {
             sched.running = false;
-            this._updateStatus(key, `✅ اكتمل ${sched.completedCycles} دورة`);
             this._log(`🎉 ${item.name}: ${sched.completedCycles} دورة`);
+            this._updateOverlayStatus(key);
             return;
         }
 
         const hasProducts = (typeof sd.products === 'number' && sd.products > 0) ||
                            (Array.isArray(sd.products) && sd.products.length > 0);
-
         if (hasProducts) {
-            this._log(`📦 حصاد: ${item.name}`);
             try { if (gc?._collectMapObject) gc._collectMapObject(mo); } catch(e) {}
             sched.completedCycles++;
-            this._updateStatus(key);
+            this._log(`📦 ${item.name}: دورة ${sched.completedCycles}`);
+            this._updateOverlayStatus(key);
             return;
         }
 
         const needsFeed = sd.raw_materials === 0 || sd.raw_materials === '0' || sd.raw_materials === false;
         if (needsFeed) {
-            this._log(`🍽️ تغذية: ${item.name}`);
             try {
                 if (gc?._feedMapObject) gc._feedMapObject(mo);
                 else if (gc?.feedMapObject) gc.feedMapObject(mo);
             } catch(e) {}
-            this._updateStatus(key);
         }
     }
 
