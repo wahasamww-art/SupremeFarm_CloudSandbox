@@ -8412,14 +8412,22 @@ SF.modules.register(new SF.ProductionSchedulerModule());
     console.log('[SupremeFarm Modular] Initializing System V2.0 (Cloud Bundle)...');
     const initApp = () => {
         if(!window.SF) window.SF = {};
-        if(!window.SF.SplashScreen) {
-            window.SF.ui = new window.SF.UIManager();
-            return;
-        }
-        const splash = new window.SF.SplashScreen();
-        splash.show(() => {
-            window.SF.ui = new window.SF.UIManager();
-        });
+        
+        // Wait for game to be ready before injecting UI so it doesn't get wiped by game initialization
+        const checkReady = setInterval(() => {
+            const gw = window.unsafeWindow || window;
+            if (gw.egret || document.querySelector('canvas')) {
+                clearInterval(checkReady);
+                if (!window.SF.ui) {
+                    try {
+                        window.SF.ui = new window.SF.UIManager();
+                        console.log('[SupremeFarm] UI Initialized Successfully');
+                    } catch(e) {
+                        console.error('[SupremeFarm] UI Initialization Failed:', e);
+                    }
+                }
+            }
+        }, 1000);
     };
 
     if (document.readyState === 'complete' || document.readyState === 'interactive') {
