@@ -7539,6 +7539,26 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
             const y = parseInt(sd.y || sd.map_y) || 0;
             const newKey = `${objType[0]}_${currentScene}_${cd.id || mo.id}_${x}_${y}`;
 
+            let reqMatsIds = [];
+            let reqMats = [];
+            let isMachineParsed = isMachine && cd.raw_material && cd.product;
+
+            if (isAnimal && cd.raw_material) {
+                let rm = cd.raw_material;
+                if (typeof rm === 'string') { try { rm = JSON.parse(rm); } catch(e) { rm = rm.split(','); } }
+                if (!Array.isArray(rm)) rm = rm ? [rm] : [];
+                reqMatsIds = rm.map(x => parseInt(x) || x);
+                
+                reqMats = reqMatsIds.map(id => {
+                    let mName = '';
+                    try {
+                        const c = gw.Config?.Store_GetItemData(id);
+                        mName = c ? (c.name_ar || c.name) : '';
+                    } catch(e) {}
+                    return { id: id, name: mName || `مادة ${id}` };
+                });
+            }
+
             let item = this.items.find(i => i.mo && i.mo.map_unique_id === mo.map_unique_id);
             if (item) {
                 // Check if moved
@@ -7557,37 +7577,55 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
                     changed = true;
                 }
             } else {
-                // New item
                 item = {
                     key: newKey, type: objType,
                     id: cd.id || mo.id,
                     name: cd.name_ar || cd.name || `${objType} ${cd.id || mo.id}`,
                     x, y, mo, products: [],
-                    rawMaterialId: isAnimal ? (Array.isArray(cd.raw_material) ? cd.raw_material[0] : cd.raw_material) : null,
+                    reqMats: reqMats,
+                    rawMaterialId: reqMatsIds[0] || null,
                     productId: isAnimal ? (Array.isArray(cd.product) ? cd.product[0] : cd.product) : null
                 };
 
-                if (isMachine && cd.raw_material && cd.product) {
+                if (isMachineParsed) {
                     let rawMats = cd.raw_material;
                     if (typeof rawMats === 'string') { try { rawMats = JSON.parse(rawMats); } catch(e) { rawMats = rawMats.split(','); } }
                     if (!Array.isArray(rawMats)) rawMats = [rawMats];
                     
-                    // The first element is the array of dynamic materials (if the machine has multiple products)
-                    if (Array.isArray(rawMats[0])) {
-                        rawMats = rawMats[0];
-                    }
+                    let dynamicMats = Array.isArray(rawMats[0]) ? rawMats[0] : rawMats;
+                    let fixedMats = Array.isArray(rawMats[0]) ? rawMats.slice(1) : [];
 
                     let prods = cd.product;
                     if (typeof prods === 'string') { try { prods = JSON.parse(prods); } catch(e) { prods = prods.split(','); } }
                     if (!Array.isArray(prods)) prods = [prods];
 
-                    for (let i = 0; i < Math.min(rawMats.length, prods.length); i++) {
+                    for (let i = 0; i < Math.min(dynamicMats.length, prods.length); i++) {
                         let pName = '';
                         try {
                             const pc = gw.Config?.Store_GetItemData(prods[i]);
                             pName = pc ? (pc.name_ar || pc.name) : '';
                         } catch(e) {}
-                        item.products.push({ index: i, rawMaterialId: parseInt(rawMats[i]) || rawMats[i], productId: parseInt(prods[i]) || prods[i], name: pName || `منتج #${i+1}` });
+                        
+                        let pReqIds = [];
+                        if (dynamicMats[i] !== undefined) pReqIds.push(parseInt(dynamicMats[i]) || dynamicMats[i]);
+                        fixedMats.forEach(m => pReqIds.push(parseInt(m) || m));
+                        
+                        let pReqMats = pReqIds.map(id => {
+                            let mName = '';
+                            try {
+                                const c = gw.Config?.Store_GetItemData(id);
+                                mName = c ? (c.name_ar || c.name) : '';
+                            } catch(e) {}
+                            return { id: id, name: mName || `مادة ${id}` };
+                        });
+
+                        item.products.push({ 
+                            index: i, 
+                            rawMaterialId: pReqIds[0], 
+                            reqMats: pReqMats,
+                            productId: parseInt(prods[i]) || prods[i], 
+                            name: pName || `منتج #${i+1}` 
+                        });
                     }
                 }
                 this.items.push(item);
@@ -7616,14 +7654,24 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
             const running = sched?.running;
             const cycles = sched?.targetCycles || 0;
             const done = sched?.completedCycles || 0;
-            const rawCount = item.rawMaterialId ? this._getInventoryCount(item.rawMaterialId) : 0;
+            const reqHtml = (item.reqMats || []).map(rm => {
+                const count = this._getInventoryCount(rm.id);
+                const color = count > 0 ? '#2ecc71' : '#e74c3c';
+                return `<span style="background:rgba(0,0,0,0.3);padding:2px 4px;border-radius:3px;margin-left:4px;">${rm.name}: <strong style="color:${color};">${count}</strong></span>`;
+            }).join('');
+            
             const prodCount = item.productId ? this._getInventoryCount(item.productId) : 0;
-            const rawColor = rawCount > 0 ? '#2ecc71' : '#e74c3c';
+            
             return `<div class="sf-ps-item" data-key="${item.key}" data-name="${item.name}" style="background:rgba(230,126,34,0.1);border:1px solid #e67e2244;border-radius:8px;padding:8px 12px;margin-bottom:6px;box-shadow:0 2px 4px rgba(0,0,0,0.2);">
                 <div style="display:flex;align-items:center;justify-content:space-between;">
                     <div style="display:flex;flex-direction:column;gap:4px;">
                         <span style="color:#e67e22;font-size:14px;font-weight:bold;display:flex;align-items:center;gap:6px;">🐄 <span>${item.name}</span></span>
-                        ${(item.rawMaterialId || item.productId) ? `<span style="font-size:11px;color:#bbb;">طعام: <span style="color:${rawColor};">${rawCount}</span> | المنتَج في الحظيرة: <span style="color:#f39c12;">${prodCount}</span></span>` : ''}
+                        ${(reqHtml || prodCount > 0) ? `
+                        <div style="font-size:11px;color:#bbb;display:flex;flex-wrap:wrap;gap:4px;line-height:1.4;margin-top:2px;">
+                            ${reqHtml}
+                            ${item.productId ? `<span style="background:rgba(243,156,18,0.2);padding:2px 4px;border-radius:3px;color:#f39c12;margin-right:8px;">المخزون: <strong>${prodCount}</strong></span>` : ''}
+                        </div>
+                        ` : ''}
                     </div>
                     <div style="display:flex;align-items:center;gap:6px;">
                         <span style="color:#aaa;font-size:12px;">دورات:</span>
@@ -7712,14 +7760,23 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
                     <div class="sf-ps-prod-list" style="max-height:150px;overflow-y:auto;padding-right:4px;">
                         ${item.products.map((p, i) => {
                             const pNameSafe = (p.name || '').replace(/"/g, '&quot;');
-                            const rawCount = p.rawMaterialId ? this._getInventoryCount(p.rawMaterialId) : 0;
+                            
+                            const reqHtml = (p.reqMats || []).map(rm => {
+                                const count = this._getInventoryCount(rm.id);
+                                const color = count > 0 ? '#2ecc71' : '#e74c3c';
+                                return `<span style="background:rgba(0,0,0,0.3);padding:2px 4px;border-radius:3px;margin-left:4px;">${rm.name}: <strong style="color:${color};">${count}</strong></span>`;
+                            }).join('');
+                            
                             const prodCount = p.productId ? this._getInventoryCount(p.productId) : 0;
-                            const rawColor = rawCount > 0 ? '#2ecc71' : '#e74c3c';
+                            
                             return `
                         <div class="sf-ps-prod-item" data-name="${pNameSafe}" style="display:flex;align-items:center;justify-content:space-between;background:rgba(255,255,255,0.05);padding:6px 8px;border-radius:4px;margin-bottom:4px;">
-                            <div style="display:flex;flex-direction:column;flex:1;">
-                                <span style="font-size:13px;color:#ecf0f1;">${p.name}</span>
-                                <span style="font-size:11px;color:#bbb;">مواد خام: <span style="color:${rawColor};">${rawCount}</span> | المنتَج في الحظيرة: <span style="color:#f39c12;">${prodCount}</span></span>
+                            <div style="display:flex;flex-direction:column;flex:1;gap:4px;">
+                                <span style="font-size:13px;color:#ecf0f1;font-weight:bold;">${p.name}</span>
+                                <div style="font-size:11px;color:#bbb;display:flex;flex-wrap:wrap;gap:4px;line-height:1.4;">
+                                    ${reqHtml}
+                                    <span style="background:rgba(243,156,18,0.2);padding:2px 4px;border-radius:3px;color:#f39c12;margin-right:8px;">المخزون: <strong>${prodCount}</strong></span>
+                                </div>
                             </div>
                             <div style="display:flex;align-items:center;gap:6px;">
                                 <input type="number" min="0" value="1" class="sf-ps-prod-qty" data-idx="${i}" style="width:45px;background:#111;color:#fff;border:1px solid #555;border-radius:4px;text-align:center;font-size:13px;padding:4px;outline:none;" title="0 = بلا حدود">
