@@ -8014,12 +8014,6 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
                     this._log(`▶ بدء ${item.name}: ${next.name}`);
                 } catch(e) {}
             }
-
-            try {
-                const slot = 1;
-                const matId = mo.getRawMaterialId ? mo.getRawMaterialId(slot) : null;
-                if (matId && gc._refillMapObject) { gc._refillMapObject(mo, matId, slot, false); this._updateBadge(key); }
-            } catch(e) {}
         }
     }
 
