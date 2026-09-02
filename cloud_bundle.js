@@ -7383,28 +7383,28 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
 
     render() {
         return `
-        <div class="sf-card">
-            <div style="margin-bottom:8px;">
-                <div style="display:flex;align-items:center;gap:4px;margin-bottom:4px;">
-                    <span style="font-size:13px;">🐄</span>
-                    <span style="font-weight:bold;color:#e67e22;font-size:12px;">الحيوانات</span>
+        <div class="sf-card" style="padding: 20px;">
+            <div style="margin-bottom:15px;">
+                <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
+                    <span style="font-size:16px;">🐄</span>
+                    <span style="font-weight:bold;color:#e67e22;font-size:16px;">الحيوانات</span>
                 </div>
-                <input id="sf-ps-search-animal" type="text" placeholder="🔍 بحث..." style="width:100%;background:#1a1a2e;color:#fff;border:1px solid #333;border-radius:4px;padding:4px 6px;font-size:11px;margin-bottom:4px;box-sizing:border-box;">
-                <div id="sf-ps-animals-list" style="max-height:120px;overflow-y:auto;"></div>
+                <input id="sf-ps-search-animal" type="text" placeholder="🔍 ابحث عن حيوان..." style="width:100%;background:#1a1a2e;color:#fff;border:1px solid #444;border-radius:6px;padding:8px 12px;font-size:14px;margin-bottom:8px;box-sizing:border-box;">
+                <div id="sf-ps-animals-list" style="max-height:200px;overflow-y:auto;padding-right:5px;"></div>
             </div>
-            <div style="margin-bottom:8px;">
-                <div style="display:flex;align-items:center;gap:4px;margin-bottom:4px;">
-                    <span style="font-size:13px;">⚙</span>
-                    <span style="font-weight:bold;color:#3498db;font-size:12px;">الآلات</span>
+            <div style="margin-bottom:15px;">
+                <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
+                    <span style="font-size:16px;">⚙</span>
+                    <span style="font-weight:bold;color:#3498db;font-size:16px;">الآلات</span>
                 </div>
-                <input id="sf-ps-search-machine" type="text" placeholder="🔍 بحث..." style="width:100%;background:#1a1a2e;color:#fff;border:1px solid #333;border-radius:4px;padding:4px 6px;font-size:11px;margin-bottom:4px;box-sizing:border-box;">
-                <div id="sf-ps-machines-list" style="max-height:250px;overflow-y:auto;"></div>
+                <input id="sf-ps-search-machine" type="text" placeholder="🔍 ابحث عن آلة..." style="width:100%;background:#1a1a2e;color:#fff;border:1px solid #444;border-radius:6px;padding:8px 12px;font-size:14px;margin-bottom:8px;box-sizing:border-box;">
+                <div id="sf-ps-machines-list" style="max-height:300px;overflow-y:auto;padding-right:5px;"></div>
             </div>
-            <div style="display:flex;gap:6px;margin-bottom:6px;">
-                <button id="sf-ps-start-all" class="sf-btn" style="flex:1;background:#27ae60;font-size:11px;padding:5px;">▶ تشغيل الكل</button>
-                <button id="sf-ps-stop-all" class="sf-btn" style="flex:1;background:#c0392b;font-size:11px;padding:5px;">⏹ إيقاف الكل</button>
+            <div style="display:flex;gap:10px;margin-bottom:10px;margin-top:20px;">
+                <button id="sf-ps-start-all" class="sf-btn" style="flex:1;background:#27ae60;font-size:15px;padding:10px;border-radius:8px;">▶ تشغيل كل الجداول</button>
+                <button id="sf-ps-stop-all" class="sf-btn" style="flex:1;background:#c0392b;font-size:15px;padding:10px;border-radius:8px;">⏹ إيقاف كل الجداول</button>
             </div>
-            <div id="sf-ps-log" style="max-height:60px;overflow-y:auto;font-size:9px;color:#666;background:rgba(0,0,0,0.2);padding:4px;border-radius:4px;direction:rtl;"></div>
+            <div id="sf-ps-log" style="max-height:100px;overflow-y:auto;font-size:12px;color:#bbb;background:rgba(0,0,0,0.3);padding:8px;border-radius:6px;direction:rtl;border:1px solid #333;"></div>
         </div>`;
     }
 
@@ -7559,26 +7559,26 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
         const container = this.container?.querySelector('#sf-ps-animals-list');
         if (!container) return;
         const animals = this.items.filter(i => i.type === 'Animal');
-        if (animals.length === 0) { container.innerHTML = '<div style="color:#555;font-size:10px;text-align:center;padding:4px;">لا يوجد حيوانات</div>'; return; }
+        if (animals.length === 0) { container.innerHTML = '<div style="color:#777;font-size:13px;text-align:center;padding:10px;">لا يوجد حيوانات على الأرض</div>'; return; }
 
         container.innerHTML = animals.map(item => {
             const sched = this.schedules[item.key];
             const running = sched?.running;
             const cycles = sched?.targetCycles || 0;
             const done = sched?.completedCycles || 0;
-            return `<div class="sf-ps-item" data-key="${item.key}" data-name="${item.name}" style="background:rgba(230,126,34,0.1);border:1px solid #e67e2244;border-radius:5px;padding:5px 6px;margin-bottom:3px;">
+            return `<div class="sf-ps-item" data-key="${item.key}" data-name="${item.name}" style="background:rgba(230,126,34,0.1);border:1px solid #e67e2244;border-radius:8px;padding:8px 12px;margin-bottom:6px;box-shadow:0 2px 4px rgba(0,0,0,0.2);">
                 <div style="display:flex;align-items:center;justify-content:space-between;">
-                    <span style="color:#e67e22;font-size:11px;font-weight:bold;">🐄 ${item.name}</span>
-                    <div style="display:flex;align-items:center;gap:3px;">
-                        <input type="number" min="0" value="${cycles}" class="sf-ps-cycles" data-key="${item.key}" style="width:30px;background:#1a1a2e;color:#fff;border:1px solid #444;border-radius:3px;text-align:center;font-size:10px;padding:2px;" title="0=∞">
-                        <span style="color:#555;font-size:9px;">دورة</span>
+                    <span style="color:#e67e22;font-size:14px;font-weight:bold;display:flex;align-items:center;gap:6px;">🐄 <span>${item.name}</span></span>
+                    <div style="display:flex;align-items:center;gap:6px;">
+                        <span style="color:#aaa;font-size:12px;">دورات:</span>
+                        <input type="number" min="0" value="${cycles}" class="sf-ps-cycles" data-key="${item.key}" style="width:45px;background:#1a1a2e;color:#fff;border:1px solid #555;border-radius:4px;text-align:center;font-size:13px;padding:4px;outline:none;" title="0 = مستمر بدون توقف">
                         ${running
-                            ? `<button class="sf-ps-stop-btn" data-key="${item.key}" style="background:#c0392b;border:none;color:#fff;width:22px;height:20px;border-radius:3px;cursor:pointer;font-size:10px;">⏹</button>`
-                            : `<button class="sf-ps-start-btn" data-key="${item.key}" style="background:#27ae60;border:none;color:#fff;width:22px;height:20px;border-radius:3px;cursor:pointer;font-size:10px;">▶</button>`
+                            ? `<button class="sf-ps-stop-btn" data-key="${item.key}" style="background:#c0392b;border:none;color:#fff;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:12px;font-weight:bold;box-shadow:0 1px 3px rgba(0,0,0,0.4);">⏹ إيقاف</button>`
+                            : `<button class="sf-ps-start-btn" data-key="${item.key}" style="background:#27ae60;border:none;color:#fff;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:12px;font-weight:bold;box-shadow:0 1px 3px rgba(0,0,0,0.4);">▶ تشغيل</button>`
                         }
                     </div>
                 </div>
-                ${running ? `<div style="color:#2ecc71;font-size:9px;margin-top:2px;">🔄 ${done}/${cycles||'∞'}</div>` : ''}
+                ${running ? `<div style="color:#2ecc71;font-size:12px;margin-top:6px;background:rgba(46,204,113,0.1);padding:4px;border-radius:4px;text-align:center;">🔄 تم إنجاز: ${done} ${cycles ? `من أصل ${cycles}` : 'دورة'}</div>` : ''}
             </div>`;
         }).join('');
         this._bindItemEvents(container);
@@ -7591,7 +7591,7 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
         const container = this.container?.querySelector('#sf-ps-machines-list');
         if (!container) return;
         const machines = this.items.filter(i => i.type === 'Machine');
-        if (machines.length === 0) { container.innerHTML = '<div style="color:#555;font-size:10px;text-align:center;padding:4px;">لا يوجد آلات</div>'; return; }
+        if (machines.length === 0) { container.innerHTML = '<div style="color:#777;font-size:13px;text-align:center;padding:10px;">لا يوجد آلات على الأرض</div>'; return; }
 
         container.innerHTML = machines.map(item => {
             const sched = this.schedules[item.key];
@@ -7601,35 +7601,35 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
 
             let queueHtml = '';
             if (queue.length > 0) {
-                queueHtml = `<div style="margin-top:3px;padding:3px 4px;background:rgba(0,0,0,0.2);border-radius:3px;">
+                queueHtml = `<div style="margin-top:8px;padding:6px;background:rgba(0,0,0,0.3);border-radius:6px;border:1px solid #333;">
                     ${queue.map((q, idx) => {
                         const isCurrent = sched?.currentQueueIdx === idx;
                         const isDone = q.target > 0 && q.done >= q.target;
-                        const color = isDone ? '#27ae60' : (isCurrent && running ? '#f39c12' : '#888');
+                        const color = isDone ? '#27ae60' : (isCurrent && running ? '#f39c12' : '#aaa');
                         const icon = isDone ? '✅' : (isCurrent && running ? '▶' : '⏳');
-                        return `<div style="display:flex;align-items:center;justify-content:space-between;font-size:9px;color:${color};padding:1px 0;">
-                            <span>${icon} ${q.name} ×${q.target||'∞'} ${isDone ? '' : `(${q.done}/${q.target||'∞'})`}</span>
-                            ${!running ? `<button class="sf-ps-rmq" data-key="${item.key}" data-idx="${idx}" style="background:none;border:none;color:#c0392b;cursor:pointer;font-size:9px;padding:0 2px;">✕</button>` : ''}
+                        return `<div style="display:flex;align-items:center;justify-content:space-between;font-size:13px;color:${color};padding:3px 0;border-bottom:${idx<queue.length-1?'1px solid #222':'none'};">
+                            <span>${icon} <strong>${q.name}</strong> ×${q.target||'∞'} <span style="font-size:11px;opacity:0.8;">${isDone ? '' : `(${q.done} من ${q.target||'∞'})`}</span></span>
+                            ${!running ? `<button class="sf-ps-rmq" data-key="${item.key}" data-idx="${idx}" style="background:#e74c3c22;border:1px solid #e74c3c;color:#e74c3c;cursor:pointer;font-size:11px;padding:2px 6px;border-radius:4px;font-weight:bold;">✕ حذف</button>` : ''}
                         </div>`;
                     }).join('')}
                 </div>`;
             }
 
-            return `<div class="sf-ps-item" data-key="${item.key}" data-name="${item.name}" style="background:rgba(52,152,219,0.1);border:1px solid #3498db44;border-radius:5px;padding:5px 6px;margin-bottom:3px;">
-                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:3px;">
-                    <span style="color:#3498db;font-size:11px;font-weight:bold;">⚙ ${item.name}</span>
-                    <div style="display:flex;gap:3px;">
+            return `<div class="sf-ps-item" data-key="${item.key}" data-name="${item.name}" style="background:rgba(52,152,219,0.1);border:1px solid #3498db44;border-radius:8px;padding:8px 12px;margin-bottom:6px;box-shadow:0 2px 4px rgba(0,0,0,0.2);">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+                    <span style="color:#3498db;font-size:14px;font-weight:bold;display:flex;align-items:center;gap:6px;">⚙ <span>${item.name}</span></span>
+                    <div style="display:flex;gap:6px;">
                         ${running
-                            ? `<button class="sf-ps-stop-btn" data-key="${item.key}" style="background:#c0392b;border:none;color:#fff;width:22px;height:20px;border-radius:3px;cursor:pointer;font-size:10px;">⏹</button>`
-                            : `<button class="sf-ps-start-btn" data-key="${item.key}" style="background:#27ae60;border:none;color:#fff;width:22px;height:20px;border-radius:3px;cursor:pointer;font-size:10px;">▶</button>`
+                            ? `<button class="sf-ps-stop-btn" data-key="${item.key}" style="background:#c0392b;border:none;color:#fff;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:12px;font-weight:bold;box-shadow:0 1px 3px rgba(0,0,0,0.4);">⏹ إيقاف</button>`
+                            : `<button class="sf-ps-start-btn" data-key="${item.key}" style="background:#27ae60;border:none;color:#fff;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:12px;font-weight:bold;box-shadow:0 1px 3px rgba(0,0,0,0.4);">▶ تشغيل</button>`
                         }
                     </div>
                 </div>
-                ${!running ? `<div style="display:flex;gap:3px;align-items:center;">
-                    <select class="sf-ps-product" data-key="${item.key}" style="flex:1;background:#1a1a2e;color:#fff;border:1px solid #444;border-radius:3px;padding:2px;font-size:10px;">${opts}</select>
-                    <span style="color:#666;">×</span>
-                    <input type="number" min="1" value="1" class="sf-ps-qty" data-key="${item.key}" style="width:30px;background:#1a1a2e;color:#fff;border:1px solid #444;border-radius:3px;text-align:center;font-size:10px;padding:2px;">
-                    <button class="sf-ps-add-btn" data-key="${item.key}" style="background:#8e44ad;border:none;color:#fff;padding:2px 6px;border-radius:3px;cursor:pointer;font-size:10px;">+</button>
+                ${!running ? `<div style="display:flex;gap:6px;align-items:center;background:rgba(0,0,0,0.2);padding:6px;border-radius:6px;">
+                    <select class="sf-ps-product" data-key="${item.key}" style="flex:1;background:#1a1a2e;color:#fff;border:1px solid #555;border-radius:4px;padding:4px;font-size:13px;outline:none;">${opts}</select>
+                    <span style="color:#888;font-weight:bold;font-size:14px;">×</span>
+                    <input type="number" min="1" value="1" class="sf-ps-qty" data-key="${item.key}" style="width:45px;background:#1a1a2e;color:#fff;border:1px solid #555;border-radius:4px;text-align:center;font-size:13px;padding:4px;outline:none;">
+                    <button class="sf-ps-add-btn" data-key="${item.key}" style="background:#8e44ad;border:none;color:#fff;padding:4px 12px;border-radius:4px;cursor:pointer;font-size:13px;font-weight:bold;box-shadow:0 1px 3px rgba(0,0,0,0.4);">+ إضافة</button>
                 </div>` : ''}
                 ${queueHtml}
             </div>`;
