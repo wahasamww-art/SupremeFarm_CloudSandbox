@@ -8062,7 +8062,23 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
         let count = 0;
         const gw = unsafeWindow;
         
-        // 1. Check AppData first (contains crops, products, etc.)
+        // 1. Game's built-in getStorageQtyById (safest)
+        try {
+            if (gw.GF?.loginModel && typeof gw.GF.loginModel.getStorageQtyById === 'function') {
+                const c = gw.GF.loginModel.getStorageQtyById(id);
+                if (c !== undefined && c !== null) count = Math.max(count, parseInt(c) || 0);
+            }
+        } catch(e) {}
+        
+        // 2. Direct read from AppData.storage (contains crops, products, etc.)
+        try {
+            const sd = gw.GF?.loginModel?.AppData?.storage;
+            if (sd && sd[id] !== undefined) {
+                count = Math.max(count, parseInt(sd[id]) || 0);
+            }
+        } catch(e) {}
+        
+        // 3. Check AppData.items (just in case some versions use it)
         try {
             const sd = gw.GF?.loginModel?.AppData?.items;
             if (sd) {
@@ -8075,7 +8091,7 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
             }
         } catch(e) {}
         
-        // 2. Check Bag (contains tools, tickets, etc.)
+        // 4. Check Bag (contains tools, tickets, etc.)
         try {
             const bag = gw.App?.ControllerManager?.getControllerModel("Bag");
             if (bag && typeof bag.getItemCount === 'function') {
