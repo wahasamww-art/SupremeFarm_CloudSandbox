@@ -7394,11 +7394,13 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
                 <div id="sf-ps-animals-list" style="max-height:200px;overflow-y:auto;padding-right:5px;"></div>
             </div>
             <div style="margin-bottom:15px;">
-                <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
-                    <span style="font-size:16px;">⚙</span>
-                    <span style="font-weight:bold;color:#3498db;font-size:16px;">الآلات</span>
+                <div id="sf-ps-machine-header-wrap">
+                    <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
+                        <span style="font-size:16px;">⚙</span>
+                        <span style="font-weight:bold;color:#3498db;font-size:16px;">الآلات</span>
+                    </div>
+                    <input id="sf-ps-search-machine" type="text" placeholder="🔍 ابحث عن آلة..." style="width:100%;background:#1a1a2e;color:#fff;border:1px solid #444;border-radius:6px;padding:8px 12px;font-size:14px;margin-bottom:8px;box-sizing:border-box;">
                 </div>
-                <input id="sf-ps-search-machine" type="text" placeholder="🔍 ابحث عن آلة..." style="width:100%;background:#1a1a2e;color:#fff;border:1px solid #444;border-radius:6px;padding:8px 12px;font-size:14px;margin-bottom:8px;box-sizing:border-box;">
                 <div id="sf-ps-machines-list" style="max-height:300px;overflow-y:auto;padding-right:5px;"></div>
             </div>
             <div style="display:flex;gap:10px;margin-bottom:10px;margin-top:20px;">
@@ -7603,7 +7605,9 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
         const container = this.container?.querySelector('#sf-ps-machines-list');
         if (!container) return;
 
+        const headerWrap = this.container?.querySelector('#sf-ps-machine-header-wrap');
         if (this.activeMachineKey) {
+            if (headerWrap) headerWrap.style.display = 'none';
             const item = this.items.find(i => i.key === this.activeMachineKey);
             if (!item) { this.activeMachineKey = null; return this._renderMachines(); }
             const sched = this.schedules[item.key];
@@ -7621,7 +7625,11 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
                         const icon = isDone ? '✅' : (isCurrent && running ? '▶' : '⏳');
                         return `<div style="display:flex;align-items:center;justify-content:space-between;font-size:13px;color:${color};padding:3px 0;border-bottom:${idx<queue.length-1?'1px solid #222':'none'};">
                             <span>${icon} <strong>${q.name}</strong> ×${q.target||'∞'} <span style="font-size:11px;opacity:0.8;">${isDone ? '' : `(${q.done} من ${q.target||'∞'})`}</span></span>
-                            ${!running ? `<button class="sf-ps-rmq" data-key="${item.key}" data-idx="${idx}" style="background:#e74c3c22;border:1px solid #e74c3c;color:#e74c3c;cursor:pointer;font-size:11px;padding:2px 6px;border-radius:4px;font-weight:bold;">✕ حذف</button>` : ''}
+                            <div style="display:flex;gap:4px;">
+                                ${idx > 0 ? `<button class="sf-ps-move-btn" data-dir="-1" data-key="${item.key}" data-idx="${idx}" style="background:#2980b9;border:none;color:#fff;cursor:pointer;font-size:10px;padding:2px 6px;border-radius:4px;font-weight:bold;">▲</button>` : ''}
+                                ${idx < queue.length - 1 ? `<button class="sf-ps-move-btn" data-dir="1" data-key="${item.key}" data-idx="${idx}" style="background:#2980b9;border:none;color:#fff;cursor:pointer;font-size:10px;padding:2px 6px;border-radius:4px;font-weight:bold;">▼</button>` : ''}
+                                <button class="sf-ps-rmq" data-key="${item.key}" data-idx="${idx}" style="background:#e74c3c22;border:1px solid #e74c3c;color:#e74c3c;cursor:pointer;font-size:11px;padding:2px 6px;border-radius:4px;font-weight:bold;">✕ حذف</button>
+                            </div>
                         </div>`;
                     }).join('')}
                 </div>`;
@@ -7640,7 +7648,6 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
                     }
                 </div>
                 ${queueHtml}
-                ${!running ? `
                 <div style="margin-top:12px;border-top:1px solid #333;padding-top:10px;">
                     <div style="font-size:13px;color:#bbb;margin-bottom:6px;">إضافة منتجات للجدولة:</div>
                     <input type="text" class="sf-ps-prod-search" placeholder="🔍 بحث ذكي عن المنتجات..." style="width:100%;background:#1a1a2e;color:#fff;border:1px solid #555;border-radius:6px;padding:8px;font-size:13px;margin-bottom:8px;box-sizing:border-box;">
@@ -7656,7 +7663,6 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
                         `).join('')}
                     </div>
                 </div>
-                ` : `<div style="text-align:center;color:#e74c3c;font-size:12px;margin-top:10px;">قم بإيقاف الآلة لتتمكن من إضافة منتجات جديدة</div>`}
             </div>`;
             this._bindItemEvents(container);
             
@@ -7674,6 +7680,7 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
         }
 
         // List View
+        if (headerWrap) headerWrap.style.display = 'block';
         const machines = this.items.filter(i => i.type === 'Machine');
         if (machines.length === 0) { container.innerHTML = '<div style="color:#777;font-size:13px;text-align:center;padding:10px;">لا يوجد آلات على الأرض</div>'; return; }
 
@@ -7705,6 +7712,7 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
         container.querySelectorAll('.sf-ps-start-btn').forEach(btn => btn.addEventListener('click', () => { this._startOne(btn.dataset.key); if (this.activeMachineKey === btn.dataset.key) this._renderMachines(); }));
         container.querySelectorAll('.sf-ps-stop-btn').forEach(btn => btn.addEventListener('click', () => { this._stopOne(btn.dataset.key); if (this.activeMachineKey === btn.dataset.key) this._renderMachines(); }));
         container.querySelectorAll('.sf-ps-rmq').forEach(btn => btn.addEventListener('click', () => { this._removeFromQueue(btn.dataset.key, parseInt(btn.dataset.idx)); if (this.activeMachineKey === btn.dataset.key) this._renderMachines(); }));
+        container.querySelectorAll('.sf-ps-move-btn').forEach(btn => btn.addEventListener('click', () => { this._moveQueueItem(btn.dataset.key, parseInt(btn.dataset.idx), parseInt(btn.dataset.dir)); }));
         
         container.querySelectorAll('.sf-ps-manage-btn').forEach(btn => btn.addEventListener('click', () => {
             this.activeMachineKey = btn.dataset.key;
@@ -7751,8 +7759,34 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
     _removeFromQueue(key, idx) {
         if (!this.schedules[key]) return;
         this.schedules[key].queue.splice(idx, 1);
+        if (this.schedules[key].currentQueueIdx > idx) {
+            this.schedules[key].currentQueueIdx--;
+        } else if (this.schedules[key].currentQueueIdx >= this.schedules[key].queue.length) {
+            this.schedules[key].currentQueueIdx = 0; // Reset if we deleted the last item
+            if (this.schedules[key].queue.length === 0) this.schedules[key].running = false;
+        }
         this._saveSchedules();
         this._renderMachines();
+    }
+
+    _moveQueueItem(key, idx, dir) {
+        if (!this.schedules[key]) return;
+        const q = this.schedules[key].queue;
+        const targetIdx = idx + dir;
+        if (targetIdx < 0 || targetIdx >= q.length) return;
+
+        // Swap
+        const temp = q[idx];
+        q[idx] = q[targetIdx];
+        q[targetIdx] = temp;
+
+        // Fix currentQueueIdx
+        const cur = this.schedules[key].currentQueueIdx;
+        if (cur === idx) this.schedules[key].currentQueueIdx = targetIdx;
+        else if (cur === targetIdx) this.schedules[key].currentQueueIdx = idx;
+
+        this._saveSchedules();
+        if (this.activeMachineKey === key) this._renderMachines();
     }
 
     _startOne(key) {
