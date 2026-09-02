@@ -21,7 +21,7 @@
 
 // ===================================================================
 // SupremeFarm Modular - Cloud Distribution Bundle
-// Generated at: 2026-09-02T19:57:41.583Z
+// Generated at: 2026-09-02T20:08:32.795Z
 // ===================================================================
 
 var SF = window.SF || {};
@@ -8127,11 +8127,19 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
             if (gw.App?.ControllerManager?.getControllerModel("WindowManager")?.getOpenWindows && gw.App.ControllerManager.getControllerModel("WindowManager").getOpenWindows().length > 0) hideAll = true;
             if (gw.GF?.guiManager?.getOpenWindows && gw.GF.guiManager.getOpenWindows().length > 0) hideAll = true;
             
-            // Robust check via Egret LayerManager
+            // Robust check via Egret LayerManager checking visibility
             if (gw.LayerManager) {
-                if (gw.LayerManager.UI_Popup && gw.LayerManager.UI_Popup.numChildren > 0) hideAll = true;
-                if (gw.LayerManager.UI_Message && gw.LayerManager.UI_Message.numChildren > 0) hideAll = true;
-                if (gw.LayerManager.UI_Tutorial && gw.LayerManager.UI_Tutorial.numChildren > 0) hideAll = true;
+                const isVisible = (layer) => {
+                    if (!layer || layer.numChildren === 0) return false;
+                    const children = layer.$children || layer.children || [];
+                    for (let i = 0; i < children.length; i++) {
+                        if (children[i].visible !== false && children[i].alpha !== 0) return true;
+                    }
+                    return false;
+                };
+                if (isVisible(gw.LayerManager.UI_Popup)) hideAll = true;
+                if (isVisible(gw.LayerManager.UI_Message)) hideAll = true;
+                if (isVisible(gw.LayerManager.UI_Tutorial)) hideAll = true;
             }
         } catch(e) {}
 
