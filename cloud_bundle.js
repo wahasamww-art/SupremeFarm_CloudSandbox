@@ -7366,75 +7366,69 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
         super('production_scheduler', 'جدولة الإنتاج', '🏭');
         this.items = [];
         this.schedules = {};
-        this.overlays = {};
+        this.badges = {};
         this.loopTimer = null;
         this.posTimer = null;
-        this.loopSpeed = 2000;
+        this.loopSpeed = 3000;
         this._logLines = [];
-        this._overlayContainer = null;
+        this._badgeContainer = null;
         this._autoInitTimer = null;
         this._autoInitAttempts = 0;
+        this._waitingProductChange = {};
     }
 
     render() {
         return `
         <div class="sf-card">
-            <p style="color:#2ecc71; font-size:12px; text-align:center; margin-bottom:10px;">
-                ✅ البطاقات تظهر تلقائياً فوق كل آلة وحيوان على الخريطة
-            </p>
-            <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px; background:rgba(0,0,0,0.3); padding:8px; border-radius:6px;">
-                <span style="font-size:12px; color:#aaa;">⏱️ سرعة:</span>
-                <select id="sf-ps-speed" style="flex:1; background:#1a1a2e; color:#fff; border:1px solid #333; border-radius:4px; padding:4px;">
-                    <option value="500">⚡ فوري (0.5 ث)</option>
-                    <option value="1000">🚀 سريع (1 ث)</option>
-                    <option value="2000" selected>⏩ متوسط (2 ث)</option>
-                    <option value="5000">🐌 عادي (5 ث)</option>
-                </select>
+            <div style="margin-bottom:8px;">
+                <div style="display:flex;align-items:center;gap:4px;margin-bottom:4px;">
+                    <span style="font-size:13px;">🐄</span>
+                    <span style="font-weight:bold;color:#e67e22;font-size:12px;">الحيوانات</span>
+                </div>
+                <input id="sf-ps-search-animal" type="text" placeholder="🔍 بحث..." style="width:100%;background:#1a1a2e;color:#fff;border:1px solid #333;border-radius:4px;padding:4px 6px;font-size:11px;margin-bottom:4px;box-sizing:border-box;">
+                <div id="sf-ps-animals-list" style="max-height:120px;overflow-y:auto;"></div>
             </div>
-            <div style="display:flex; gap:8px; margin-bottom:8px;">
-                <button id="sf-ps-start-all" class="sf-btn" style="flex:1; background:#27ae60;">▶️ تشغيل الكل</button>
-                <button id="sf-ps-stop-all" class="sf-btn" style="flex:1; background:#c0392b;">⏹️ إيقاف الكل</button>
+            <div style="margin-bottom:8px;">
+                <div style="display:flex;align-items:center;gap:4px;margin-bottom:4px;">
+                    <span style="font-size:13px;">⚙</span>
+                    <span style="font-weight:bold;color:#3498db;font-size:12px;">الآلات</span>
+                </div>
+                <input id="sf-ps-search-machine" type="text" placeholder="🔍 بحث..." style="width:100%;background:#1a1a2e;color:#fff;border:1px solid #333;border-radius:4px;padding:4px 6px;font-size:11px;margin-bottom:4px;box-sizing:border-box;">
+                <div id="sf-ps-machines-list" style="max-height:250px;overflow-y:auto;"></div>
             </div>
-            <div style="display:flex; gap:8px; margin-bottom:8px;">
-                <button id="sf-ps-refresh" class="sf-btn" style="flex:1; background:#2980b9;">🔄 تحديث البطاقات</button>
-                <button id="sf-ps-hide" class="sf-btn" style="flex:1; background:#7f8c8d;">👁 إخفاء/إظهار</button>
+            <div style="display:flex;gap:6px;margin-bottom:6px;">
+                <button id="sf-ps-start-all" class="sf-btn" style="flex:1;background:#27ae60;font-size:11px;padding:5px;">▶ تشغيل الكل</button>
+                <button id="sf-ps-stop-all" class="sf-btn" style="flex:1;background:#c0392b;font-size:11px;padding:5px;">⏹ إيقاف الكل</button>
             </div>
-            <div id="sf-ps-info" style="font-size:11px; color:#888; text-align:center;"></div>
-            <div id="sf-ps-log" style="max-height:80px; overflow-y:auto; margin-top:6px; font-size:10px; color:#666; background:rgba(0,0,0,0.2); padding:4px; border-radius:4px; direction:rtl;"></div>
+            <div id="sf-ps-log" style="max-height:60px;overflow-y:auto;font-size:9px;color:#666;background:rgba(0,0,0,0.2);padding:4px;border-radius:4px;direction:rtl;"></div>
         </div>`;
     }
 
     bindEvents() {
         const c = this.container;
         if (!c) return;
-        c.querySelector('#sf-ps-speed')?.addEventListener('change', (e) => {
-            this.loopSpeed = parseInt(e.target.value) || 2000;
-            if (this.loopTimer) { this._stopLoop(); this._startLoop(); }
-        });
         c.querySelector('#sf-ps-start-all')?.addEventListener('click', () => this._startAll());
         c.querySelector('#sf-ps-stop-all')?.addEventListener('click', () => this._stopAll());
-        c.querySelector('#sf-ps-refresh')?.addEventListener('click', () => this._autoInit());
-        c.querySelector('#sf-ps-hide')?.addEventListener('click', () => {
-            if (this._overlayContainer) {
-                const vis = this._overlayContainer.style.display !== 'none';
-                this._overlayContainer.style.display = vis ? 'none' : '';
-            }
-        });
-
-        // AUTO-INIT: Start showing overlays automatically
+        c.querySelector('#sf-ps-search-animal')?.addEventListener('input', (e) => this._filterList('animal', e.target.value));
+        c.querySelector('#sf-ps-search-machine')?.addEventListener('input', (e) => this._filterList('machine', e.target.value));
         this._scheduleAutoInit();
     }
 
+    onDeactivate() {
+        this._stopLoop();
+        if (this._autoInitTimer) { clearInterval(this._autoInitTimer); this._autoInitTimer = null; }
+        if (this.posTimer) { clearInterval(this.posTimer); this.posTimer = null; }
+        if (this._badgeContainer) { this._badgeContainer.remove(); this._badgeContainer = null; }
+    }
+
     // ═══════════════════════════════════════
-    // AUTO-INIT (No button needed)
+    // AUTO-INIT
     // ═══════════════════════════════════════
     _scheduleAutoInit() {
         this._autoInitAttempts = 0;
-        // Try every 3 seconds until we find items (max 20 attempts)
         this._autoInitTimer = setInterval(() => {
             this._autoInitAttempts++;
-            const gw = unsafeWindow;
-            const dict = gw.GameGridData?.uidDictionary;
+            const dict = unsafeWindow.GameGridData?.uidDictionary;
             if (dict && Object.keys(dict).length > 0) {
                 clearInterval(this._autoInitTimer);
                 this._autoInitTimer = null;
@@ -7442,47 +7436,21 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
             } else if (this._autoInitAttempts >= 20) {
                 clearInterval(this._autoInitTimer);
                 this._autoInitTimer = null;
-                this._log('⚠️ تعذر العثور على بيانات الخريطة');
             }
         }, 3000);
     }
 
     _autoInit() {
-        this._ensureContainer();
         this._scanItems();
-
-        // Clear old overlays
-        if (this._overlayContainer) this._overlayContainer.innerHTML = '';
-        this.overlays = {};
-
-        this.items.forEach(item => {
-            const el = this._createOverlayCard(item);
-            if (el) {
-                this._overlayContainer.appendChild(el);
-                this.overlays[item.key] = el;
-            }
-        });
-
+        this._renderAnimals();
+        this._renderMachines();
+        this._ensureBadgeContainer();
         this._startPositionUpdater();
-
-        const info = this.container?.querySelector('#sf-ps-info');
-        if (info) info.textContent = `🏭 ${this.items.filter(i=>i.type==='Machine').length} آلة | 🐄 ${this.items.filter(i=>i.type==='Animal').length} حيوان`;
-        this._log(`📍 ${this.items.length} عنصر على الخريطة`);
+        this._log(`📍 ${this.items.length} عنصر (${this.items.filter(i=>i.type==='Machine').length} آلة, ${this.items.filter(i=>i.type==='Animal').length} حيوان)`);
     }
 
     // ═══════════════════════════════════════
-    // OVERLAY CONTAINER
-    // ═══════════════════════════════════════
-    _ensureContainer() {
-        if (this._overlayContainer && document.body.contains(this._overlayContainer)) return;
-        this._overlayContainer = document.createElement('div');
-        this._overlayContainer.id = 'sf-ps-overlay-root';
-        this._overlayContainer.style.cssText = 'position:fixed; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index:9000;';
-        document.body.appendChild(this._overlayContainer);
-    }
-
-    // ═══════════════════════════════════════
-    // SCAN — finds all machines & animals
+    // SCAN
     // ═══════════════════════════════════════
     _scanItems() {
         const gw = unsafeWindow;
@@ -7490,28 +7458,17 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
         try {
             const dict = gw.GameGridData?.uidDictionary;
             if (!dict) return;
-            const moList = Object.values(dict);
-
-            moList.forEach(mo => {
+            Object.values(dict).forEach(mo => {
                 if (!mo) return;
-
-                // Egret stores class name in __class__, not className
                 const cn = mo.__class__ || '';
                 const cd = mo.configData || {};
-
-                const isMachine = cn === 'Machine'
-                    && cd.raw_material && cd.product; // only real production machines
-
-                const isAnimal = cn === 'Animal'
-                    || (cd.type === 'animals' && cd.sub_type === 'working');
-
+                const isMachine = cn === 'Machine' && cd.raw_material && cd.product;
+                const isAnimal = cn === 'Animal' || (cd.type === 'animals' && cd.sub_type === 'working');
                 if (!isMachine && !isAnimal) return;
 
                 const sd = mo.serverData || {};
                 const objType = isMachine ? 'Machine' : 'Animal';
                 const key = `${objType[0]}_${cd.id || mo.id}_${sd.x || sd.map_x || 0}_${sd.y || sd.map_y || 0}`;
-
-                // Skip if already added (same position)
                 if (this.items.some(i => i.key === key)) return;
 
                 const item = {
@@ -7523,7 +7480,6 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
                     mo, products: []
                 };
 
-                // Discover products for machines
                 if (isMachine && cd.raw_material && cd.product) {
                     const rawMats = Array.isArray(cd.raw_material[0]) ? cd.raw_material[0] : cd.raw_material;
                     const prods = cd.product;
@@ -7534,306 +7490,259 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
                                 const pc = gw.Config?.Store_GetItemData(prods[i]);
                                 pName = pc ? (pc.name_ar || pc.name) : '';
                             } catch(e) {}
-                            item.products.push({
-                                index: i, rawMaterialId: rawMats[i],
-                                productId: prods[i], name: pName || `منتج #${i + 1}`
-                            });
+                            item.products.push({ index: i, rawMaterialId: rawMats[i], productId: prods[i], name: pName || `منتج #${i+1}` });
                         }
                     }
                 }
                 this.items.push(item);
             });
-        } catch(e) {
-            this._log(`❌ خطأ الفحص: ${e.message}`);
-        }
+        } catch(e) { this._log(`❌ خطأ: ${e.message}`); }
     }
 
     // ═══════════════════════════════════════
-    // OVERLAY CARDS (on the map)
+    // PANEL UI — Animals
     // ═══════════════════════════════════════
-    _createOverlayCard(item) {
-        const div = document.createElement('div');
-        div.dataset.key = item.key;
-        const color = item.type === 'Machine' ? '#3498db' : '#e67e22';
-        const icon = item.type === 'Machine' ? '⚙' : '🐄';
+    _renderAnimals() {
+        const container = this.container?.querySelector('#sf-ps-animals-list');
+        if (!container) return;
+        const animals = this.items.filter(i => i.type === 'Animal');
+        if (animals.length === 0) { container.innerHTML = '<div style="color:#555;font-size:10px;text-align:center;padding:4px;">لا يوجد حيوانات</div>'; return; }
 
-        div.style.cssText = `
-            position:absolute; pointer-events:auto; background:rgba(5,5,18,0.9);
-            border:1px solid ${color}; border-radius:5px; padding:2px 4px;
-            font-family:sans-serif; direction:rtl; font-size:8px; line-height:1.3;
-            box-shadow:0 1px 6px rgba(0,0,0,0.6); transform:translate(-50%,-100%);
-            white-space:nowrap; cursor:default;
-        `;
-
-        let html = `<div style="display:flex;align-items:center;gap:2px;">
-            <span style="color:${color};font-weight:bold;font-size:8px;max-width:65px;overflow:hidden;text-overflow:ellipsis;">${icon}${item.name}</span>
-            <button class="sf-ps-o-start" data-key="${item.key}" style="background:#27ae60;border:none;color:#fff;width:14px;height:13px;border-radius:2px;cursor:pointer;font-size:7px;padding:0;">▶</button>
-            <button class="sf-ps-o-stop" data-key="${item.key}" style="background:#c0392b;border:none;color:#fff;width:14px;height:13px;border-radius:2px;cursor:pointer;font-size:7px;padding:0;">⏹</button>
-        </div>`;
-
-        if (item.type === 'Machine' && item.products.length > 1) {
-            let opts = item.products.map((p, i) => `<option value="${i}">${p.name}</option>`).join('');
-            html += `<div style="display:flex;gap:2px;align-items:center;margin-top:1px;">
-                <select class="sf-ps-o-product" data-key="${item.key}" style="background:#111;color:#fff;border:1px solid #333;border-radius:2px;font-size:7px;padding:0 1px;max-width:60px;">
-                    ${opts}
-                </select>
-                <input type="number" min="0" value="0" class="sf-ps-o-qty" data-key="${item.key}"
-                    style="width:22px;background:#111;color:#fff;border:1px solid #333;border-radius:2px;text-align:center;font-size:7px;padding:0;">
-                <button class="sf-ps-o-add" data-key="${item.key}" style="background:#8e44ad;border:none;color:#fff;width:13px;height:13px;border-radius:2px;cursor:pointer;font-size:7px;padding:0;">+</button>
-            </div>
-            <div class="sf-ps-o-queue" data-key="${item.key}" style="font-size:7px;color:#aaa;max-height:25px;overflow-y:auto;"></div>`;
-        } else if (item.type === 'Machine') {
-            html += `<div style="display:flex;gap:2px;align-items:center;margin-top:1px;">
-                <span style="color:#888;font-size:7px;">×</span>
-                <input type="number" min="0" value="0" class="sf-ps-o-qty" data-key="${item.key}" data-pidx="0"
-                    style="width:22px;background:#111;color:#fff;border:1px solid #333;border-radius:2px;text-align:center;font-size:7px;padding:0;">
+        container.innerHTML = animals.map(item => {
+            const sched = this.schedules[item.key];
+            const running = sched?.running;
+            const cycles = sched?.targetCycles || 0;
+            const done = sched?.completedCycles || 0;
+            return `<div class="sf-ps-item" data-key="${item.key}" data-name="${item.name}" style="background:rgba(230,126,34,0.1);border:1px solid #e67e2244;border-radius:5px;padding:5px 6px;margin-bottom:3px;">
+                <div style="display:flex;align-items:center;justify-content:space-between;">
+                    <span style="color:#e67e22;font-size:11px;font-weight:bold;">🐄 ${item.name}</span>
+                    <div style="display:flex;align-items:center;gap:3px;">
+                        <input type="number" min="0" value="${cycles}" class="sf-ps-cycles" data-key="${item.key}" style="width:30px;background:#1a1a2e;color:#fff;border:1px solid #444;border-radius:3px;text-align:center;font-size:10px;padding:2px;" title="0=∞">
+                        <span style="color:#555;font-size:9px;">دورة</span>
+                        ${running
+                            ? `<button class="sf-ps-stop-btn" data-key="${item.key}" style="background:#c0392b;border:none;color:#fff;width:22px;height:20px;border-radius:3px;cursor:pointer;font-size:10px;">⏹</button>`
+                            : `<button class="sf-ps-start-btn" data-key="${item.key}" style="background:#27ae60;border:none;color:#fff;width:22px;height:20px;border-radius:3px;cursor:pointer;font-size:10px;">▶</button>`
+                        }
+                    </div>
+                </div>
+                ${running ? `<div style="color:#2ecc71;font-size:9px;margin-top:2px;">🔄 ${done}/${cycles||'∞'}</div>` : ''}
             </div>`;
-        } else {
-            html += `<div style="display:flex;gap:2px;align-items:center;margin-top:1px;">
-                <span style="color:#888;font-size:7px;">🔄</span>
-                <input type="number" min="0" value="0" class="sf-ps-o-cycles" data-key="${item.key}"
-                    style="width:22px;background:#111;color:#fff;border:1px solid #333;border-radius:2px;text-align:center;font-size:7px;padding:0;">
-            </div>`;
-        }
-
-        html += `<div class="sf-ps-o-status" data-key="${item.key}" style="color:#555;font-size:7px;">●</div>`;
-        html += `<div style="position:absolute;bottom:-5px;left:50%;transform:translateX(-50%);width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-top:5px solid ${color};"></div>`;
-
-        div.innerHTML = html;
-
-        div.querySelector('.sf-ps-o-start')?.addEventListener('click', (e) => { e.stopPropagation(); this._startOne(item.key); });
-        div.querySelector('.sf-ps-o-stop')?.addEventListener('click', (e) => { e.stopPropagation(); this._stopOne(item.key); });
-        div.querySelector('.sf-ps-o-add')?.addEventListener('click', (e) => { e.stopPropagation(); this._addToQueue(item.key); });
-
-        return div;
-    }
-
-    _addToQueue(key) {
-        const item = this.items.find(i => i.key === key);
-        const overlay = this.overlays[key];
-        if (!item || !overlay) return;
-
-        const selEl = overlay.querySelector(`.sf-ps-o-product[data-key="${key}"]`);
-        const qtyEl = overlay.querySelector(`.sf-ps-o-qty[data-key="${key}"]`);
-        if (!selEl || !qtyEl) return;
-
-        const pidx = parseInt(selEl.value);
-        const qty = parseInt(qtyEl.value) || 0;
-        if (qty <= 0) return;
-
-        if (!this.schedules[key]) {
-            this.schedules[key] = { queue: [], currentQueueIdx: 0, running: false, completedCycles: 0, targetCycles: 0 };
-        }
-
-        const prod = item.products[pidx];
-        this.schedules[key].queue.push({
-            productIndex: pidx, rawMaterialId: prod?.rawMaterialId,
-            productId: prod?.productId, name: prod?.name || `#${pidx}`,
-            target: qty, done: 0
-        });
-
-        qtyEl.value = '0';
-        this._renderQueue(key);
-        this._log(`➕ ${item.name}: ${prod?.name} × ${qty}`);
-    }
-
-    _renderQueue(key) {
-        const sched = this.schedules[key];
-        const overlay = this.overlays[key];
-        if (!overlay || !sched) return;
-
-        const queueDiv = overlay.querySelector(`.sf-ps-o-queue[data-key="${key}"]`);
-        if (!queueDiv) return;
-
-        if (sched.queue.length === 0) { queueDiv.innerHTML = ''; return; }
-
-        queueDiv.innerHTML = sched.queue.map((q, i) => {
-            const active = i === sched.currentQueueIdx && sched.running;
-            const done = q.target > 0 && q.done >= q.target;
-            const color = active ? '#2ecc71' : (done ? '#27ae60' : '#888');
-            return `<div style="color:${color};">${active ? '▶' : (done ? '✓' : '•')} ${q.name} ${q.done}/${q.target}</div>`;
         }).join('');
+        this._bindItemEvents(container);
     }
 
     // ═══════════════════════════════════════
-    // POSITION TRACKING (follows game objects)
+    // PANEL UI — Machines
     // ═══════════════════════════════════════
-    _startPositionUpdater() {
-        this._stopPositionUpdater();
-        const update = () => {
-            this._updatePositions();
-            this.posTimer = requestAnimationFrame(update);
-        };
-        this.posTimer = requestAnimationFrame(update);
-    }
+    _renderMachines() {
+        const container = this.container?.querySelector('#sf-ps-machines-list');
+        if (!container) return;
+        const machines = this.items.filter(i => i.type === 'Machine');
+        if (machines.length === 0) { container.innerHTML = '<div style="color:#555;font-size:10px;text-align:center;padding:4px;">لا يوجد آلات</div>'; return; }
 
-    _stopPositionUpdater() {
-        if (this.posTimer) { cancelAnimationFrame(this.posTimer); this.posTimer = null; }
-    }
+        container.innerHTML = machines.map(item => {
+            const sched = this.schedules[item.key];
+            const running = sched?.running;
+            const queue = sched?.queue || [];
+            let opts = item.products.map((p, i) => `<option value="${i}">${p.name}</option>`).join('');
 
-    _updatePositions() {
-        const gw = unsafeWindow;
-        const canvas = document.querySelector('canvas');
-        if (!canvas) return;
-
-        const canvasRect = canvas.getBoundingClientRect();
-        let stageW, stageH;
-        try {
-            const stage = gw.egret?.lifecycle?.stage
-                || gw.egret?.MainContext?.instance?.stage
-                || gw.egret?.sys?.$TempStage;
-            stageW = stage?.stageWidth || canvas.width;
-            stageH = stage?.stageHeight || canvas.height;
-        } catch(e) {
-            stageW = canvas.width; stageH = canvas.height;
-        }
-        const scaleX = canvasRect.width / stageW;
-        const scaleY = canvasRect.height / stageH;
-
-        this.items.forEach(item => {
-            const el = this.overlays[item.key];
-            if (!el) return;
-
-            const pos = this._getScreenPos(item, gw, scaleX, scaleY, canvasRect);
-            if (pos && pos.x > canvasRect.left - 50 && pos.x < canvasRect.right + 50
-                && pos.y > canvasRect.top - 50 && pos.y < canvasRect.bottom + 100) {
-                el.style.left = pos.x + 'px';
-                el.style.top = pos.y + 'px';
-                el.style.display = '';
-            } else {
-                el.style.display = 'none';
+            let queueHtml = '';
+            if (queue.length > 0) {
+                queueHtml = `<div style="margin-top:3px;padding:3px 4px;background:rgba(0,0,0,0.2);border-radius:3px;">
+                    ${queue.map((q, idx) => {
+                        const isCurrent = sched?.currentQueueIdx === idx;
+                        const isDone = q.target > 0 && q.done >= q.target;
+                        const color = isDone ? '#27ae60' : (isCurrent && running ? '#f39c12' : '#888');
+                        const icon = isDone ? '✅' : (isCurrent && running ? '▶' : '⏳');
+                        return `<div style="display:flex;align-items:center;justify-content:space-between;font-size:9px;color:${color};padding:1px 0;">
+                            <span>${icon} ${q.name} ×${q.target||'∞'} ${isDone ? '' : `(${q.done}/${q.target||'∞'})`}</span>
+                            ${!running ? `<button class="sf-ps-rmq" data-key="${item.key}" data-idx="${idx}" style="background:none;border:none;color:#c0392b;cursor:pointer;font-size:9px;padding:0 2px;">✕</button>` : ''}
+                        </div>`;
+                    }).join('')}
+                </div>`;
             }
-        });
+
+            return `<div class="sf-ps-item" data-key="${item.key}" data-name="${item.name}" style="background:rgba(52,152,219,0.1);border:1px solid #3498db44;border-radius:5px;padding:5px 6px;margin-bottom:3px;">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:3px;">
+                    <span style="color:#3498db;font-size:11px;font-weight:bold;">⚙ ${item.name}</span>
+                    <div style="display:flex;gap:3px;">
+                        ${running
+                            ? `<button class="sf-ps-stop-btn" data-key="${item.key}" style="background:#c0392b;border:none;color:#fff;width:22px;height:20px;border-radius:3px;cursor:pointer;font-size:10px;">⏹</button>`
+                            : `<button class="sf-ps-start-btn" data-key="${item.key}" style="background:#27ae60;border:none;color:#fff;width:22px;height:20px;border-radius:3px;cursor:pointer;font-size:10px;">▶</button>`
+                        }
+                    </div>
+                </div>
+                ${!running ? `<div style="display:flex;gap:3px;align-items:center;">
+                    <select class="sf-ps-product" data-key="${item.key}" style="flex:1;background:#1a1a2e;color:#fff;border:1px solid #444;border-radius:3px;padding:2px;font-size:10px;">${opts}</select>
+                    <span style="color:#666;">×</span>
+                    <input type="number" min="1" value="1" class="sf-ps-qty" data-key="${item.key}" style="width:30px;background:#1a1a2e;color:#fff;border:1px solid #444;border-radius:3px;text-align:center;font-size:10px;padding:2px;">
+                    <button class="sf-ps-add-btn" data-key="${item.key}" style="background:#8e44ad;border:none;color:#fff;padding:2px 6px;border-radius:3px;cursor:pointer;font-size:10px;">+</button>
+                </div>` : ''}
+                ${queueHtml}
+            </div>`;
+        }).join('');
+        this._bindItemEvents(container);
     }
 
-    _getScreenPos(item, gw, scaleX, scaleY, canvasRect) {
-        try {
-            const mo = this._getFreshMO(item);
-            if (!mo || typeof mo.localToGlobal !== 'function') return null;
+    _bindItemEvents(container) {
+        container.querySelectorAll('.sf-ps-start-btn').forEach(btn => btn.addEventListener('click', () => this._startOne(btn.dataset.key)));
+        container.querySelectorAll('.sf-ps-stop-btn').forEach(btn => btn.addEventListener('click', () => this._stopOne(btn.dataset.key)));
+        container.querySelectorAll('.sf-ps-add-btn').forEach(btn => btn.addEventListener('click', () => this._addToQueue(btn.dataset.key)));
+        container.querySelectorAll('.sf-ps-rmq').forEach(btn => btn.addEventListener('click', () => this._removeFromQueue(btn.dataset.key, parseInt(btn.dataset.idx))));
+    }
 
-            // MO itself IS the Egret DisplayObject — call localToGlobal directly
-            const p = new gw.egret.Point(0, 0);
-            mo.localToGlobal(0, 0, p);
-
-            return {
-                x: canvasRect.left + p.x * scaleX,
-                y: canvasRect.top + p.y * scaleY - 10
-            };
-        } catch(e) {}
-        return null;
+    _filterList(type, query) {
+        const listId = type === 'animal' ? '#sf-ps-animals-list' : '#sf-ps-machines-list';
+        const container = this.container?.querySelector(listId);
+        if (!container) return;
+        const q = query.trim().toLowerCase();
+        container.querySelectorAll('.sf-ps-item').forEach(el => {
+            el.style.display = !q || (el.dataset.name || '').toLowerCase().includes(q) ? '' : 'none';
+        });
     }
 
     // ═══════════════════════════════════════
     // SCHEDULE MANAGEMENT
     // ═══════════════════════════════════════
+    _addToQueue(key) {
+        const item = this.items.find(i => i.key === key);
+        if (!item) return;
+        const c = this.container;
+        const pidx = parseInt(c?.querySelector(`.sf-ps-product[data-key="${key}"]`)?.value) || 0;
+        const qty = parseInt(c?.querySelector(`.sf-ps-qty[data-key="${key}"]`)?.value) || 1;
+        if (!item.products[pidx]) return;
+
+        if (!this.schedules[key]) this.schedules[key] = { queue: [], currentQueueIdx: 0, running: false, completedCycles: 0, targetCycles: 0 };
+        const p = item.products[pidx];
+        this.schedules[key].queue.push({ productIndex: pidx, rawMaterialId: p.rawMaterialId, productId: p.productId, name: p.name, target: qty, done: 0 });
+        this._log(`➕ ${item.name}: ${p.name} ×${qty}`);
+        this._renderMachines();
+    }
+
+    _removeFromQueue(key, idx) {
+        if (!this.schedules[key]) return;
+        this.schedules[key].queue.splice(idx, 1);
+        this._renderMachines();
+    }
+
     _startOne(key) {
         const item = this.items.find(i => i.key === key);
         if (!item) return;
-
-        if (!this.schedules[key]) {
-            this.schedules[key] = { queue: [], currentQueueIdx: 0, running: false, completedCycles: 0, targetCycles: 0 };
-        }
+        if (!this.schedules[key]) this.schedules[key] = { queue: [], currentQueueIdx: 0, running: false, completedCycles: 0, targetCycles: 0 };
         const sched = this.schedules[key];
 
         if (item.type === 'Machine') {
-            if (sched.queue.length === 0) {
-                const overlay = this.overlays[key];
-                const qtyEl = overlay?.querySelector(`.sf-ps-o-qty[data-key="${key}"]`);
-                const qty = parseInt(qtyEl?.value) || 0;
-                const selEl = overlay?.querySelector(`.sf-ps-o-product[data-key="${key}"]`);
-                const pidx = parseInt(selEl?.value) || 0;
-
-                if (qty > 0 && item.products[pidx]) {
-                    const p = item.products[pidx];
-                    sched.queue = [{ productIndex: pidx, rawMaterialId: p.rawMaterialId, productId: p.productId, name: p.name, target: qty, done: 0 }];
-                } else {
-                    sched.queue = [{ productIndex: -1, name: 'الحالي', target: qty, done: 0 }];
-                }
-            }
-            sched.currentQueueIdx = sched.queue.findIndex(q => q.done < q.target || q.target === 0);
-            if (sched.currentQueueIdx < 0) sched.currentQueueIdx = 0;
+            if (sched.queue.length === 0) { this._log(`⚠️ ${item.name}: أضف منتجات أولاً`); return; }
+            sched.queue.forEach(q => q.done = 0);
+            sched.currentQueueIdx = 0;
         } else {
-            const overlay = this.overlays[key];
-            const cycEl = overlay?.querySelector(`.sf-ps-o-cycles[data-key="${key}"]`);
+            const cycEl = this.container?.querySelector(`.sf-ps-cycles[data-key="${key}"]`);
             sched.targetCycles = parseInt(cycEl?.value) || 0;
             sched.completedCycles = 0;
         }
 
         sched.running = true;
-        this._updateOverlayStatus(key);
-        this._renderQueue(key);
-        this._log(`✅ ${item.name}`);
+        this._log(`✅ ${item.name}: بدأ`);
+        this._renderAnimals();
+        this._renderMachines();
+        this._updateBadge(key);
         this._startLoop();
     }
 
     _stopOne(key) {
-        if (this.schedules[key]) {
-            this.schedules[key].running = false;
-            this._updateOverlayStatus(key);
-            this._renderQueue(key);
-        }
+        if (this.schedules[key]) { this.schedules[key].running = false; this._updateBadge(key); }
+        delete this._waitingProductChange[key];
+        this._renderAnimals();
+        this._renderMachines();
         if (!Object.values(this.schedules).some(s => s.running)) this._stopLoop();
     }
 
-    _startAll() { this.items.forEach(item => this._startOne(item.key)); }
+    _startAll() { this.items.forEach(item => { const s = this.schedules[item.key]; if (item.type === 'Animal' || (s && s.queue.length > 0)) this._startOne(item.key); }); }
     _stopAll() { Object.keys(this.schedules).forEach(k => this._stopOne(k)); this._stopLoop(); }
 
-    _updateOverlayStatus(key) {
+    // ═══════════════════════════════════════
+    // STATUS BADGES (on map, read-only)
+    // ═══════════════════════════════════════
+    _ensureBadgeContainer() {
+        if (this._badgeContainer && document.body.contains(this._badgeContainer)) return;
+        this._badgeContainer = document.createElement('div');
+        this._badgeContainer.id = 'sf-ps-badge-root';
+        this._badgeContainer.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:9000;';
+        document.body.appendChild(this._badgeContainer);
+    }
+
+    _updateBadge(key) {
         const sched = this.schedules[key];
         const item = this.items.find(i => i.key === key);
-        const overlay = this.overlays[key];
-        if (!overlay) return;
-        const el = overlay.querySelector(`.sf-ps-o-status[data-key="${key}"]`);
-        if (!el) return;
+        if (!item) return;
+        if (!sched?.running) { if (this.badges[key]) { this.badges[key].remove(); delete this.badges[key]; } return; }
 
-        if (!sched?.running) {
-            el.style.color = '#666'; el.textContent = '● متوقف';
-            overlay.style.borderColor = item?.type === 'Machine' ? '#3498db' : '#e67e22';
-            return;
+        if (!this.badges[key]) {
+            const b = document.createElement('div');
+            b.style.cssText = 'position:absolute;background:rgba(0,0,0,0.85);color:#fff;padding:1px 5px;border-radius:3px;font-size:8px;font-family:sans-serif;white-space:nowrap;transform:translate(-50%,-100%);border:1px solid #2ecc71;';
+            this._ensureBadgeContainer();
+            this._badgeContainer.appendChild(b);
+            this.badges[key] = b;
         }
-
-        el.style.color = '#2ecc71';
-        overlay.style.borderColor = '#2ecc71';
-
-        if (item?.type === 'Machine') {
+        const b = this.badges[key];
+        if (item.type === 'Machine') {
             const cur = sched.queue[sched.currentQueueIdx];
-            if (!cur) { el.textContent = '✅ اكتمل!'; return; }
-            el.textContent = cur.target === 0 ? `🔄 ${cur.name} — ${cur.done}` : `🔄 ${cur.name} ${cur.done}/${cur.target}`;
+            b.textContent = cur ? (cur.target === 0 ? `${cur.name} ${cur.done}` : `${cur.name} ${cur.done}/${cur.target}`) : '✅';
         } else {
-            const t = sched.targetCycles === 0 ? '∞' : sched.targetCycles;
-            el.textContent = `🔄 ${sched.completedCycles}/${t}`;
+            b.textContent = `🔄 ${sched.completedCycles}/${sched.targetCycles||'∞'}`;
         }
+    }
+
+    _startPositionUpdater() {
+        if (this.posTimer) return;
+        this.posTimer = setInterval(() => this._positionBadges(), 500);
+    }
+
+    _positionBadges() {
+        const gw = unsafeWindow;
+        const canvas = document.querySelector('canvas');
+        if (!canvas) return;
+        const rect = canvas.getBoundingClientRect();
+        let stageW, stageH;
+        try { const s = gw.egret.lifecycle.stage; stageW = s.stageWidth; stageH = s.stageHeight; } catch(e) { stageW = canvas.width; stageH = canvas.height; }
+        const scX = rect.width / stageW, scY = rect.height / stageH;
+
+        Object.keys(this.badges).forEach(key => {
+            const badge = this.badges[key];
+            const item = this.items.find(i => i.key === key);
+            if (!badge || !item) return;
+            try {
+                const mo = this._getFreshMO(item);
+                if (!mo || typeof mo.localToGlobal !== 'function') { badge.style.display = 'none'; return; }
+                const p = new gw.egret.Point(0, 0);
+                mo.localToGlobal(0, 0, p);
+                const sx = rect.left + p.x * scX, sy = rect.top + p.y * scY - 8;
+                if (sx > rect.left - 30 && sx < rect.right + 30 && sy > rect.top - 30 && sy < rect.bottom + 30) {
+                    badge.style.left = sx + 'px'; badge.style.top = sy + 'px'; badge.style.display = '';
+                } else { badge.style.display = 'none'; }
+            } catch(e) { badge.style.display = 'none'; }
+        });
     }
 
     // ═══════════════════════════════════════
     // MAIN LOOP
     // ═══════════════════════════════════════
-    _startLoop() {
-        if (this.loopTimer) return;
-        this.loopTimer = setInterval(() => this._checkAll(), this.loopSpeed);
-    }
-
-    _stopLoop() {
-        if (this.loopTimer) { clearInterval(this.loopTimer); this.loopTimer = null; }
-    }
+    _startLoop() { if (this.loopTimer) return; this.loopTimer = setInterval(() => this._checkAll(), this.loopSpeed); }
+    _stopLoop() { if (this.loopTimer) { clearInterval(this.loopTimer); this.loopTimer = null; } }
 
     _checkAll() {
         const keys = Object.keys(this.schedules).filter(k => this.schedules[k].running);
         if (keys.length === 0) { this._stopLoop(); return; }
-        keys.forEach(key => {
-            try { this._processItem(key); } catch(e) { this._log(`❌ ${key}: ${e.message}`); }
-        });
+        keys.forEach(key => { try { this._processItem(key); } catch(e) { this._log(`❌ ${key}: ${e.message}`); } });
     }
 
     _processItem(key) {
         const sched = this.schedules[key];
         const item = this.items.find(i => i.key === key);
         if (!item || !sched?.running) return;
-
         const mo = this._getFreshMO(item);
         if (!mo) return;
         const sd = mo.serverData || {};
-
         if (item.type === 'Machine') this._processMachine(key, item, mo, sd, sched);
         else this._processAnimal(key, item, mo, sd, sched);
     }
@@ -7841,84 +7750,92 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
     _processMachine(key, item, mo, sd, sched) {
         const gw = unsafeWindow;
         const gc = gw.GF?.gameController;
+        if (!gc) return;
 
-        const hasProducts = sd.products && (
-            (Array.isArray(sd.products) && sd.products.length > 0) ||
-            (typeof sd.products === 'number' && sd.products > 0));
+        // Waiting for product change to take effect
+        if (this._waitingProductChange[key] !== undefined) {
+            const curSel = parseInt(sd.selected_raw_material);
+            if (curSel === this._waitingProductChange[key]) { delete this._waitingProductChange[key]; }
+            else return;
+        }
 
+        // Collect if products ready
+        const hasProducts = sd.products && ((Array.isArray(sd.products) && sd.products.length > 0) || (typeof sd.products === 'number' && sd.products > 0));
         if (hasProducts) {
-            try { if (gc?._collectMapObject) gc._collectMapObject(mo); } catch(e) {}
+            try { gc._collectMapObject(mo); } catch(e) {}
             const cur = sched.queue[sched.currentQueueIdx];
             if (cur) {
                 cur.done++;
-                this._log(`📦 ${item.name}: ${cur.name} ${cur.done}/${cur.target || '∞'}`);
+                this._log(`📦 ${item.name}: ${cur.name} ${cur.done}/${cur.target||'∞'}`);
                 if (cur.target > 0 && cur.done >= cur.target) {
                     sched.currentQueueIdx++;
                     if (sched.currentQueueIdx >= sched.queue.length) {
                         sched.running = false;
                         this._log(`🎉 ${item.name}: اكتمل!`);
+                        this._renderMachines(); this._updateBadge(key); return;
+                    }
+                    const next = sched.queue[sched.currentQueueIdx];
+                    if (next && next.productIndex >= 0) {
+                        const curSel = parseInt(sd.selected_raw_material) || 0;
+                        if (curSel !== next.productIndex) {
+                            this._log(`🔄 ${item.name} → ${next.name}`);
+                            try { gw.NetUtils.enqueue('save_selected_material.save_data', { id: item.id, x: item.x, y: item.y, flip: 0, material: next.productIndex }); } catch(e) {}
+                            this._waitingProductChange[key] = next.productIndex;
+                        }
                     }
                 }
             }
-            this._updateOverlayStatus(key);
-            this._renderQueue(key);
-            return;
+            this._updateBadge(key); this._renderMachines(); return;
         }
 
+        // Idle — check if product change needed, then refill
         const rawMats = sd.raw_materials;
         const isIdle = !rawMats || (Array.isArray(rawMats) && rawMats.every(r => !r || (Array.isArray(r) && r.length === 0)));
-
         if (isIdle) {
             const cur = sched.queue[sched.currentQueueIdx];
-            if (cur && cur.productIndex >= 0) {
+            if (!cur) { sched.running = false; this._updateBadge(key); return; }
+
+            if (cur.productIndex >= 0) {
                 const curSel = parseInt(sd.selected_raw_material) || 0;
-                if (curSel !== cur.productIndex && curSel !== cur.productIndex + 1) {
+                if (curSel !== cur.productIndex) {
                     this._log(`🔄 ${item.name} → ${cur.name}`);
                     try { gw.NetUtils.enqueue('save_selected_material.save_data', { id: item.id, x: item.x, y: item.y, flip: 0, material: cur.productIndex }); } catch(e) {}
+                    this._waitingProductChange[key] = cur.productIndex;
                     return;
                 }
             }
+
             try {
-                // _refillMapObject(mo, rawMaterialId, slotIndex, isAuto)
-                // slot is 1-based, getRawMaterialId gets the material for that slot
                 const slot = 1;
                 const matId = mo.getRawMaterialId ? mo.getRawMaterialId(slot) : null;
-                if (matId && gc?._refillMapObject) {
-                    gc._refillMapObject(mo, matId, slot, false);
-                }
+                if (matId && gc._refillMapObject) { gc._refillMapObject(mo, matId, slot, false); this._updateBadge(key); }
             } catch(e) {}
-            this._updateOverlayStatus(key);
         }
     }
 
     _processAnimal(key, item, mo, sd, sched) {
         const gc = unsafeWindow.GF?.gameController;
+        if (!gc) return;
 
         if (sched.targetCycles > 0 && sched.completedCycles >= sched.targetCycles) {
             sched.running = false;
             this._log(`🎉 ${item.name}: ${sched.completedCycles} دورة`);
-            this._updateOverlayStatus(key);
-            return;
+            this._renderAnimals(); this._updateBadge(key); return;
         }
 
-        const hasProducts = (typeof sd.products === 'number' && sd.products > 0) ||
-                           (Array.isArray(sd.products) && sd.products.length > 0);
+        const hasProducts = (typeof sd.products === 'number' && sd.products > 0) || (Array.isArray(sd.products) && sd.products.length > 0);
         if (hasProducts) {
-            try { if (gc?._collectMapObject) gc._collectMapObject(mo); } catch(e) {}
+            try { gc._collectMapObject(mo); } catch(e) {}
             sched.completedCycles++;
             this._log(`📦 ${item.name}: دورة ${sched.completedCycles}`);
-            this._updateOverlayStatus(key);
-            return;
+            this._renderAnimals(); this._updateBadge(key); return;
         }
 
         const needsFeed = sd.raw_materials === 0 || sd.raw_materials === '0' || sd.raw_materials === false;
         if (needsFeed) {
             try {
-                // _feedMapObject(mo, rawMaterialId, isAuto)
                 const matId = mo.raw_material_id;
-                if (matId && gc?._feedMapObject && (!mo.canFeed || mo.canFeed())) {
-                    gc._feedMapObject(mo, matId, false);
-                }
+                if (matId && gc._feedMapObject && (!mo.canFeed || mo.canFeed())) { gc._feedMapObject(mo, matId, false); }
             } catch(e) {}
         }
     }
@@ -7934,23 +7851,19 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
                 if (!mo) return false;
                 const cd = mo.configData || {};
                 const sd = mo.serverData || {};
-                return (cd.id || mo.id) === item.id &&
-                    (parseInt(sd.x || sd.map_x) || 0) === item.x &&
-                    (parseInt(sd.y || sd.map_y) || 0) === item.y;
+                return (cd.id || mo.id) === item.id && (parseInt(sd.x || sd.map_x) || 0) === item.x && (parseInt(sd.y || sd.map_y) || 0) === item.y;
             }) || null;
         } catch(e) { return null; }
     }
 
     _log(msg) {
-        const ts = new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-        this._logLines.unshift(`[${ts}] ${msg}`);
-        if (this._logLines.length > 50) this._logLines.length = 50;
+        const t = new Date().toLocaleTimeString('ar-EG', { hour12: false });
+        this._logLines.unshift(`[${t}] ${msg}`);
+        if (this._logLines.length > 30) this._logLines.length = 30;
         const el = this.container?.querySelector('#sf-ps-log');
-        if (el) el.innerHTML = this._logLines.join('<br>');
+        if (el) el.innerHTML = this._logLines.map(l => `<div>${l}</div>`).join('');
     }
 };
-
-SF.modules.register(new SF.ProductionSchedulerModule());
 
 
 // --- System Initialization ---
