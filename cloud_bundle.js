@@ -7541,7 +7541,11 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
                 };
 
                 if (isMachine && cd.raw_material && cd.product) {
-                    const rawMats = Array.isArray(cd.raw_material[0]) ? cd.raw_material[0] : cd.raw_material;
+                    let rawMats = [];
+                    if (Array.isArray(cd.raw_material)) {
+                        if (Array.isArray(cd.raw_material[0])) rawMats = cd.raw_material.map(r => r[0]);
+                        else rawMats = cd.raw_material;
+                    }
                     const prods = cd.product;
                     if (Array.isArray(rawMats) && Array.isArray(prods)) {
                         for (let i = 0; i < Math.min(rawMats.length, prods.length); i++) {
@@ -7761,11 +7765,25 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
     _recalcQueueIdx(sched) {
         if (!sched || !sched.queue) return;
         let found = false;
+        
+        // Find the item matching this schedule to dynamically fix rawMaterialId if missing
+        const item = this.items.find(i => this.schedules[i.key] === sched);
+
         for (let i = 0; i < sched.queue.length; i++) {
             const q = sched.queue[i];
             
             // Check inventory for raw material
-            const matId = q.rawMaterialId;
+            let matId = q.rawMaterialId;
+            if (Array.isArray(matId)) matId = null; // invalid legacy format
+            
+            if (!matId && item && item.products) {
+                const p = item.products.find(prod => prod.index === q.productIndex);
+                if (p && p.rawMaterialId) {
+                    matId = p.rawMaterialId;
+                    q.rawMaterialId = matId; // Auto-fix legacy schedules
+                }
+            }
+            
             let hasStock = true;
             if (matId) {
                 const invCount = this._getInventoryCount(matId);
