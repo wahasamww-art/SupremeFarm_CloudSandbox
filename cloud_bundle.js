@@ -2013,15 +2013,39 @@ SF.ZeroGasModule = class ZeroGasModule extends SF.ModuleBase {
 
         const fnStr = function() {
             const initZeroGas = function() {
-                if (window.App && window.App.ControllerManager) {
-                    const orig_applyFunc = window.App.ControllerManager.applyFunc;
-                    window.App.ControllerManager.applyFunc = function(controller, funcId, param) {
-                        if (param && typeof param === 'object') {
-                            if (param.hasOwnProperty('automatic')) delete param.automatic;
-                            if (param.hasOwnProperty('automation_turn')) delete param.automation_turn;
-                        }
-                        return orig_applyFunc.apply(this, arguments);
+                if (window.GF && window.GF.loginModel && window.GF.loginModel.AppData && window.TreasureType) {
+                    
+                    // 1. Block costTreasure (visual deduction)
+                    const orig_cost = window.GF.loginModel.costTreasure;
+                    window.GF.loginModel.costTreasure = function(type, amount, ...args) {
+                        try {
+                            if (type === window.TreasureType.OP) {
+                                return; // Block visual OP deduction
+                            }
+                        } catch(e) {}
+                        return orig_cost.apply(this, arguments);
                     };
+                    
+                    // 2. Block validation methods
+                    window.GF.loginModel.isMeetUseOP = function() { return true; };
+                    
+                    const orig_treasureIsMeet = window.GF.loginModel.treasureIsMeet;
+                    window.GF.loginModel.treasureIsMeet = function(type, amount) {
+                        if (type === window.TreasureType.OP) return true;
+                        return orig_treasureIsMeet.apply(this, arguments);
+                    };
+
+                    // 3. Prevent 'AppData.op <= 0' hardcoded checks from failing
+                    try {
+                        let actualOp = window.GF.loginModel.AppData.op || 999;
+                        Object.defineProperty(window.GF.loginModel.AppData, 'op', {
+                            get: function() { return Math.max(actualOp, 999); }, // Always pretend we have at least 999 OP
+                            set: function(val) { actualOp = val; },
+                            configurable: true
+                        });
+                    } catch(e) {}
+
+                    console.log('[SF-ZeroGas] Hooked OP verification & locked AppData.op successfully!');
                 } else {
                     setTimeout(initZeroGas, 2000);
                 }
@@ -2035,7 +2059,7 @@ SF.ZeroGasModule = class ZeroGasModule extends SF.ModuleBase {
                             if (payload) {
                                 const forbiddenKeys = [
                                     'op_cost', 'useOp', 'automatic', 'isAuto', 
-                                    'automation', 'auto', 'gas', 'is_auto', 'automate'
+                                    'automation', 'auto', 'gas', 'is_auto', 'automate', 'is_automatic'
                                 ];
                                 forbiddenKeys.forEach(k => {
                                     if (payload.hasOwnProperty(k)) {
@@ -2046,6 +2070,7 @@ SF.ZeroGasModule = class ZeroGasModule extends SF.ModuleBase {
                         } catch(e) {}
                         return orig_enqueue.apply(this, arguments);
                     };
+                    console.log('[SF-ZeroGas] Hooked NetUtils successfully!');
                 } else {
                     setTimeout(initNetUtils, 2000);
                 }
