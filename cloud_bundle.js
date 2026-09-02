@@ -7963,40 +7963,16 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
                     q.rawMaterialId = matId; // Auto-fix legacy schedules
                 }
             }
-            let hasStock = true;
-            let missingName = null;
             
-            if (item && item.products) {
-                const p = item.products.find(prod => prod.index === q.productIndex);
-                if (p && p.reqMats && p.reqMats.length > 0) {
-                    for (let rm of p.reqMats) {
-                        const invCount = this._getInventoryCount(rm.id);
-                        if (invCount < 1) {
-                            hasStock = false;
-                            missingName = rm.name || this._getItemSourceHint(rm.id);
-                            break;
-                        }
-                    }
-                } else if (matId) {
-                    // Fallback to legacy matId if reqMats not available
-                    const invCount = this._getInventoryCount(matId);
-                    if (invCount < 1) {
-                        hasStock = false;
-                        missingName = this._getItemSourceHint(matId);
-                    }
-                }
-            } else if (matId) {
+            let hasStock = true;
+            if (matId) {
                 const invCount = this._getInventoryCount(matId);
                 if (invCount < 1) {
                     hasStock = false;
-                    missingName = this._getItemSourceHint(matId);
+                    q.error = `ينقصك: ${this._getItemSourceHint(matId)}`;
+                } else {
+                    q.error = null;
                 }
-            }
-
-            if (!hasStock) {
-                q.error = `ينقصك: ${missingName}`;
-            } else {
-                q.error = null;
             }
 
             if (hasStock && (q.target === 0 || q.done < q.target)) {
@@ -8118,11 +8094,10 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
         
         let hideAll = false;
         try {
-            if (gw.GF?.windowManager?.getOpenWindows && gw.GF.windowManager.getOpenWindows().length > 0) hideAll = true;
-            if (gw.App?.PopUpManager?.getPopUps && gw.App.PopUpManager.getPopUps().length > 0) hideAll = true;
-            if (gw.PopUpManager?.getPopUps && gw.PopUpManager.getPopUps().length > 0) hideAll = true;
-            if (gw.App?.ControllerManager?.getControllerModel("WindowManager")?.getOpenWindows && gw.App.ControllerManager.getControllerModel("WindowManager").getOpenWindows().length > 0) hideAll = true;
-            if (gw.GF?.guiManager?.getOpenWindows && gw.GF.guiManager.getOpenWindows().length > 0) hideAll = true;
+            if (gw.GF && gw.GF.windowManager && typeof gw.GF.windowManager.getOpenWindows === 'function') {
+                const wins = gw.GF.windowManager.getOpenWindows();
+                if (wins && wins.length > 0) hideAll = true;
+            }
         } catch(e) {}
 
         const rect = canvas.getBoundingClientRect();
@@ -8226,33 +8201,16 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
                 }
                 
                 try {
-                    const p = item.products.find(prod => prod.index === next.productIndex);
-                    if (p && p.reqMats && p.reqMats.length > 0 && gc._refillMapObject) {
-                        // Multi-slot refill
-                        for (let s = 0; s < p.reqMats.length; s++) {
-                            const mId = p.reqMats[s].id;
-                            const slotNum = s + 1; // slots are usually 1-indexed
-                            try { gc._refillMapObject(mo, mId, slotNum, false); } catch(e) {}
-                        }
-                        this._updateBadge(key);
+                    const slot = 1;
+                    const matId = next.rawMaterialId || (mo.getRawMaterialId ? mo.getRawMaterialId(slot) : null);
+                    if (matId && gc._refillMapObject) { 
+                        gc._refillMapObject(mo, matId, slot, false); 
+                        this._updateBadge(key); 
                         this._log(`▶ بدء ${item.name}: ${next.name}`);
-                    } else {
-                        // Fallback to single slot
-                        const slot = 1;
-                        const matId = next.rawMaterialId || (mo.getRawMaterialId ? mo.getRawMaterialId(slot) : null);
-                        if (matId && gc._refillMapObject) { 
-                            gc._refillMapObject(mo, matId, slot, false); 
-                            this._updateBadge(key); 
-                            this._log(`▶ بدء ${item.name}: ${next.name}`);
-                        } else if (!matId) {
-                            if (gc._clickMapObject) gc._clickMapObject(mo);
-                            this._updateBadge(key);
-                            this._log(`▶ بدء (نقرة) ${item.name}: ${next.name}`);
-                        }
+                    } else if (!matId) {
+                        this._log(`⚠️ تعذر معرفة مكون ${next.name}`);
                     }
-                } catch(e) {
-                    this._log(`⚠️ خطأ في تشغيل ${item.name}`);
-                }
+                } catch(e) {}
             }
         }
     }
