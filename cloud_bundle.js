@@ -8014,9 +8014,13 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
                 }
                 
                 try {
-                    gw.NetUtils.enqueue('execute_batch', { map_unique_id: [mo.map_unique_id], action: 'Manufacture_fillRawMaterial' });
-                    gw.NetUtils.flush();
-                    this._log(`▶ بدء ${item.name}: ${next.name}`);
+                    const slot = 1;
+                    const matId = mo.getRawMaterialId ? mo.getRawMaterialId(slot) : null;
+                    if (matId && gc._refillMapObject) { 
+                        gc._refillMapObject(mo, matId, slot, false); 
+                        this._updateBadge(key); 
+                        this._log(`▶ بدء ${item.name}: ${next.name}`);
+                    }
                 } catch(e) {}
             }
         }
