@@ -19,12 +19,9 @@
 // @run-at       document-end
 // ==/UserScript==
 
-// ===================================================================
-// SupremeFarm Modular - Cloud Distribution Bundle
-// Generated at: 2026-09-02T19:57:41.583Z
-// ===================================================================
-
 var SF = window.SF || {};
+window.SF = SF;
+
 // --- File: core/EventBus.js ---
 // --- core\EventBus.js ---
 window.SF = window.SF || {};
@@ -8002,7 +7999,7 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
                 q.error = null;
             }
 
-            if (q.target === 0 || q.done < q.target) {
+            if (hasStock && (q.target === 0 || q.done < q.target)) {
                 sched.currentQueueIdx = i;
                 found = true;
                 break;
@@ -8126,13 +8123,6 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
             if (gw.PopUpManager?.getPopUps && gw.PopUpManager.getPopUps().length > 0) hideAll = true;
             if (gw.App?.ControllerManager?.getControllerModel("WindowManager")?.getOpenWindows && gw.App.ControllerManager.getControllerModel("WindowManager").getOpenWindows().length > 0) hideAll = true;
             if (gw.GF?.guiManager?.getOpenWindows && gw.GF.guiManager.getOpenWindows().length > 0) hideAll = true;
-            
-            // Robust check via Egret LayerManager
-            if (gw.LayerManager) {
-                if (gw.LayerManager.UI_Popup && gw.LayerManager.UI_Popup.numChildren > 0) hideAll = true;
-                if (gw.LayerManager.UI_Message && gw.LayerManager.UI_Message.numChildren > 0) hideAll = true;
-                if (gw.LayerManager.UI_Tutorial && gw.LayerManager.UI_Tutorial.numChildren > 0) hideAll = true;
-            }
         } catch(e) {}
 
         const rect = canvas.getBoundingClientRect();
@@ -8233,10 +8223,6 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
                     if (mo.selected_raw_material !== undefined) mo.selected_raw_material = next.productIndex;
                     if (typeof mo.setRawMaterial === 'function') { try { mo.setRawMaterial(next.productIndex); } catch(e) {} }
                     try { gw.NetUtils.flush(); } catch(e) {}
-                }
-                if (next.error) {
-                    this._updateBadge(key);
-                    return; // Pause and wait for material
                 }
                 
                 try {
