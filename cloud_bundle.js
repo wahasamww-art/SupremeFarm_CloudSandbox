@@ -21,7 +21,7 @@
 
 // ===================================================================
 // SupremeFarm Modular - Cloud Distribution Bundle
-// Generated at: 2026-09-02T09:23:56.977Z
+// Generated at: 2026-09-02T09:30:33.108Z
 // ===================================================================
 
 var SF = window.SF || {};
@@ -1286,7 +1286,7 @@ SF.TargetProductionModule = class TargetProductionModule extends SF.ModuleBase {
                 const orig_enqueue = window.NetUtils.enqueue;
                 window.NetUtils.enqueue = function(action, payload) {
                     try {
-                        const targetActions = ['feed_animal', 'add_material', 'start_produce', 'produce', 'gear_start'];
+                        const targetActions = ['feed_animal', 'add_material', 'start_produce', 'produce', 'gear_start', 'collect_product', 'harvest'];
                         if (payload && action && targetActions.some(a => action.includes(a))) {
                             let uid = payload.unique_id || payload.machine_id || payload.id;
                             if (uid && self.targets[uid]) {
