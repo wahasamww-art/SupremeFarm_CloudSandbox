@@ -7627,7 +7627,7 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
                 ${running && !sched?.error ? `<div style="color:#2ecc71;font-size:12px;margin-top:6px;background:rgba(46,204,113,0.1);padding:4px;border-radius:4px;text-align:center;">🔄 تم إنجاز: ${done} ${cycles ? `من أصل ${cycles}` : 'دورة'}</div>` : ''}
             </div>`;
         }).join('');
-        this._bindItemEvents(container);
+        
     }
 
     // ═══════════════════════════════════════
@@ -7711,18 +7711,6 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
                     </div>
                 </div>
             </div>`;
-            this._bindItemEvents(container);
-            
-            // Setup smart search for products
-            const prodSearch = container.querySelector('.sf-ps-prod-search');
-            if (prodSearch) {
-                prodSearch.addEventListener('input', (e) => {
-                    const term = e.target.value.toLowerCase();
-                    container.querySelectorAll('.sf-ps-prod-item').forEach(el => {
-                        el.style.display = el.dataset.name.toLowerCase().includes(term) ? 'flex' : 'none';
-                    });
-                });
-            }
             return;
         }
 
