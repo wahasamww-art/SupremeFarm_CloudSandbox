@@ -7965,7 +7965,7 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
                 }
             }
 
-            if (hasStock && (q.target === 0 || q.done < q.target)) {
+            if (q.target === 0 || q.done < q.target) {
                 sched.currentQueueIdx = i;
                 found = true;
                 break;
@@ -8081,6 +8081,17 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
         const gw = unsafeWindow;
         const canvas = document.querySelector('canvas');
         if (!canvas) return;
+        
+        let hideAll = false;
+        try {
+            const isVis = (l) => l && l.numChildren > 0 && (l.$children||[]).some(c => c.visible !== false && c.alpha !== 0);
+            if (gw.LayerManager) {
+                if (isVis(gw.LayerManager.UI_Popup) || isVis(gw.LayerManager.UI_Message) || isVis(gw.LayerManager.UI_Tutorial)) {
+                    hideAll = true;
+                }
+            }
+        } catch(e) {}
+        
         const rect = canvas.getBoundingClientRect();
         let stageW, stageH;
         try { const s = gw.egret.lifecycle.stage; stageW = s.stageWidth; stageH = s.stageHeight; } catch(e) { stageW = canvas.width; stageH = canvas.height; }
@@ -8089,7 +8100,10 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
         Object.keys(this.badges).forEach(key => {
             const badge = this.badges[key];
             const item = this.items.find(i => i.key === key);
-            if (!badge || !item) return;
+            if (!badge || !item || hideAll) {
+                if (badge) badge.style.display = 'none';
+                return;
+            }
             try {
                 const mo = this._getFreshMO(item);
                 if (!mo || typeof mo.localToGlobal !== 'function') { badge.style.display = 'none'; return; }
@@ -8167,6 +8181,10 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
 
             const next = sched.queue[sched.currentQueueIdx];
             if (next && next.productIndex >= 0) {
+                if (next.error) {
+                    this._updateBadge(key);
+                    return; // Pause and wait for material
+                }
                 const curSel = parseInt(sd.selected_raw_material) || 0;
                 if (curSel !== next.productIndex) {
                     this._log(`🔄 ${item.name} إلى ${next.name}`);
