@@ -8226,20 +8226,29 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
                 }
                 
                 try {
-                    const slot = 1;
-                    const matId = next.rawMaterialId || (mo.getRawMaterialId ? mo.getRawMaterialId(slot) : null);
-                    if (matId && gc._refillMapObject) { 
-                        gc._refillMapObject(mo, matId, slot, false); 
-                        this._updateBadge(key); 
-                        this._log(`▶ بدء ${item.name}: ${next.name}`);
-                        
-                        // Fallback: sometimes machines need a click to fully start if they require multiple materials
-                        setTimeout(() => { if (mo.serverData && (mo.serverData.raw_materials === 0 || mo.serverData.raw_materials === '0')) { try { gc._clickMapObject(mo); } catch(e) {} } }, 500);
-                    } else {
-                        // Machine might not need a specific raw material or uses a different start mechanism
-                        if (gc._clickMapObject) gc._clickMapObject(mo);
+                    const p = item.products.find(prod => prod.index === next.productIndex);
+                    if (p && p.reqMats && p.reqMats.length > 0 && gc._refillMapObject) {
+                        // Multi-slot refill
+                        for (let s = 0; s < p.reqMats.length; s++) {
+                            const mId = p.reqMats[s].id;
+                            const slotNum = s + 1; // slots are usually 1-indexed
+                            try { gc._refillMapObject(mo, mId, slotNum, false); } catch(e) {}
+                        }
                         this._updateBadge(key);
-                        this._log(`▶ بدء (نقرة) ${item.name}: ${next.name}`);
+                        this._log(`▶ بدء ${item.name}: ${next.name}`);
+                    } else {
+                        // Fallback to single slot
+                        const slot = 1;
+                        const matId = next.rawMaterialId || (mo.getRawMaterialId ? mo.getRawMaterialId(slot) : null);
+                        if (matId && gc._refillMapObject) { 
+                            gc._refillMapObject(mo, matId, slot, false); 
+                            this._updateBadge(key); 
+                            this._log(`▶ بدء ${item.name}: ${next.name}`);
+                        } else if (!matId) {
+                            if (gc._clickMapObject) gc._clickMapObject(mo);
+                            this._updateBadge(key);
+                            this._log(`▶ بدء (نقرة) ${item.name}: ${next.name}`);
+                        }
                     }
                 } catch(e) {
                     this._log(`⚠️ خطأ في تشغيل ${item.name}`);
