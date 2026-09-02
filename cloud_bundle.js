@@ -7377,6 +7377,14 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
         this.activeMachineKey = null;
     }
 
+    _normalizeArabic(text) {
+        if (!text) return '';
+        return text.replace(/[أإآ]/g, 'ا')
+                   .replace(/ة/g, 'ه')
+                   .replace(/ى/g, 'ي')
+                   .replace(/[\u064B-\u065F]/g, '');
+    }
+
     _saveSchedules() {
         if (!window.SF || !window.SF.StorageManager) return;
         window.SF.StorageManager.set('sf-production-schedules', this.schedules);
@@ -7432,16 +7440,6 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
                 const parent = tgt.closest('.sf-ps-prod-item');
                 const qtyInput = parent.querySelector('.sf-ps-prod-qty');
                 this._addToQueue(tgt.dataset.key, idx, parseInt(qtyInput.value) || 0);
-            }
-        });
-        
-        c.addEventListener('input', (e) => {
-            const tgt = e.target;
-            if (tgt.classList.contains('sf-ps-prod-search')) {
-                const term = tgt.value.toLowerCase();
-                c.querySelectorAll('.sf-ps-prod-item').forEach(el => {
-                    el.style.display = el.dataset.name.toLowerCase().includes(term) ? 'flex' : 'none';
-                });
             }
         });
 
@@ -7564,25 +7562,31 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
                     key: newKey, type: objType,
                     id: cd.id || mo.id,
                     name: cd.name_ar || cd.name || `${objType} ${cd.id || mo.id}`,
-                    x, y, mo, products: []
+                    x, y, mo, products: [],
+                    rawMaterialId: isAnimal ? (Array.isArray(cd.raw_material) ? cd.raw_material[0] : cd.raw_material) : null
                 };
 
                 if (isMachine && cd.raw_material && cd.product) {
-                    let rawMats = [];
-                    if (Array.isArray(cd.raw_material)) {
-                        if (Array.isArray(cd.raw_material[0])) rawMats = cd.raw_material.map(r => r[0]);
-                        else rawMats = cd.raw_material;
+                    let rawMats = cd.raw_material;
+                    if (typeof rawMats === 'string') { try { rawMats = JSON.parse(rawMats); } catch(e) { rawMats = rawMats.split(','); } }
+                    if (!Array.isArray(rawMats)) rawMats = [rawMats];
+                    
+                    // The first element is the array of dynamic materials (if the machine has multiple products)
+                    if (Array.isArray(rawMats[0])) {
+                        rawMats = rawMats[0];
                     }
-                    const prods = cd.product;
-                    if (Array.isArray(rawMats) && Array.isArray(prods)) {
-                        for (let i = 0; i < Math.min(rawMats.length, prods.length); i++) {
-                            let pName = '';
-                            try {
-                                const pc = gw.Config?.Store_GetItemData(prods[i]);
-                                pName = pc ? (pc.name_ar || pc.name) : '';
-                            } catch(e) {}
-                            item.products.push({ index: i, rawMaterialId: rawMats[i], productId: prods[i], name: pName || `منتج #${i+1}` });
-                        }
+
+                    let prods = cd.product;
+                    if (typeof prods === 'string') { try { prods = JSON.parse(prods); } catch(e) { prods = prods.split(','); } }
+                    if (!Array.isArray(prods)) prods = [prods];
+
+                    for (let i = 0; i < Math.min(rawMats.length, prods.length); i++) {
+                        let pName = '';
+                        try {
+                            const pc = gw.Config?.Store_GetItemData(prods[i]);
+                            pName = pc ? (pc.name_ar || pc.name) : '';
+                        } catch(e) {}
+                        item.products.push({ index: i, rawMaterialId: parseInt(rawMats[i]) || rawMats[i], productId: parseInt(prods[i]) || prods[i], name: pName || `منتج #${i+1}` });
                     }
                 }
                 this.items.push(item);
@@ -7611,9 +7615,14 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
             const running = sched?.running;
             const cycles = sched?.targetCycles || 0;
             const done = sched?.completedCycles || 0;
+            const invCount = item.rawMaterialId ? this._getInventoryCount(item.rawMaterialId) : 0;
+            const countColor = invCount > 0 ? '#2ecc71' : '#e74c3c';
             return `<div class="sf-ps-item" data-key="${item.key}" data-name="${item.name}" style="background:rgba(230,126,34,0.1);border:1px solid #e67e2244;border-radius:8px;padding:8px 12px;margin-bottom:6px;box-shadow:0 2px 4px rgba(0,0,0,0.2);">
                 <div style="display:flex;align-items:center;justify-content:space-between;">
-                    <span style="color:#e67e22;font-size:14px;font-weight:bold;display:flex;align-items:center;gap:6px;">🐄 <span>${item.name}</span></span>
+                    <div style="display:flex;flex-direction:column;gap:4px;">
+                        <span style="color:#e67e22;font-size:14px;font-weight:bold;display:flex;align-items:center;gap:6px;">🐄 <span>${item.name}</span></span>
+                        ${item.rawMaterialId ? `<span style="font-size:11px;color:${countColor};">في الحظيرة: ${invCount}</span>` : ''}
+                    </div>
                     <div style="display:flex;align-items:center;gap:6px;">
                         <span style="color:#aaa;font-size:12px;">دورات:</span>
                         <input type="number" min="0" value="${cycles}" class="sf-ps-cycles" data-key="${item.key}" style="width:45px;background:#1a1a2e;color:#fff;border:1px solid #555;border-radius:4px;text-align:center;font-size:13px;padding:4px;outline:none;" title="0 = مستمر بدون توقف">
@@ -7699,18 +7708,36 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
                     <div style="font-size:13px;color:#bbb;margin-bottom:6px;">إضافة منتجات للجدولة:</div>
                     <input type="text" class="sf-ps-prod-search" placeholder="🔍 بحث ذكي عن المنتجات..." style="width:100%;background:#1a1a2e;color:#fff;border:1px solid #555;border-radius:6px;padding:8px;font-size:13px;margin-bottom:8px;box-sizing:border-box;">
                     <div class="sf-ps-prod-list" style="max-height:150px;overflow-y:auto;padding-right:4px;">
-                        ${item.products.map((p, i) => `
-                        <div class="sf-ps-prod-item" data-name="${p.name}" style="display:flex;align-items:center;justify-content:space-between;background:rgba(255,255,255,0.05);padding:6px 8px;border-radius:4px;margin-bottom:4px;">
-                            <span style="font-size:13px;color:#ecf0f1;flex:1;">${p.name}</span>
+                        ${item.products.map((p, i) => {
+                            const pNameSafe = (p.name || '').replace(/"/g, '&quot;');
+                            const invCount = p.rawMaterialId ? this._getInventoryCount(p.rawMaterialId) : 0;
+                            const countColor = invCount > 0 ? '#2ecc71' : '#e74c3c';
+                            return `
+                        <div class="sf-ps-prod-item" data-name="${pNameSafe}" style="display:flex;align-items:center;justify-content:space-between;background:rgba(255,255,255,0.05);padding:6px 8px;border-radius:4px;margin-bottom:4px;">
+                            <div style="display:flex;flex-direction:column;flex:1;">
+                                <span style="font-size:13px;color:#ecf0f1;">${p.name}</span>
+                                <span style="font-size:11px;color:${countColor};">في الحظيرة: ${invCount}</span>
+                            </div>
                             <div style="display:flex;align-items:center;gap:6px;">
                                 <input type="number" min="0" value="1" class="sf-ps-prod-qty" data-idx="${i}" style="width:45px;background:#111;color:#fff;border:1px solid #555;border-radius:4px;text-align:center;font-size:13px;padding:4px;outline:none;" title="0 = بلا حدود">
                                 <button class="sf-ps-add-prod-btn" data-key="${item.key}" data-idx="${i}" style="background:#8e44ad;border:none;color:#fff;padding:4px 12px;border-radius:4px;cursor:pointer;font-size:12px;font-weight:bold;">+ إضافة</button>
                             </div>
                         </div>
-                        `).join('')}
+                        `;
+                        }).join('')}
                     </div>
                 </div>
             </div>`;
+            const searchInput = container.querySelector('.sf-ps-prod-search');
+            if (searchInput) {
+                searchInput.addEventListener('input', (e) => {
+                    const term = this._normalizeArabic(e.target.value.toLowerCase());
+                    container.querySelectorAll('.sf-ps-prod-item').forEach(el => {
+                        const itemName = this._normalizeArabic((el.dataset.name || el.getAttribute('data-name') || '').toLowerCase());
+                        el.style.display = itemName.includes(term) ? 'flex' : 'none';
+                    });
+                });
+            }
             return;
         }
 
@@ -7746,9 +7773,10 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
         const listId = type === 'animal' ? '#sf-ps-animals-list' : '#sf-ps-machines-list';
         const container = this.container?.querySelector(listId);
         if (!container) return;
-        const q = query.trim().toLowerCase();
+        const q = this._normalizeArabic(query.trim().toLowerCase());
         container.querySelectorAll('.sf-ps-item').forEach(el => {
-            el.style.display = !q || (el.dataset.name || '').toLowerCase().includes(q) ? '' : 'none';
+            const itemName = this._normalizeArabic((el.dataset.name || '').toLowerCase());
+            el.style.display = !q || itemName.includes(q) ? '' : 'none';
         });
     }
 
@@ -7969,7 +7997,7 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
         if (!gc) return;
 
         // Collect if products ready
-        const hasProducts = sd.products && ((Array.isArray(sd.products) && sd.products.length > 0) || (typeof sd.products === 'number' && sd.products > 0));
+        const hasProducts = sd.products && ((Array.isArray(sd.products) && sd.products.length > 0) || parseInt(sd.products) > 0);
         if (hasProducts) {
             try { gc._collectMapObject(mo); } catch(e) {}
             
@@ -7993,7 +8021,7 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
 
         // Idle — check if product change needed, then refill
         const rawMats = sd.raw_materials;
-        const isIdle = !rawMats || (Array.isArray(rawMats) && rawMats.every(r => !r || (Array.isArray(r) && r.length === 0)));
+        const isIdle = !rawMats || rawMats === '0' || rawMats === 0 || (Array.isArray(rawMats) && rawMats.every(r => !r || (Array.isArray(r) && r.length === 0)));
         if (isIdle) {
             this._recalcQueueIdx(sched);
             if (sched.currentQueueIdx >= sched.queue.length) {
@@ -8015,11 +8043,13 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
                 
                 try {
                     const slot = 1;
-                    const matId = mo.getRawMaterialId ? mo.getRawMaterialId(slot) : null;
+                    const matId = next.rawMaterialId || (mo.getRawMaterialId ? mo.getRawMaterialId(slot) : null);
                     if (matId && gc._refillMapObject) { 
                         gc._refillMapObject(mo, matId, slot, false); 
                         this._updateBadge(key); 
                         this._log(`▶ بدء ${item.name}: ${next.name}`);
+                    } else if (!matId) {
+                        this._log(`⚠️ تعذر معرفة مكون ${next.name}`);
                     }
                 } catch(e) {}
             }
@@ -8036,7 +8066,7 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
             this._renderAnimals(); this._updateBadge(key); return;
         }
 
-        const hasProducts = (typeof sd.products === 'number' && sd.products > 0) || (Array.isArray(sd.products) && sd.products.length > 0);
+        const hasProducts = sd.products && ((Array.isArray(sd.products) && sd.products.length > 0) || parseInt(sd.products) > 0);
         if (hasProducts) {
             try { gc._collectMapObject(mo); } catch(e) {}
             sched.completedCycles++;
