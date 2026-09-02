@@ -7592,7 +7592,8 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
                         }
                     </div>
                 </div>
-                ${running ? `<div style="color:#2ecc71;font-size:12px;margin-top:6px;background:rgba(46,204,113,0.1);padding:4px;border-radius:4px;text-align:center;">🔄 تم إنجاز: ${done} ${cycles ? `من أصل ${cycles}` : 'دورة'}</div>` : ''}
+                ${sched?.error ? `<div style="color:#e74c3c;font-size:12px;margin-top:6px;background:rgba(231,76,60,0.1);padding:4px;border-radius:4px;text-align:center;">⚠️ ${sched.error}</div>` : ''}
+                ${running && !sched?.error ? `<div style="color:#2ecc71;font-size:12px;margin-top:6px;background:rgba(46,204,113,0.1);padding:4px;border-radius:4px;text-align:center;">🔄 تم إنجاز: ${done} ${cycles ? `من أصل ${cycles}` : 'دورة'}</div>` : ''}
             </div>`;
         }).join('');
         this._bindItemEvents(container);
@@ -7621,10 +7622,11 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
                     ${queue.map((q, idx) => {
                         const isCurrent = sched?.currentQueueIdx === idx;
                         const isDone = q.target > 0 && q.done >= q.target;
-                        const color = isDone ? '#27ae60' : (isCurrent && running ? '#f39c12' : '#aaa');
-                        const icon = isDone ? '✅' : (isCurrent && running ? '▶' : '⏳');
+                        const color = q.error ? '#e74c3c' : (isDone ? '#27ae60' : (isCurrent && running ? '#f39c12' : '#aaa'));
+                        const icon = q.error ? '⚠️' : (isDone ? '✅' : (isCurrent && running ? '▶' : '⏳'));
+                        const errorMsg = q.error ? `<br><span style="color:#e74c3c;font-size:11px;">${q.error}</span>` : '';
                         return `<div style="display:flex;align-items:center;justify-content:space-between;font-size:13px;color:${color};padding:3px 0;border-bottom:${idx<queue.length-1?'1px solid #222':'none'};">
-                            <span>${icon} <strong>${q.name}</strong> ×${q.target||'∞'} <span style="font-size:11px;opacity:0.8;">${isDone ? '' : `(${q.done} من ${q.target||'∞'})`}</span></span>
+                            <span>${icon} <strong>${q.name}</strong> ×${q.target||'∞'} <span style="font-size:11px;opacity:0.8;">${isDone ? '' : `(${q.done} من ${q.target||'∞'})`}</span>${errorMsg}</span>
                             <div style="display:flex;gap:4px;">
                                 ${idx > 0 ? `<button class="sf-ps-move-btn" data-dir="-1" data-key="${item.key}" data-idx="${idx}" style="background:#2980b9;border:none;color:#fff;cursor:pointer;font-size:10px;padding:2px 6px;border-radius:4px;font-weight:bold;">▲</button>` : ''}
                                 ${idx < queue.length - 1 ? `<button class="sf-ps-move-btn" data-dir="1" data-key="${item.key}" data-idx="${idx}" style="background:#2980b9;border:none;color:#fff;cursor:pointer;font-size:10px;padding:2px 6px;border-radius:4px;font-weight:bold;">▼</button>` : ''}
@@ -7761,7 +7763,21 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
         let found = false;
         for (let i = 0; i < sched.queue.length; i++) {
             const q = sched.queue[i];
-            if (q.target === 0 || q.done < q.target) {
+            
+            // Check inventory for raw material
+            const matId = q.rawMaterialId;
+            let hasStock = true;
+            if (matId) {
+                const invCount = this._getInventoryCount(matId);
+                if (invCount < 1) {
+                    hasStock = false;
+                    q.error = `ينقصك: ${this._getItemSourceHint(matId)}`;
+                } else {
+                    q.error = null;
+                }
+            }
+
+            if (hasStock && (q.target === 0 || q.done < q.target)) {
                 sched.currentQueueIdx = i;
                 found = true;
                 break;
@@ -8011,6 +8027,16 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
         if (needsFeed) {
             try {
                 const matId = mo.raw_material_id || mo.configData?.raw_material;
+                if (matId) {
+                    const invCount = this._getInventoryCount(matId);
+                    if (invCount < 1) {
+                        sched.error = `ينقصك: ${this._getItemSourceHint(matId)}`;
+                        this._updateBadge(key);
+                        return; // Do not feed if we don't have food
+                    } else {
+                        sched.error = null;
+                    }
+                }
                 if (matId && gc._feedMapObject && (!mo.canFeed || mo.canFeed())) { gc._feedMapObject(mo, matId, false); }
             } catch(e) {}
         }
@@ -8019,6 +8045,42 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
     // ═══════════════════════════════════════
     // HELPERS
     // ═══════════════════════════════════════
+    _getInventoryCount(id) {
+        if (!id) return 0;
+        const gw = unsafeWindow;
+        try {
+            const bag = gw.App?.ControllerManager?.getControllerModel("Bag");
+            if (bag && typeof bag.getItemCount === 'function') {
+                const c = bag.getItemCount(id);
+                if (c !== undefined && c !== null) return parseInt(c);
+            }
+        } catch(e) {}
+        
+        try {
+            const sd = gw.GF?.loginModel?.AppData?.items;
+            if (sd) {
+                if (Array.isArray(sd)) {
+                    const it = sd.find(i => String(i.id) === String(id));
+                    if (it) return parseInt(it.count) || 0;
+                } else if (sd[id]) {
+                    return parseInt(sd[id].count || sd[id]) || 0;
+                }
+            }
+        } catch(e) {}
+        return Infinity;
+    }
+
+    _getItemSourceHint(id) {
+        try {
+            const gw = unsafeWindow;
+            const cd = gw.Config?.Store_GetItemData ? gw.Config.Store_GetItemData(id) : null;
+            if (cd) {
+                return cd.name || cd.localeName || 'مجهول';
+            }
+        } catch(e) {}
+        return 'مكون مطلوب';
+    }
+
     _getFreshMO(item) {
         try {
             const dict = unsafeWindow.GameGridData?.uidDictionary;
