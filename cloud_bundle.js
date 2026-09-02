@@ -7418,6 +7418,33 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
         c.querySelector('#sf-ps-stop-all')?.addEventListener('click', () => this._stopAll());
         c.querySelector('#sf-ps-search-animal')?.addEventListener('input', (e) => this._filterList('animal', e.target.value));
         c.querySelector('#sf-ps-search-machine')?.addEventListener('input', (e) => this._filterList('machine', e.target.value));
+        
+        c.addEventListener('click', (e) => {
+            const tgt = e.target;
+            if (tgt.classList.contains('sf-ps-start-btn')) { this._startOne(tgt.dataset.key); if (this.activeMachineKey === tgt.dataset.key) this._renderMachines(); }
+            else if (tgt.classList.contains('sf-ps-stop-btn')) { this._stopOne(tgt.dataset.key); if (this.activeMachineKey === tgt.dataset.key) this._renderMachines(); }
+            else if (tgt.classList.contains('sf-ps-rmq')) { this._removeFromQueue(tgt.dataset.key, parseInt(tgt.dataset.idx)); if (this.activeMachineKey === tgt.dataset.key) this._renderMachines(); }
+            else if (tgt.classList.contains('sf-ps-move-btn')) { this._moveQueueItem(tgt.dataset.key, parseInt(tgt.dataset.idx), parseInt(tgt.dataset.dir)); }
+            else if (tgt.classList.contains('sf-ps-manage-btn')) { this.activeMachineKey = tgt.dataset.key; this._renderMachines(); }
+            else if (tgt.classList.contains('sf-ps-back-btn')) { this.activeMachineKey = null; this._renderMachines(); }
+            else if (tgt.classList.contains('sf-ps-add-prod-btn')) {
+                const idx = parseInt(tgt.dataset.idx);
+                const parent = tgt.closest('.sf-ps-prod-item');
+                const qtyInput = parent.querySelector('.sf-ps-prod-qty');
+                this._addToQueue(tgt.dataset.key, idx, parseInt(qtyInput.value) || 0);
+            }
+        });
+        
+        c.addEventListener('input', (e) => {
+            const tgt = e.target;
+            if (tgt.classList.contains('sf-ps-prod-search')) {
+                const term = tgt.value.toLowerCase();
+                c.querySelectorAll('.sf-ps-prod-item').forEach(el => {
+                    el.style.display = el.dataset.name.toLowerCase().includes(term) ? 'flex' : 'none';
+                });
+            }
+        });
+
         this._scheduleAutoInit();
     }
 
@@ -7641,19 +7668,33 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
                 </div>`;
             }
 
+            const existingView = container.querySelector('.sf-ps-manage-view');
+            if (existingView && existingView.dataset.key === item.key) {
+                // Update only buttons and queue to preserve search input focus
+                const btnsDiv = existingView.querySelector('.sf-ps-manage-btns');
+                if (btnsDiv) {
+                    btnsDiv.innerHTML = running
+                        ? `<button class="sf-ps-stop-btn" data-key="${item.key}" style="width:100%;background:#c0392b;border:none;color:#fff;padding:8px;border-radius:6px;cursor:pointer;font-size:14px;font-weight:bold;">⏹ إيقاف الآلة</button>`
+                        : `<button class="sf-ps-start-btn" data-key="${item.key}" style="width:100%;background:#27ae60;border:none;color:#fff;padding:8px;border-radius:6px;cursor:pointer;font-size:14px;font-weight:bold;">▶ تشغيل الآلة</button>`;
+                }
+                const queueDiv = existingView.querySelector('.sf-ps-manage-queue');
+                if (queueDiv) queueDiv.innerHTML = queueHtml;
+                return;
+            }
+
             container.innerHTML = `
-            <div style="background:rgba(52,152,219,0.05);border:1px solid #3498db44;border-radius:8px;padding:12px;box-shadow:inset 0 0 10px rgba(0,0,0,0.5);">
+            <div class="sf-ps-manage-view" data-key="${item.key}" style="background:rgba(52,152,219,0.05);border:1px solid #3498db44;border-radius:8px;padding:12px;box-shadow:inset 0 0 10px rgba(0,0,0,0.5);">
                 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;border-bottom:1px solid #333;padding-bottom:8px;">
                     <button class="sf-ps-back-btn" style="background:#444;border:none;color:#fff;padding:6px 12px;border-radius:4px;cursor:pointer;font-size:13px;font-weight:bold;">⬅️ عودة للقائمة</button>
                     <span style="color:#3498db;font-size:16px;font-weight:bold;">⚙ ${item.name}</span>
                 </div>
-                <div style="display:flex;justify-content:center;margin-bottom:10px;">
+                <div class="sf-ps-manage-btns" style="display:flex;justify-content:center;margin-bottom:10px;">
                     ${running
                         ? `<button class="sf-ps-stop-btn" data-key="${item.key}" style="width:100%;background:#c0392b;border:none;color:#fff;padding:8px;border-radius:6px;cursor:pointer;font-size:14px;font-weight:bold;">⏹ إيقاف الآلة</button>`
                         : `<button class="sf-ps-start-btn" data-key="${item.key}" style="width:100%;background:#27ae60;border:none;color:#fff;padding:8px;border-radius:6px;cursor:pointer;font-size:14px;font-weight:bold;">▶ تشغيل الآلة</button>`
                     }
                 </div>
-                ${queueHtml}
+                <div class="sf-ps-manage-queue">${queueHtml}</div>
                 <div style="margin-top:12px;border-top:1px solid #333;padding-top:10px;">
                     <div style="font-size:13px;color:#bbb;margin-bottom:6px;">إضافة منتجات للجدولة:</div>
                     <input type="text" class="sf-ps-prod-search" placeholder="🔍 بحث ذكي عن المنتجات..." style="width:100%;background:#1a1a2e;color:#fff;border:1px solid #555;border-radius:6px;padding:8px;font-size:13px;margin-bottom:8px;box-sizing:border-box;">
@@ -7711,31 +7752,6 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
                 </div>
             </div>`;
         }).join('');
-        this._bindItemEvents(container);
-    }
-
-    _bindItemEvents(container) {
-        container.querySelectorAll('.sf-ps-start-btn').forEach(btn => btn.addEventListener('click', () => { this._startOne(btn.dataset.key); if (this.activeMachineKey === btn.dataset.key) this._renderMachines(); }));
-        container.querySelectorAll('.sf-ps-stop-btn').forEach(btn => btn.addEventListener('click', () => { this._stopOne(btn.dataset.key); if (this.activeMachineKey === btn.dataset.key) this._renderMachines(); }));
-        container.querySelectorAll('.sf-ps-rmq').forEach(btn => btn.addEventListener('click', () => { this._removeFromQueue(btn.dataset.key, parseInt(btn.dataset.idx)); if (this.activeMachineKey === btn.dataset.key) this._renderMachines(); }));
-        container.querySelectorAll('.sf-ps-move-btn').forEach(btn => btn.addEventListener('click', () => { this._moveQueueItem(btn.dataset.key, parseInt(btn.dataset.idx), parseInt(btn.dataset.dir)); }));
-        
-        container.querySelectorAll('.sf-ps-manage-btn').forEach(btn => btn.addEventListener('click', () => {
-            this.activeMachineKey = btn.dataset.key;
-            this._renderMachines();
-        }));
-        container.querySelectorAll('.sf-ps-back-btn').forEach(btn => btn.addEventListener('click', () => {
-            this.activeMachineKey = null;
-            this._renderMachines();
-        }));
-        container.querySelectorAll('.sf-ps-add-prod-btn').forEach(btn => btn.addEventListener('click', () => {
-            const idx = parseInt(btn.dataset.idx);
-            const parent = btn.closest('.sf-ps-prod-item');
-            const qtyInput = parent.querySelector('.sf-ps-prod-qty');
-            const qty = parseInt(qtyInput.value) || 0; // 0 = infinite
-            this._addToQueue(btn.dataset.key, idx, qty);
-        }));
-    }
 
     _filterList(type, query) {
         const listId = type === 'animal' ? '#sf-ps-animals-list' : '#sf-ps-machines-list';
@@ -8061,6 +8077,14 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
         if (!id) return 0;
         let count = 0;
         const gw = unsafeWindow;
+        
+        // Translate Seed/Tree ID to Crop/Fruit ID (Barn ID)
+        try {
+            let rc = gw.Config?.Store_GetItemData ? gw.Config.Store_GetItemData(id) : null;
+            if (rc && (rc.product || rc.product_id)) {
+                id = rc.product || rc.product_id;
+            }
+        } catch(e) {}
         
         // 1. Game's built-in getStorageQtyById (safest)
         try {
