@@ -21,7 +21,7 @@
 
 // ===================================================================
 // SupremeFarm Modular - Cloud Distribution Bundle
-// Generated at: 2026-09-02T09:08:45.640Z
+// Generated at: 2026-09-02T09:23:56.977Z
 // ===================================================================
 
 var SF = window.SF || {};
@@ -1178,6 +1178,160 @@ SF.ZeroGasModule = class ZeroGasModule extends SF.ModuleBase {
 
 // Register the module
 new SF.ZeroGasModule();
+
+
+// --- File: features/TargetProductionModule.js ---
+// --- features\TargetProductionModule.js ---
+window.SF = window.SF || {};
+
+SF.TargetProductionModule = class TargetProductionModule extends SF.ModuleBase {
+    constructor() {
+        super('target_production', 'الإنتاج الذكي (محدد)', '🎯');
+        this.isActive = false;
+        this.targets = {}; // map_unique_id -> { count, name, objRef }
+        this.injectHooks();
+    }
+
+    render() {
+        return `
+            <div class="sf-card">
+                <h3 style="color:#2ecc71; text-align:center; margin-bottom:5px;">🎯 نظام الإنتاج بالعدد المحدد</h3>
+                <p style="font-size:12px; color:#aaa; text-align:center; margin-bottom:10px;">
+                    هذا النظام مدمج تلقائياً مع أزرار اللعبة الأصلية.<br>
+                    قم بتشغيل أي آلة أو حيوان من خلال الترس الأصفر في مزرعتك، وسيسألك النظام عن العدد الذي تريده.
+                </p>
+                <div id="sf-target-prod-list" style="font-size:12px; color:#ddd; background:rgba(0,0,0,0.4); padding:10px; border-radius:6px; max-height: 200px; overflow-y:auto;">
+                    <i>لا توجد آلات تعمل بعدد محدد حالياً...</i>
+                </div>
+            </div>
+        `;
+    }
+
+    bindEvents() {
+        this.updateUI();
+    }
+
+    updateUI() {
+        const listContainer = document.getElementById('sf-target-prod-list');
+        if (!listContainer) return;
+        
+        let html = '';
+        for (let uid in this.targets) {
+            let data = this.targets[uid];
+            html += `<div style="display:flex; justify-content:space-between; margin-bottom:5px; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:5px;">
+                        <span>⚙️ ${data.name}</span>
+                        <span style="color:#f1c40f; font-weight:bold;">متبقي: ${data.count}</span>
+                     </div>`;
+        }
+        
+        if (html === '') {
+            listContainer.innerHTML = '<i>لا توجد آلات تعمل بعدد محدد حالياً...</i>';
+        } else {
+            listContainer.innerHTML = html;
+        }
+    }
+
+    injectHooks() {
+        if (this.isActive) return;
+        this.isActive = true;
+        const self = this;
+
+        // 1. Hooking UI Toggle Click (Gear Icon)
+        const initToggleHook = function() {
+            if (window.App && window.App.ControllerManager) {
+                const orig_applyFunc = window.App.ControllerManager.applyFunc;
+                window.App.ControllerManager.applyFunc = function(controller, funcId, param) {
+                    if (funcId === window.GameConst.MAPOBJECT_TOGGLE_AUTOMATION && param) {
+                        let objName = param.configData ? (param.configData.name_ar || param.configData.name) : "الآلة";
+                        let uid = param.map_unique_id || param.unique_id || param.id;
+
+                        // إذا كانت الآلة مغلقة وسيتم تشغيلها الآن
+                        if (!param.automatic) {
+                            let userInput = prompt(`🎯 التشغيل الذكي لـ [${objName}]\n\nكم عدد المنتجات المطلوبة؟\n(اتركه فارغاً واضغط موافق للتشغيل المستمر اللانهائي)`, "");
+                            
+                            if (userInput !== null && userInput.trim() !== "") {
+                                let count = parseInt(userInput);
+                                if (!isNaN(count) && count > 0) {
+                                    self.targets[uid] = {
+                                        count: count,
+                                        name: objName,
+                                        objRef: param
+                                    };
+                                    if (window.SF.ui && window.SF.ui.showToast) {
+                                        window.SF.ui.showToast(`✅ تم برمجة ${objName} لإنتاج ${count} عنصر.`, 'success');
+                                    }
+                                    self.updateUI();
+                                }
+                            }
+                        } else {
+                            // إذا أوقف المستخدم الآلة بيده، نمسحها من العداد
+                            if (self.targets[uid]) {
+                                delete self.targets[uid];
+                                self.updateUI();
+                            }
+                        }
+                    }
+                    return orig_applyFunc.apply(this, arguments);
+                };
+                console.log("✅ [TargetProduction] Hooked MAPOBJECT_TOGGLE_AUTOMATION");
+            } else {
+                setTimeout(initToggleHook, 2000);
+            }
+        };
+        setTimeout(initToggleHook, 4000); // Delayed slightly to ensure ZeroGas runs first
+
+        // 2. Hooking AMF network payload to decrement count on each production
+        const initNetHook = function() {
+            if (window.NetUtils && window.NetUtils.enqueue) {
+                const orig_enqueue = window.NetUtils.enqueue;
+                window.NetUtils.enqueue = function(action, payload) {
+                    try {
+                        const targetActions = ['feed_animal', 'add_material', 'start_produce', 'produce', 'gear_start'];
+                        if (payload && action && targetActions.some(a => action.includes(a))) {
+                            let uid = payload.unique_id || payload.machine_id || payload.id;
+                            if (uid && self.targets[uid]) {
+                                // الخصم من العداد
+                                self.targets[uid].count--;
+                                self.updateUI();
+                                
+                                // إذا انتهى العدد
+                                if (self.targets[uid].count <= 0) {
+                                    let objName = self.targets[uid].name;
+                                    let mapObj = self.targets[uid].objRef;
+                                    
+                                    // إيقاف الترس برمجياً وبصرياً
+                                    if (mapObj) {
+                                        mapObj.automatic = false;
+                                        if (typeof mapObj.automation_turn === 'function') {
+                                            mapObj.automation_turn();
+                                        }
+                                    }
+                                    
+                                    delete self.targets[uid];
+                                    self.updateUI();
+                                    
+                                    if (window.SF.ui && window.SF.ui.showToast) {
+                                        window.SF.ui.showToast(`🛑 اكتمل العدد المطلوب لـ [${objName}] وتوقفت تلقائياً!`, 'warning');
+                                    }
+                                }
+                            }
+                        }
+                    } catch(e) {
+                        console.error("[TargetProduction] Error in net hook:", e);
+                    }
+                    return orig_enqueue.apply(this, arguments);
+                };
+                console.log("✅ [TargetProduction] Hooked NetUtils.enqueue");
+            } else {
+                setTimeout(initNetHook, 2000);
+            }
+        };
+        setTimeout(initNetHook, 4500);
+    }
+};
+
+window.SF.modules = window.SF.modules || [];
+window.SF.modules.push(new SF.TargetProductionModule());
 
 
 // --- File: features/AutoFarmModule.js ---
