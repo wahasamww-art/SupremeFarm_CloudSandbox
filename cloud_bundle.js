@@ -7374,6 +7374,7 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
         this._autoInitTimer = null;
         this._autoInitAttempts = 0;
         this._waitingProductChange = {};
+        this.activeMachineKey = null;
     }
 
     _saveSchedules() {
@@ -7601,18 +7602,18 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
     _renderMachines() {
         const container = this.container?.querySelector('#sf-ps-machines-list');
         if (!container) return;
-        const machines = this.items.filter(i => i.type === 'Machine');
-        if (machines.length === 0) { container.innerHTML = '<div style="color:#777;font-size:13px;text-align:center;padding:10px;">لا يوجد آلات على الأرض</div>'; return; }
 
-        container.innerHTML = machines.map(item => {
+        if (this.activeMachineKey) {
+            const item = this.items.find(i => i.key === this.activeMachineKey);
+            if (!item) { this.activeMachineKey = null; return this._renderMachines(); }
             const sched = this.schedules[item.key];
             const running = sched?.running;
             const queue = sched?.queue || [];
-            let opts = item.products.map((p, i) => `<option value="${i}">${p.name}</option>`).join('');
 
             let queueHtml = '';
             if (queue.length > 0) {
                 queueHtml = `<div style="margin-top:8px;padding:6px;background:rgba(0,0,0,0.3);border-radius:6px;border:1px solid #333;">
+                    <div style="font-size:12px;color:#aaa;margin-bottom:4px;">طابور الإنتاج الحالي:</div>
                     ${queue.map((q, idx) => {
                         const isCurrent = sched?.currentQueueIdx === idx;
                         const isDone = q.target > 0 && q.done >= q.target;
@@ -7626,33 +7627,100 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
                 </div>`;
             }
 
+            container.innerHTML = `
+            <div style="background:rgba(52,152,219,0.05);border:1px solid #3498db44;border-radius:8px;padding:12px;box-shadow:inset 0 0 10px rgba(0,0,0,0.5);">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;border-bottom:1px solid #333;padding-bottom:8px;">
+                    <button class="sf-ps-back-btn" style="background:#444;border:none;color:#fff;padding:6px 12px;border-radius:4px;cursor:pointer;font-size:13px;font-weight:bold;">⬅️ عودة للقائمة</button>
+                    <span style="color:#3498db;font-size:16px;font-weight:bold;">⚙ ${item.name}</span>
+                </div>
+                <div style="display:flex;justify-content:center;margin-bottom:10px;">
+                    ${running
+                        ? `<button class="sf-ps-stop-btn" data-key="${item.key}" style="width:100%;background:#c0392b;border:none;color:#fff;padding:8px;border-radius:6px;cursor:pointer;font-size:14px;font-weight:bold;">⏹ إيقاف الآلة</button>`
+                        : `<button class="sf-ps-start-btn" data-key="${item.key}" style="width:100%;background:#27ae60;border:none;color:#fff;padding:8px;border-radius:6px;cursor:pointer;font-size:14px;font-weight:bold;">▶ تشغيل الآلة</button>`
+                    }
+                </div>
+                ${queueHtml}
+                ${!running ? `
+                <div style="margin-top:12px;border-top:1px solid #333;padding-top:10px;">
+                    <div style="font-size:13px;color:#bbb;margin-bottom:6px;">إضافة منتجات للجدولة:</div>
+                    <input type="text" class="sf-ps-prod-search" placeholder="🔍 بحث ذكي عن المنتجات..." style="width:100%;background:#1a1a2e;color:#fff;border:1px solid #555;border-radius:6px;padding:8px;font-size:13px;margin-bottom:8px;box-sizing:border-box;">
+                    <div class="sf-ps-prod-list" style="max-height:150px;overflow-y:auto;padding-right:4px;">
+                        ${item.products.map((p, i) => `
+                        <div class="sf-ps-prod-item" data-name="${p.name}" style="display:flex;align-items:center;justify-content:space-between;background:rgba(255,255,255,0.05);padding:6px 8px;border-radius:4px;margin-bottom:4px;">
+                            <span style="font-size:13px;color:#ecf0f1;flex:1;">${p.name}</span>
+                            <div style="display:flex;align-items:center;gap:6px;">
+                                <input type="number" min="0" value="1" class="sf-ps-prod-qty" data-idx="${i}" style="width:45px;background:#111;color:#fff;border:1px solid #555;border-radius:4px;text-align:center;font-size:13px;padding:4px;outline:none;" title="0 = بلا حدود">
+                                <button class="sf-ps-add-prod-btn" data-key="${item.key}" data-idx="${i}" style="background:#8e44ad;border:none;color:#fff;padding:4px 12px;border-radius:4px;cursor:pointer;font-size:12px;font-weight:bold;">+ إضافة</button>
+                            </div>
+                        </div>
+                        `).join('')}
+                    </div>
+                </div>
+                ` : `<div style="text-align:center;color:#e74c3c;font-size:12px;margin-top:10px;">قم بإيقاف الآلة لتتمكن من إضافة منتجات جديدة</div>`}
+            </div>`;
+            this._bindItemEvents(container);
+            
+            // Setup smart search for products
+            const prodSearch = container.querySelector('.sf-ps-prod-search');
+            if (prodSearch) {
+                prodSearch.addEventListener('input', (e) => {
+                    const term = e.target.value.toLowerCase();
+                    container.querySelectorAll('.sf-ps-prod-item').forEach(el => {
+                        el.style.display = el.dataset.name.toLowerCase().includes(term) ? 'flex' : 'none';
+                    });
+                });
+            }
+            return;
+        }
+
+        // List View
+        const machines = this.items.filter(i => i.type === 'Machine');
+        if (machines.length === 0) { container.innerHTML = '<div style="color:#777;font-size:13px;text-align:center;padding:10px;">لا يوجد آلات على الأرض</div>'; return; }
+
+        container.innerHTML = machines.map(item => {
+            const sched = this.schedules[item.key];
+            const running = sched?.running;
+            const queue = sched?.queue || [];
+            
             return `<div class="sf-ps-item" data-key="${item.key}" data-name="${item.name}" style="background:rgba(52,152,219,0.1);border:1px solid #3498db44;border-radius:8px;padding:8px 12px;margin-bottom:6px;box-shadow:0 2px 4px rgba(0,0,0,0.2);">
-                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
-                    <span style="color:#3498db;font-size:14px;font-weight:bold;display:flex;align-items:center;gap:6px;">⚙ <span>${item.name}</span></span>
-                    <div style="display:flex;gap:6px;">
+                <div style="display:flex;align-items:center;justify-content:space-between;">
+                    <div style="display:flex;flex-direction:column;gap:4px;">
+                        <span style="color:#3498db;font-size:14px;font-weight:bold;display:flex;align-items:center;gap:6px;">⚙ <span>${item.name}</span></span>
+                        <span style="font-size:11px;color:#aaa;">${queue.length > 0 ? `الجدولة: ${queue.length} منتجات` : 'لا يوجد منتجات مجدولة'}</span>
+                    </div>
+                    <div style="display:flex;gap:6px;align-items:center;">
+                        <button class="sf-ps-manage-btn" data-key="${item.key}" style="background:#34495e;border:1px solid #2c3e50;color:#fff;padding:6px 12px;border-radius:4px;cursor:pointer;font-size:12px;font-weight:bold;">⚙️ إدارة</button>
                         ${running
-                            ? `<button class="sf-ps-stop-btn" data-key="${item.key}" style="background:#c0392b;border:none;color:#fff;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:12px;font-weight:bold;box-shadow:0 1px 3px rgba(0,0,0,0.4);">⏹ إيقاف</button>`
-                            : `<button class="sf-ps-start-btn" data-key="${item.key}" style="background:#27ae60;border:none;color:#fff;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:12px;font-weight:bold;box-shadow:0 1px 3px rgba(0,0,0,0.4);">▶ تشغيل</button>`
+                            ? `<button class="sf-ps-stop-btn" data-key="${item.key}" style="background:#c0392b;border:none;color:#fff;padding:6px 10px;border-radius:4px;cursor:pointer;font-size:12px;font-weight:bold;">⏹</button>`
+                            : `<button class="sf-ps-start-btn" data-key="${item.key}" style="background:#27ae60;border:none;color:#fff;padding:6px 10px;border-radius:4px;cursor:pointer;font-size:12px;font-weight:bold;">▶</button>`
                         }
                     </div>
                 </div>
-                ${!running ? `<div style="display:flex;gap:6px;align-items:center;background:rgba(0,0,0,0.2);padding:6px;border-radius:6px;">
-                    <select class="sf-ps-product" data-key="${item.key}" style="flex:1;background:#1a1a2e;color:#fff;border:1px solid #555;border-radius:4px;padding:4px;font-size:13px;outline:none;">${opts}</select>
-                    <span style="color:#888;font-weight:bold;font-size:14px;">×</span>
-                    <input type="number" min="1" value="1" class="sf-ps-qty" data-key="${item.key}" style="width:45px;background:#1a1a2e;color:#fff;border:1px solid #555;border-radius:4px;text-align:center;font-size:13px;padding:4px;outline:none;">
-                    <button class="sf-ps-add-btn" data-key="${item.key}" style="background:#8e44ad;border:none;color:#fff;padding:4px 12px;border-radius:4px;cursor:pointer;font-size:13px;font-weight:bold;box-shadow:0 1px 3px rgba(0,0,0,0.4);">+ إضافة</button>
-                </div>` : ''}
-                ${queueHtml}
             </div>`;
         }).join('');
         this._bindItemEvents(container);
     }
 
     _bindItemEvents(container) {
-        container.querySelectorAll('.sf-ps-start-btn').forEach(btn => btn.addEventListener('click', () => this._startOne(btn.dataset.key)));
-        container.querySelectorAll('.sf-ps-stop-btn').forEach(btn => btn.addEventListener('click', () => this._stopOne(btn.dataset.key)));
-        container.querySelectorAll('.sf-ps-add-btn').forEach(btn => btn.addEventListener('click', () => this._addToQueue(btn.dataset.key)));
-        container.querySelectorAll('.sf-ps-rmq').forEach(btn => btn.addEventListener('click', () => this._removeFromQueue(btn.dataset.key, parseInt(btn.dataset.idx))));
+        container.querySelectorAll('.sf-ps-start-btn').forEach(btn => btn.addEventListener('click', () => { this._startOne(btn.dataset.key); if (this.activeMachineKey === btn.dataset.key) this._renderMachines(); }));
+        container.querySelectorAll('.sf-ps-stop-btn').forEach(btn => btn.addEventListener('click', () => { this._stopOne(btn.dataset.key); if (this.activeMachineKey === btn.dataset.key) this._renderMachines(); }));
+        container.querySelectorAll('.sf-ps-rmq').forEach(btn => btn.addEventListener('click', () => { this._removeFromQueue(btn.dataset.key, parseInt(btn.dataset.idx)); if (this.activeMachineKey === btn.dataset.key) this._renderMachines(); }));
+        
+        container.querySelectorAll('.sf-ps-manage-btn').forEach(btn => btn.addEventListener('click', () => {
+            this.activeMachineKey = btn.dataset.key;
+            this._renderMachines();
+        }));
+        container.querySelectorAll('.sf-ps-back-btn').forEach(btn => btn.addEventListener('click', () => {
+            this.activeMachineKey = null;
+            this._renderMachines();
+        }));
+        container.querySelectorAll('.sf-ps-add-prod-btn').forEach(btn => btn.addEventListener('click', () => {
+            const idx = parseInt(btn.dataset.idx);
+            const parent = btn.closest('.sf-ps-prod-item');
+            const qtyInput = parent.querySelector('.sf-ps-prod-qty');
+            const qty = parseInt(qtyInput.value) || 0; // 0 = infinite
+            this._addToQueue(btn.dataset.key, idx, qty);
+        }));
     }
 
     _filterList(type, query) {
@@ -7668,20 +7736,16 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
     // ═══════════════════════════════════════
     // SCHEDULE MANAGEMENT
     // ═══════════════════════════════════════
-    _addToQueue(key) {
+    _addToQueue(key, prodIdx, qty) {
         const item = this.items.find(i => i.key === key);
-        if (!item) return;
-        const c = this.container;
-        const pidx = parseInt(c?.querySelector(`.sf-ps-product[data-key="${key}"]`)?.value) || 0;
-        const qty = parseInt(c?.querySelector(`.sf-ps-qty[data-key="${key}"]`)?.value) || 1;
-        if (!item.products[pidx]) return;
+        if (!item || !item.products[prodIdx]) return;
 
         if (!this.schedules[key]) this.schedules[key] = { queue: [], currentQueueIdx: 0, running: false, completedCycles: 0, targetCycles: 0 };
-        const p = item.products[pidx];
-        this.schedules[key].queue.push({ productIndex: pidx, rawMaterialId: p.rawMaterialId, productId: p.productId, name: p.name, target: qty, done: 0 });
-        this._log(`➕ ${item.name}: ${p.name} ×${qty}`);
+        const p = item.products[prodIdx];
+        this.schedules[key].queue.push({ productIndex: prodIdx, rawMaterialId: p.rawMaterialId, productId: p.productId, name: p.name, target: qty, done: 0 });
+        this._log(`➕ ${item.name}: ${p.name} ×${qty || '∞'}`);
         this._saveSchedules();
-        this._renderMachines();
+        if (this.activeMachineKey === key) this._renderMachines();
     }
 
     _removeFromQueue(key, idx) {
