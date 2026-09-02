@@ -21,12 +21,10 @@
 
 // ===================================================================
 // SupremeFarm Modular - Cloud Distribution Bundle
-// Generated at: 2026-09-01T12:43:35.225122+00:00Z
+// Generated at: 2026-09-02T10:10:27.371Z
 // ===================================================================
 
 var SF = window.SF || {};
-window.SF = SF;
-
 // --- File: core/EventBus.js ---
 ﻿// --- core\EventBus.js ---
 window.SF = window.SF || {};
@@ -53,8 +51,6 @@ SF.EventBus = class EventBus {
 
 // Initialize global EventBus
 SF.bus = new SF.EventBus();
-
-
 
 
 
@@ -89,8 +85,6 @@ SF.ModuleBase = class ModuleBase {
     // Called when the tab becomes active, useful for refreshing data
     update() {}
 };
-
-
 
 
 
@@ -133,8 +127,6 @@ SF.ModuleManager = class ModuleManager {
 
 // Global instance
 SF.modules = new SF.ModuleManager();
-
-
 
 
 
@@ -200,8 +192,6 @@ SF.StorageManager = class StorageManager {
         });
     }
 };
-
-
 
 
 
@@ -343,8 +333,6 @@ SF.netMonitor.install();
 
 
 
-
-
 // --- File: network/GameDataExtractor.js ---
 ﻿// --- network\GameDataExtractor.js ---
 window.SF = window.SF || {};
@@ -382,8 +370,6 @@ SF.GameDataExtractor = class GameDataExtractor {
 
 // Auto-initialize
 SF.dataExtractor = new SF.GameDataExtractor();
-
-
 
 
 
@@ -646,8 +632,6 @@ SF.Styles = `
 
 
 
-
-
 // --- File: ui/SplashScreen.js ---
 // --- ui\SplashScreen.js ---
 window.SF = window.SF || {};
@@ -838,8 +822,6 @@ SF.SplashScreen = class SplashScreen {
 };
 
 
-
-
 // --- File: ui/UIManager.js ---
 ﻿// --- ui\UIManager.js ---
 window.SF = window.SF || {};
@@ -986,8 +968,6 @@ SF.UIManager = class UIManager {
         }
     }
 };
-
-
 
 
 
@@ -1999,8 +1979,6 @@ SF.modules.register(new SF.AutoFarmModule());
 
 
 
-
-
 // --- File: features/ZeroGasModule.js ---
 // --- features\ZeroGasModule.js ---
 window.SF = window.SF || {};
@@ -2168,38 +2146,16 @@ SF.ZeroGasModule = class ZeroGasModule extends SF.ModuleBase {
                     window.NetUtils.enqueue = function(action, payload) {
                         try {
                             if (payload) {
-                                if ('op_cost' in payload) delete payload.op_cost;
-                                if ('use_op' in payload) delete payload.use_op;
-
-                                if ('automatic' in payload || 'isAuto' in payload) {
-                                    delete payload.automatic;
-                                    delete payload.isAuto;
-                                    console.log('[SF-ZeroGas] Network Intercept: Completely removed automatic keys for ' + action);
-                                }
-
-                                // --- Time-Spoofing for Animals & Machines (Bypass Server Timer Natively) ---
-                                const startActions = ['feed_animal', 'add_material', 'start_produce', 'gear_start', 'produce', 'plant', 'add_feed'];
-                                if (startActions.some(a => action.includes(a))) {
-                                    console.log('[SF-ZeroGas] Intercepting start action: ' + action + '. Payload:', JSON.stringify(payload));
-                                    const uid = payload.unique_id || payload.machine_id || payload.id;
-                                    if (uid) {
-                                        const layer = window.GF && window.GF.gameController && window.GF.gameController.gameView && window.GF.gameController.gameView.objLayer;
-                                        if (layer && layer.$children) {
-                                            const obj = layer.$children.find(c => c && (c.map_unique_id == uid || c.unique_id == uid || c.id == uid));
-                                            if (obj && obj._data && obj._data.config_data && obj._data.config_data.collect_in) {
-                                                const originalTime = obj._data.config_data.collect_in / (obj.animals || 1);
-                                                const reductionPercent = 0.30;
-                                                const diff = Math.floor(originalTime * reductionPercent);
-                                                
-                                                if (diff > 0) {
-                                                    const curTime = 0.001 * egret.getTimer();
-                                                    payload.opTime = curTime - diff - 2;
-                                                    console.log('[SF-ZeroGas] Spoofed opTime for ' + (obj._data.config_data.kind || 'object') + ': -' + diff + 's. New opTime=' + payload.opTime);
-                                                }
-                                            }
-                                        }
+                                // فلتر هجومي شامل: يمسح أي متغير يدل على التشغيل التلقائي من السيرفر
+                                const banList = ['op_cost', 'use_op', 'useOp', 'automatic', 'isAuto', 'is_auto', 'isAutomatic', 'autoOperate', 'auto_operate'];
+                                banList.forEach(key => {
+                                    if (key in payload) {
+                                        delete payload[key];
+                                        console.log('[SF-ZeroGas] Network Intercept: Removed forbidden key (' + key + ') for ' + action);
                                     }
-                                }
+                                });
+
+
                             }
                         } catch(e) {
                             console.error("[SF-ZeroGas] Intercept Error:", e);
@@ -2217,18 +2173,29 @@ SF.ZeroGasModule = class ZeroGasModule extends SF.ModuleBase {
             injectNetUtils();
         };
 
-        const script = document.createElement('script');
-        script.textContent = '(' + fnStr + ')();';
-        (document.head || document.documentElement).appendChild(script);
-        script.remove();
-        console.log('[SupremeFarm Modular] Injected ZeroGas Ghost Protocol');
+        const tryInject = () => {
+            const headOrDoc = document.head || document.documentElement;
+            if (headOrDoc) {
+                const script = document.createElement('script');
+                script.textContent = '(' + fnStr + ')();';
+                headOrDoc.appendChild(script);
+                script.remove();
+                console.log('[SupremeFarm Modular] Injected ZeroGas Ghost Protocol');
+            } else {
+                window.addEventListener('DOMContentLoaded', tryInject, { once: true });
+            }
+        };
+
+        if (document.readyState === 'loading') {
+            window.addEventListener('DOMContentLoaded', tryInject, { once: true });
+        } else {
+            tryInject();
+        }
     }
 };
 
 // Register the module
 new SF.ZeroGasModule();
-
-
 
 
 // --- File: features/CropinatorModule.js ---
@@ -2643,20 +2610,30 @@ SF.CropinatorModule = class CropinatorModule extends SF.ModuleBase {
             setTimeout(initZeroGasMachine, 3000);
         };
 
-        const script = document.createElement('script');
-        script.textContent = '(' + fnStr + ')();';
-        (document.head || document.documentElement).appendChild(script);
-        script.remove();
-        console.log('[SupremeFarm Modular] Injected Cropinator Fix Protocol');
+        const tryInject = () => {
+            const headOrDoc = document.head || document.documentElement;
+            if (headOrDoc) {
+                const script = document.createElement('script');
+                script.textContent = '(' + fnStr + ')();';
+                headOrDoc.appendChild(script);
+                script.remove();
+                console.log('[SupremeFarm Modular] Injected Cropinator Ghost Protocol');
+            } else {
+                window.addEventListener('DOMContentLoaded', tryInject, { once: true });
+            }
+        };
+
+        if (document.readyState === 'loading') {
+            window.addEventListener('DOMContentLoaded', tryInject, { once: true });
+        } else {
+            tryInject();
+        }
     }
 };
 
 // Register the module
+
 new SF.CropinatorModule();
-
-
-
-
 
 
 // --- File: config/MachineBuilderAccounts.js ---
@@ -2704,9 +2681,8 @@ window.MachineBuilderAccounts = `
 `;
 
 
-
-
 // --- File: features/MachineBuilderModule.js ---
+// --- features/MachineBuilderModule.js ---
 window.SF = window.SF || {};
 
 SF.MachineBuilderModule = class MachineBuilderModule extends SF.ModuleBase {
@@ -3640,7 +3616,6 @@ SF.MachineBuilderModule = class MachineBuilderModule extends SF.ModuleBase {
     }
 };
 SF.modules.register(new SF.MachineBuilderModule());
-
 
 
 // --- File: features/AlbumTrackerModule.js ---
@@ -4577,8 +4552,6 @@ SF.AlbumTrackerModule = class AlbumTrackerModule extends SF.ModuleBase {
 SF.modules.register(new SF.AlbumTrackerModule());
 
 
-
-
 // --- File: features/MineModule.js ---
 window.SF = window.SF || {};
 
@@ -4790,8 +4763,6 @@ SF.MineModule = class MineModule extends SF.ModuleBase {
 console.log('[SF-MineModule] ✅ MineModule class defined. Registering now...');
 SF.modules.register(new SF.MineModule());
 console.log('[SF-MineModule] ✅ Registration complete. Total modules:', SF.modules.getModules().length);
-
-
 
 
 // --- File: features/BattlePassModule.js ---
@@ -5068,8 +5039,6 @@ SF.BattlePassModule = class BattlePassModule extends SF.ModuleBase {
 };
 
 new SF.BattlePassModule();
-
-
 
 
 // --- File: features/IslandPointBuyerModule.js ---
@@ -5357,8 +5326,6 @@ SF.IslandPointBuyerModule = class IslandPointBuyerModule extends SF.ModuleBase {
 SF.modules.register(new SF.IslandPointBuyerModule());
 
 
-
-
 // --- File: features/StoreFlipFixModule.js ---
 // --- features\StoreFlipFixModule.js ---
 window.SF = window.SF || {};
@@ -5478,8 +5445,6 @@ SF.StoreFlipFixModule = class StoreFlipFixModule extends SF.ModuleBase {
 
 // Register the module
 new SF.StoreFlipFixModule();
-
-
 
 
 // --- File: features/StoreRevealModule.js ---
@@ -5697,8 +5662,6 @@ SF.StoreRevealModule = class StoreRevealModule extends SF.ModuleBase {
 
 // Register the module
 new SF.StoreRevealModule();
-
-
 
 
 // --- File: features/AutoMegaHarvestModule.js ---
@@ -6395,8 +6358,6 @@ if (window.SF && window.SF.modules) {
 }
 
 
-
-
 // --- File: features/SessionExtractorModule.js ---
 window.SF = window.SF || {};
 
@@ -6552,8 +6513,6 @@ SF.SessionExtractorModule = class SessionExtractorModule extends SF.ModuleBase {
 if (window.SF && window.SF.modules) {
     window.SF.modules.register(new SF.SessionExtractorModule());
 }
-
-
 
 
 // --- File: features/MonopolySmartHelper.js ---
@@ -6975,8 +6934,6 @@ if (window.SF && window.SF.modules) {
     // Start Interceptor
     setupInterceptor();
 })();
-
-
 
 
 // --- File: features/MiniSlot2AutoModule.js ---
@@ -7472,8 +7429,6 @@ if (window.SF && window.SF.modules) {
     console.log('[MiniSlot2Auto] ✅ جاهز للعمل. الشريط سيظهر تلقائياً داخل اللوحة فقط.');
 
 })();
-
-
 
 
 // --- System Initialization ---
