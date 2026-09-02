@@ -143,7 +143,7 @@ SF.StorageManager = class StorageManager {
                 let val = GM_getValue(key);
                 return val ? JSON.parse(val) : defaultVal;
             }
-            let val = localStorage.getItem(key);
+            let val = SF.StorageManager.get(key);
             return val ? JSON.parse(val) : defaultVal;
         } catch(e) { return defaultVal; }
     }
@@ -152,7 +152,7 @@ SF.StorageManager = class StorageManager {
         if (typeof GM_setValue !== 'undefined') {
             GM_setValue(key, JSON.stringify(val));
         } else {
-            localStorage.setItem(key, JSON.stringify(val));
+            SF.StorageManager.set(key, JSON.stringify(val));
         }
     }
 
@@ -823,7 +823,7 @@ SF.SplashScreen = class SplashScreen {
 
 
 // --- File: ui/UIManager.js ---
-// --- ui\UIManager.js ---
+// --- ui/UIManager.js ---
 window.SF = window.SF || {};
 
 SF.UIManager = class UIManager {
@@ -845,6 +845,16 @@ SF.UIManager = class UIManager {
             // Hide panel initially so it doesn't clutter the screen
             this.app.classList.add('sf-hidden');
         }
+        
+        // Bulletproof: Force UI to stay in DOM
+        setInterval(() => {
+            if (this.topBar && document.body && !document.body.contains(this.topBar)) {
+                document.body.appendChild(this.topBar);
+            }
+            if (this.app && document.body && !document.body.contains(this.app)) {
+                document.body.appendChild(this.app);
+            }
+        }, 2000);
     }
 
     injectCSS() {
@@ -2695,7 +2705,7 @@ SF.MachineBuilderModule = class MachineBuilderModule extends SF.ModuleBase {
 
     function getSavedState() {
         try {
-            let state = localStorage.getItem(STATE_KEY);
+            let state = SF.StorageManager.get(STATE_KEY);
             let gameDay = getGameDayString();
             if (state) {
                 let parsed = JSON.parse(state);
@@ -2706,7 +2716,7 @@ SF.MachineBuilderModule = class MachineBuilderModule extends SF.ModuleBase {
     }
 
     function saveState(index) {
-        localStorage.setItem(STATE_KEY, JSON.stringify({
+        SF.StorageManager.set(STATE_KEY, JSON.stringify({
             date: getGameDayString(),
             index: index
         }));
@@ -5599,7 +5609,7 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
     constructor() {
         super('autoharvest_pro', 'الحصاد السريع', '🚜');
         this.isRunning = false;
-        this.blacklist = JSON.parse(localStorage.getItem('sf_mega_harvest_blacklist') || '{}');
+        this.blacklist = JSON.parse(SF.StorageManager.get('sf_mega_harvest_blacklist') || '{}');
         this.clearBlacklistIfNeeded();
         
         // Settings
@@ -5617,7 +5627,7 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
     }
 
     clearBlacklistIfNeeded() {
-        let lastCleared = localStorage.getItem('sf_mega_harvest_last_clear');
+        let lastCleared = SF.StorageManager.get('sf_mega_harvest_last_clear');
         let now = new Date();
         let targetClearTime = new Date();
         targetClearTime.setHours(7, 0, 0, 0);
@@ -5629,13 +5639,13 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
         if (!lastCleared || new Date(parseInt(lastCleared)) < targetClearTime) {
             this.blacklist = {};
             this.saveBlacklist();
-            localStorage.setItem('sf_mega_harvest_last_clear', Date.now().toString());
+            SF.StorageManager.set('sf_mega_harvest_last_clear', Date.now().toString());
             console.log("[AutoMegaHarvest] تم تصفير القائمة السوداء تلقائياً (تجاوزت الساعة 7 صباحاً).");
         }
     }
 
     saveBlacklist() {
-        localStorage.setItem('sf_mega_harvest_blacklist', JSON.stringify(this.blacklist));
+        SF.StorageManager.set('sf_mega_harvest_blacklist', JSON.stringify(this.blacklist));
     }
 
     getStore() {
@@ -8412,22 +8422,14 @@ SF.modules.register(new SF.ProductionSchedulerModule());
     console.log('[SupremeFarm Modular] Initializing System V2.0 (Cloud Bundle)...');
     const initApp = () => {
         if(!window.SF) window.SF = {};
-        
-        // Wait for game to be ready before injecting UI so it doesn't get wiped by game initialization
-        const checkReady = setInterval(() => {
-            const gw = window.unsafeWindow || window;
-            if (gw.egret || document.querySelector('canvas')) {
-                clearInterval(checkReady);
-                if (!window.SF.ui) {
-                    try {
-                        window.SF.ui = new window.SF.UIManager();
-                        console.log('[SupremeFarm] UI Initialized Successfully');
-                    } catch(e) {
-                        console.error('[SupremeFarm] UI Initialization Failed:', e);
-                    }
-                }
-            }
-        }, 1000);
+        if(!window.SF.SplashScreen) {
+            window.SF.ui = new window.SF.UIManager();
+            return;
+        }
+        const splash = new window.SF.SplashScreen();
+        splash.show(() => {
+            window.SF.ui = new window.SF.UIManager();
+        });
     };
 
     if (document.readyState === 'complete' || document.readyState === 'interactive') {
