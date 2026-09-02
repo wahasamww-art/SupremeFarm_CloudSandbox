@@ -21,7 +21,7 @@
 
 // ===================================================================
 // SupremeFarm Modular - Cloud Distribution Bundle
-// Generated at: 2026-09-02T09:39:12.161Z
+// Generated at: 2026-09-02T09:42:54.551Z
 // ===================================================================
 
 var SF = window.SF || {};
@@ -1181,33 +1181,32 @@ new SF.ZeroGasModule();
 
 
 // --- File: features/TargetProductionModule.js ---
-// --- features\TargetProductionModule.js ---
 window.SF = window.SF || {};
 
 SF.TargetProductionModule = class TargetProductionModule extends SF.ModuleBase {
     constructor() {
-        super('target_production', 'الإنتاج الذكي (محدد)', '🎯');
+        super('target_production', 'Target Production (Smart)', '🎯');
         this.isActive = false;
-        this.injectHooks();
+        // Delay injection to ensure DOM is ready and prevent crash
+        setTimeout(() => this.injectHooks(), 1000);
     }
 
     render() {
         return `
             <div class="sf-card">
-                <h3 style="color:#2ecc71; text-align:center; margin-bottom:5px;">🎯 نظام الإنتاج بالعدد المحدد</h3>
+                <h3 style="color:#2ecc71; text-align:center; margin-bottom:5px;">🎯 Smart Target Production</h3>
                 <p style="font-size:12px; color:#aaa; text-align:center; margin-bottom:10px;">
-                    هذا النظام مدمج تلقائياً مع أزرار اللعبة الأصلية.<br>
-                    قم بتشغيل أي آلة أو حيوان من خلال الترس الأصفر في مزرعتك، وسيسألك النظام عن العدد الذي تريده.
+                    This system is integrated natively with the game's Auto-Operate buttons.<br>
+                    Click the Yellow Gear icon on any machine, and it will ask you for a target count.
                 </p>
                 <div id="sf-target-prod-list" style="font-size:12px; color:#ddd; background:rgba(0,0,0,0.4); padding:10px; border-radius:6px; max-height: 200px; overflow-y:auto;">
-                    <i>لا توجد آلات تعمل بعدد محدد حالياً...</i>
+                    <i>No machines are currently running with a target count...</i>
                 </div>
             </div>
         `;
     }
 
     bindEvents() {
-        // تحديث الواجهة بشكل مستمر بقراءة البيانات من الذاكرة الحقيقية للعبة
         setInterval(() => {
             const listContainer = document.getElementById('sf-target-prod-list');
             if (!listContainer) return;
@@ -1226,12 +1225,12 @@ SF.TargetProductionModule = class TargetProductionModule extends SF.ModuleBase {
                 let data = targets[uid];
                 html += `<div style="display:flex; justify-content:space-between; margin-bottom:5px; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:5px;">
                             <span>⚙️ ${data.name}</span>
-                            <span style="color:#f1c40f; font-weight:bold;">متبقي: ${data.count}</span>
+                            <span style="color:#f1c40f; font-weight:bold;">Remaining: ${data.count}</span>
                          </div>`;
             }
             
             if (html === '') {
-                listContainer.innerHTML = '<i>لا توجد آلات تعمل بعدد محدد حالياً...</i>';
+                listContainer.innerHTML = '<i>No machines are currently running with a target count...</i>';
             } else {
                 listContainer.innerHTML = html;
             }
@@ -1242,7 +1241,6 @@ SF.TargetProductionModule = class TargetProductionModule extends SF.ModuleBase {
         if (this.isActive) return;
         this.isActive = true;
 
-        // وضع الكود بالكامل داخل دالة سيتم حقنها في الصفحة الأصلية
         const fnStr = function() {
             window._sf_target_prod = window._sf_target_prod || {};
 
@@ -1251,12 +1249,11 @@ SF.TargetProductionModule = class TargetProductionModule extends SF.ModuleBase {
                     const orig_applyFunc = window.App.ControllerManager.applyFunc;
                     window.App.ControllerManager.applyFunc = function(controller, funcId, param) {
                         if (funcId === window.GameConst.MAPOBJECT_TOGGLE_AUTOMATION && param) {
-                            let objName = param.configData ? (param.configData.name_ar || param.configData.name) : "الآلة";
+                            let objName = param.configData ? (param.configData.name_ar || param.configData.name) : "Machine";
                             let uid = param.map_unique_id || param.unique_id || param.id;
 
-                            // إذا كانت الآلة متوقفة وسيتم تشغيلها الآن
                             if (!param.automatic) {
-                                let userInput = prompt(`🎯 التشغيل الذكي لـ [${objName}]\n\nكم عدد المنتجات المطلوبة؟\n(اتركه فارغاً واضغط موافق للتشغيل المستمر اللانهائي)`, "");
+                                let userInput = prompt("🎯 Smart Target Production for [" + objName + "]\n\nHow many products do you want to make?\n(Leave empty and click OK for infinite operation)", "");
                                 
                                 if (userInput !== null && userInput.trim() !== "") {
                                     let count = parseInt(userInput);
@@ -1265,7 +1262,6 @@ SF.TargetProductionModule = class TargetProductionModule extends SF.ModuleBase {
                                     }
                                 }
                             } else {
-                                // إزالة العداد إذا أوقف المستخدم الآلة بيده
                                 if (window._sf_target_prod[uid]) {
                                     delete window._sf_target_prod[uid];
                                 }
@@ -1291,11 +1287,9 @@ SF.TargetProductionModule = class TargetProductionModule extends SF.ModuleBase {
                                 if (uid && window._sf_target_prod[uid]) {
                                     window._sf_target_prod[uid].count--;
                                     
-                                    // عند اكتمال العدد
                                     if (window._sf_target_prod[uid].count <= 0) {
                                         delete window._sf_target_prod[uid];
                                         
-                                        // البحث عن الآلة في الخريطة لإيقافها
                                         const layer = window.GF && window.GF.gameController && window.GF.gameController.gameView && window.GF.gameController.gameView.objLayer;
                                         if (layer && layer.$children) {
                                             const obj = layer.$children.find(c => c && (c.map_unique_id == uid || c.unique_id == uid || c.id == uid));
@@ -1320,11 +1314,18 @@ SF.TargetProductionModule = class TargetProductionModule extends SF.ModuleBase {
             setTimeout(initNetHook, 3500);
         };
 
-        // حقن الكود مباشرة في رأس الصفحة كسكربت نقي
-        const script = document.createElement('script');
-        script.textContent = '(' + fnStr + ')();';
-        (document.head || document.documentElement).appendChild(script);
-        script.remove();
+        const tryInject = () => {
+            const headOrDoc = document.head || document.documentElement;
+            if (headOrDoc) {
+                const script = document.createElement('script');
+                script.textContent = '(' + fnStr + ')();';
+                headOrDoc.appendChild(script);
+                script.remove();
+            } else {
+                setTimeout(tryInject, 100);
+            }
+        };
+        tryInject();
     }
 };
 
