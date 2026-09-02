@@ -8067,7 +8067,7 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
                 }
             }
         } catch(e) {}
-        return Infinity;
+        return 0; // If it's not found in the bag or AppData, the user doesn't have it!
     }
 
     _getItemSourceHint(id) {
