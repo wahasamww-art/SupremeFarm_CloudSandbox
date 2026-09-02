@@ -21,12 +21,10 @@
 
 // ===================================================================
 // SupremeFarm Modular - Cloud Distribution Bundle
-// Generated at: 2026-09-02T07:16:31.347Z
+// Generated at: 2026-09-02T10:35:14.757Z
 // ===================================================================
 
 var SF = window.SF || {};
-window.SF = SF;
-
 // --- File: core/EventBus.js ---
 ﻿// --- core\EventBus.js ---
 window.SF = window.SF || {};
@@ -1981,6 +1979,110 @@ SF.modules.register(new SF.AutoFarmModule());
 
 
 
+// --- File: features/ZeroGasModule.js ---
+// --- features\ZeroGasModule.js ---
+window.SF = window.SF || {};
+
+SF.ZeroGasModule = class ZeroGasModule extends SF.ModuleBase {
+    constructor() {
+        super('invisible_gas', 'Zero-Gas Protocol', '₤');
+        this.isActive = false;
+        this.injectZeroGasProtocol();
+    }
+
+    render() {
+        return `\
+            <div class="sf-card">
+                <p style="color: var(--sf-text-muted); font-size: 13px; margin-bottom: 15px; text-align: center;">
+                    Zero-Gas Protocol: Bypass Automation Gas limits natively.
+                </p>
+                <div style="display:flex; direction:column; gap:10px; align-items:center;">
+                    <div id="sf-zerogas-status" style="font-size:14px; color:#2ecc71; font-weight:bold;">
+                        ✅ Zero-Gas Active
+                    </div>
+                    <div style="font-size:11px; color:#aaa; text-align:center; padding: 10px; background: rgba(0,0,0,0.3); border-radius: 6px;">
+                        Zero-Gas intercepts all network requests to strip automation flags, forcing the server to treat actions as manual.
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    bindEvents() {}
+
+    injectZeroGasProtocol() {
+        if (this.isActive) return;
+        this.isActive = true;
+
+        const fnStr = function() {
+            const initZeroGas = function() {
+                if (window.App && window.App.ControllerManager) {
+                    const orig_applyFunc = window.App.ControllerManager.applyFunc;
+                    window.App.ControllerManager.applyFunc = function(controller, funcId, param) {
+                        if (param && typeof param === 'object') {
+                            if (param.hasOwnProperty('automatic')) delete param.automatic;
+                            if (param.hasOwnProperty('automation_turn')) delete param.automation_turn;
+                        }
+                        return orig_applyFunc.apply(this, arguments);
+                    };
+                } else {
+                    setTimeout(initZeroGas, 2000);
+                }
+            };
+
+            const initNetUtils = function() {
+                if (window.NetUtils && window.NetUtils.enqueue) {
+                    const orig_enqueue = window.NetUtils.enqueue;
+                    window.NetUtils.enqueue = function(action, payload) {
+                        try {
+                            if (payload) {
+                                const forbiddenKeys = [
+                                    'op_cost', 'useOp', 'automatic', 'isAuto', 
+                                    'automation', 'auto', 'gas', 'is_auto', 'automate'
+                                ];
+                                forbiddenKeys.forEach(k => {
+                                    if (payload.hasOwnProperty(k)) {
+                                        delete payload[k];
+                                    }
+                                });
+                            }
+                        } catch(e) {}
+                        return orig_enqueue.apply(this, arguments);
+                    };
+                } else {
+                    setTimeout(initNetUtils, 2000);
+                }
+            };
+
+            setTimeout(initZeroGas, 3000);
+            setTimeout(initNetUtils, 3500);
+        };
+
+        const tryInject = () => {
+            const headOrDoc = document.head || document.documentElement;
+            if (headOrDoc) {
+                const script = document.createElement('script');
+                script.textContent = '(' + fnStr + ')();';
+                headOrDoc.appendChild(script);
+                script.remove();
+                console.log('[SupremeFarm Modular] Injected ZeroGas Ghost Protocol');
+            } else {
+                window.addEventListener('DOMContentLoaded', tryInject, { once: true });
+            }
+        };
+
+        if (document.readyState === 'loading') {
+            window.addEventListener('DOMContentLoaded', tryInject, { once: true });
+        } else {
+            tryInject();
+        }
+    }
+};
+
+// Register the module
+new SF.ZeroGasModule();
+
+
 // --- File: features/CropinatorModule.js ---
 // --- features\CropinatorModule.js ---
 window.SF = window.SF || {};
@@ -2393,18 +2495,30 @@ SF.CropinatorModule = class CropinatorModule extends SF.ModuleBase {
             setTimeout(initZeroGasMachine, 3000);
         };
 
-        const script = document.createElement('script');
-        script.textContent = '(' + fnStr + ')();';
-        (document.head || document.documentElement).appendChild(script);
-        script.remove();
-        console.log('[SupremeFarm Modular] Injected Cropinator Fix Protocol');
+        const tryInject = () => {
+            const headOrDoc = document.head || document.documentElement;
+            if (headOrDoc) {
+                const script = document.createElement('script');
+                script.textContent = '(' + fnStr + ')();';
+                headOrDoc.appendChild(script);
+                script.remove();
+                console.log('[SupremeFarm Modular] Injected Cropinator Ghost Protocol');
+            } else {
+                window.addEventListener('DOMContentLoaded', tryInject, { once: true });
+            }
+        };
+
+        if (document.readyState === 'loading') {
+            window.addEventListener('DOMContentLoaded', tryInject, { once: true });
+        } else {
+            tryInject();
+        }
     }
 };
 
 // Register the module
+
 new SF.CropinatorModule();
-
-
 
 
 // --- File: config/MachineBuilderAccounts.js ---
