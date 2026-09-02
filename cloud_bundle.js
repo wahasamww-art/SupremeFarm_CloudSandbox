@@ -7364,7 +7364,7 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
     constructor() {
         super('production_scheduler', 'جدولة الإنتاج', '🏭');
         this.items = [];
-        this.schedules = {};
+        this.schedules = (window.SF && window.SF.StorageManager) ? window.SF.StorageManager.get('sf-production-schedules', {}) : {};
         this.badges = {};
         this.loopTimer = null;
         this.posTimer = null;
@@ -7374,6 +7374,11 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
         this._autoInitTimer = null;
         this._autoInitAttempts = 0;
         this._waitingProductChange = {};
+    }
+
+    _saveSchedules() {
+        if (!window.SF || !window.SF.StorageManager) return;
+        window.SF.StorageManager.set('sf-production-schedules', this.schedules);
     }
 
     render() {
@@ -7416,6 +7421,7 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
     onDeactivate() {
         this._stopLoop();
         if (this._autoInitTimer) { clearInterval(this._autoInitTimer); this._autoInitTimer = null; }
+        if (this._syncTimer) { clearInterval(this._syncTimer); this._syncTimer = null; }
         if (this.posTimer) { clearInterval(this.posTimer); this.posTimer = null; }
         if (this._badgeContainer) { this._badgeContainer.remove(); this._badgeContainer = null; }
     }
@@ -7440,43 +7446,84 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
     }
 
     _autoInit() {
-        this._scanItems();
-        this._renderAnimals();
-        this._renderMachines();
+        this._syncItems();
         this._ensureBadgeContainer();
         this._startPositionUpdater();
+        
+        if (!this._syncTimer) this._syncTimer = setInterval(() => this._syncItems(), 3000);
+
+        // Resume any running schedules from previous session
+        const runningKeys = Object.keys(this.schedules).filter(k => this.schedules[k].running);
+        if (runningKeys.length > 0) {
+            this._log(`🔄 استئناف ${runningKeys.length} مهام مجدولة سابقة`);
+            runningKeys.forEach(k => this._updateBadge(k));
+            this._startLoop();
+        }
+
         this._log(`📍 ${this.items.length} عنصر (${this.items.filter(i=>i.type==='Machine').length} آلة, ${this.items.filter(i=>i.type==='Animal').length} حيوان)`);
     }
 
     // ═══════════════════════════════════════
     // SCAN
     // ═══════════════════════════════════════
-    _scanItems() {
+    _syncItems() {
         const gw = unsafeWindow;
-        this.items = [];
-        try {
-            const dict = gw.GameGridData?.uidDictionary;
-            if (!dict) return;
-            Object.values(dict).forEach(mo => {
-                if (!mo) return;
-                const cn = mo.__class__ || '';
-                const cd = mo.configData || {};
-                const isMachine = cn === 'Machine' && cd.raw_material && cd.product;
-                const isAnimal = cn === 'Animal' || (cd.type === 'animals' && cd.sub_type === 'working');
-                if (!isMachine && !isAnimal) return;
+        const dict = gw.GameGridData?.uidDictionary;
+        if (!dict) return;
 
-                const sd = mo.serverData || {};
-                const objType = isMachine ? 'Machine' : 'Animal';
-                const key = `${objType[0]}_${cd.id || mo.id}_${sd.x || sd.map_x || 0}_${sd.y || sd.map_y || 0}`;
-                if (this.items.some(i => i.key === key)) return;
+        let changed = false;
+        const currentUids = new Set(Object.keys(dict));
 
-                const item = {
-                    key, type: objType,
+        // 1. Remove missing items
+        for (let i = this.items.length - 1; i >= 0; i--) {
+            const item = this.items[i];
+            if (!item.mo || !currentUids.has(String(item.mo.map_unique_id))) {
+                if (this.schedules[item.key]) delete this.schedules[item.key];
+                if (this.badges[item.key]) { this.badges[item.key].remove(); delete this.badges[item.key]; }
+                this.items.splice(i, 1);
+                changed = true;
+            }
+        }
+
+        // 2. Add new or update moved items
+        Object.values(dict).forEach(mo => {
+            if (!mo) return;
+            const cn = mo.__class__ || '';
+            const cd = mo.configData || {};
+            const isMachine = cn === 'Machine' && cd.raw_material && cd.product;
+            const isAnimal = cn === 'Animal' || (cd.type === 'animals' && cd.sub_type === 'working');
+            if (!isMachine && !isAnimal) return;
+
+            const sd = mo.serverData || {};
+            const objType = isMachine ? 'Machine' : 'Animal';
+            const x = parseInt(sd.x || sd.map_x) || 0;
+            const y = parseInt(sd.y || sd.map_y) || 0;
+            const newKey = `${objType[0]}_${cd.id || mo.id}_${x}_${y}`;
+
+            let item = this.items.find(i => i.mo && i.mo.map_unique_id === mo.map_unique_id);
+            if (item) {
+                // Check if moved
+                if (item.x !== x || item.y !== y) {
+                    const oldKey = item.key;
+                    item.x = x; item.y = y; item.key = newKey;
+                    
+                    if (this.schedules[oldKey]) {
+                        this.schedules[newKey] = this.schedules[oldKey];
+                        delete this.schedules[oldKey];
+                    }
+                    if (this.badges[oldKey]) {
+                        this.badges[newKey] = this.badges[oldKey];
+                        delete this.badges[oldKey];
+                    }
+                    changed = true;
+                }
+            } else {
+                // New item
+                item = {
+                    key: newKey, type: objType,
                     id: cd.id || mo.id,
                     name: cd.name_ar || cd.name || `${objType} ${cd.id || mo.id}`,
-                    x: parseInt(sd.x || sd.map_x) || 0,
-                    y: parseInt(sd.y || sd.map_y) || 0,
-                    mo, products: []
+                    x, y, mo, products: []
                 };
 
                 if (isMachine && cd.raw_material && cd.product) {
@@ -7494,8 +7541,15 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
                     }
                 }
                 this.items.push(item);
-            });
-        } catch(e) { this._log(`❌ خطأ: ${e.message}`); }
+                changed = true;
+            }
+        });
+
+        if (changed) {
+            this._renderAnimals();
+            this._renderMachines();
+            this._saveSchedules();
+        }
     }
 
     // ═══════════════════════════════════════
@@ -7615,12 +7669,14 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
         const p = item.products[pidx];
         this.schedules[key].queue.push({ productIndex: pidx, rawMaterialId: p.rawMaterialId, productId: p.productId, name: p.name, target: qty, done: 0 });
         this._log(`➕ ${item.name}: ${p.name} ×${qty}`);
+        this._saveSchedules();
         this._renderMachines();
     }
 
     _removeFromQueue(key, idx) {
         if (!this.schedules[key]) return;
         this.schedules[key].queue.splice(idx, 1);
+        this._saveSchedules();
         this._renderMachines();
     }
 
@@ -7641,6 +7697,7 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
         }
 
         sched.running = true;
+        this._saveSchedules();
         this._log(`✅ ${item.name}: بدأ`);
         this._renderAnimals();
         this._renderMachines();
@@ -7651,6 +7708,7 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
     _stopOne(key) {
         if (this.schedules[key]) { this.schedules[key].running = false; this._updateBadge(key); }
         delete this._waitingProductChange[key];
+        this._saveSchedules();
         this._renderAnimals();
         this._renderMachines();
         if (!Object.values(this.schedules).some(s => s.running)) this._stopLoop();
@@ -7734,6 +7792,7 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
         if (keys.length === 0) { this._stopLoop(); return; }
         keys.forEach(key => { try { this._processItem(key); } catch(e) { this._log(`❌ ${key}: ${e.message}`); } });
         try { unsafeWindow.NetUtils.flush(); } catch(e) {}
+        this._saveSchedules();
     }
 
     _processItem(key) {
