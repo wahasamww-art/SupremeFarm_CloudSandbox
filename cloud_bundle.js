@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         SupremeFarm Elite Bundle
+// @name         حصاد مظبوط المدمج
 // @namespace    https://supreme-farm.local
-// @version      2.1.1
-// @description  Supreme Farm Modular Bot - Cloud Distributed Version
+// @version      2.1.0
+// @description  نظام المزرعة الذكي - معمارية التوسعة اللانهائية
 // @author       Supreme Farm Team
 // @match        *://*.centurygames.com/*
 // @match        *://*.apps.fbsbx.com/*
@@ -21,13 +21,10 @@
 
 // ===================================================================
 // SupremeFarm Modular - Cloud Distribution Bundle
-// Generated at: 2026-09-02T09:48:44.680Z
+// Generated at: 2026-09-02T09:52:26.580Z
 // ===================================================================
 
 var SF = window.SF || {};
-window.SF = SF;
-
-// --- File: core/EventBus.js ---
 ﻿// --- core\EventBus.js ---
 window.SF = window.SF || {};
 
@@ -57,7 +54,6 @@ SF.bus = new SF.EventBus();
 
 
 
-// --- File: core/ModuleBase.js ---
 ﻿// --- core\ModuleBase.js ---
 window.SF = window.SF || {};
 
@@ -91,7 +87,6 @@ SF.ModuleBase = class ModuleBase {
 
 
 
-// --- File: core/ModuleManager.js ---
 ﻿// --- core\ModuleManager.js ---
 window.SF = window.SF || {};
 
@@ -133,7 +128,6 @@ SF.modules = new SF.ModuleManager();
 
 
 
-// --- File: core/StorageManager.js ---
 ﻿// --- core\StorageManager.js ---
 window.SF = window.SF || {};
 
@@ -198,7 +192,6 @@ SF.StorageManager = class StorageManager {
 
 
 
-// --- File: network/NetworkInterceptor.js ---
 // --- network\NetworkInterceptor.js ---
 window.SF = window.SF || {};
 
@@ -335,7 +328,6 @@ SF.netMonitor.install();
 
 
 
-// --- File: network/GameDataExtractor.js ---
 ﻿// --- network\GameDataExtractor.js ---
 window.SF = window.SF || {};
 
@@ -376,7 +368,6 @@ SF.dataExtractor = new SF.GameDataExtractor();
 
 
 
-// --- File: ui/Styles.js ---
 // --- ui\Styles.js ---
 window.SF = window.SF || {};
 
@@ -634,7 +625,6 @@ SF.Styles = `
 
 
 
-// --- File: ui/SplashScreen.js ---
 // --- ui\SplashScreen.js ---
 window.SF = window.SF || {};
 
@@ -824,7 +814,6 @@ SF.SplashScreen = class SplashScreen {
 };
 
 
-// --- File: ui/UIManager.js ---
 ﻿// --- ui\UIManager.js ---
 window.SF = window.SF || {};
 
@@ -974,7 +963,6 @@ SF.UIManager = class UIManager {
 
 
 
-// --- File: features/ZeroGasModule.js ---
 // --- features\ZeroGasModule.js ---
 window.SF = window.SF || {};
 
@@ -1180,166 +1168,6 @@ SF.ZeroGasModule = class ZeroGasModule extends SF.ModuleBase {
 new SF.ZeroGasModule();
 
 
-// --- File: features/TargetProductionModule.js ---
-window.SF = window.SF || {};
-
-SF.TargetProductionModule = class TargetProductionModule extends SF.ModuleBase {
-    constructor() {
-        super('target_production', 'Target Production (Smart)', '🎯');
-        this.isActive = false;
-        // Delay injection to ensure DOM is ready and prevent crash
-        setTimeout(() => this.injectHooks(), 1000);
-    }
-
-    render() {
-        return `
-            <div class="sf-card">
-                <h3 style="color:#2ecc71; text-align:center; margin-bottom:5px;">🎯 Smart Target Production</h3>
-                <p style="font-size:12px; color:#aaa; text-align:center; margin-bottom:10px;">
-                    This system is integrated natively with the game's Auto-Operate buttons.<br>
-                    Click the Yellow Gear icon on any machine, and it will ask you for a target count.
-                </p>
-                <div id="sf-target-prod-list" style="font-size:12px; color:#ddd; background:rgba(0,0,0,0.4); padding:10px; border-radius:6px; max-height: 200px; overflow-y:auto;">
-                    <i>No machines are currently running with a target count...</i>
-                </div>
-            </div>
-        `;
-    }
-
-    bindEvents() {
-        setInterval(() => {
-            const listContainer = document.getElementById('sf-target-prod-list');
-            if (!listContainer) return;
-            
-            let dataStr = null;
-            if (typeof unsafeWindow !== 'undefined' && unsafeWindow._sf_target_prod) {
-                dataStr = JSON.stringify(unsafeWindow._sf_target_prod);
-            } else if (window._sf_target_prod) {
-                dataStr = JSON.stringify(window._sf_target_prod);
-            }
-            if (!dataStr) return;
-            
-            let targets = JSON.parse(dataStr);
-            let html = '';
-            for (let uid in targets) {
-                let data = targets[uid];
-                html += `<div style="display:flex; justify-content:space-between; margin-bottom:5px; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:5px;">
-                            <span>⚙️ ${data.name}</span>
-                            <span style="color:#f1c40f; font-weight:bold;">Remaining: ${data.count}</span>
-                         </div>`;
-            }
-            
-            if (html === '') {
-                listContainer.innerHTML = '<i>No machines are currently running with a target count...</i>';
-            } else {
-                listContainer.innerHTML = html;
-            }
-        }, 1000);
-    }
-
-    injectHooks() {
-        if (this.isActive) return;
-        this.isActive = true;
-
-        const fnStr = function() {
-            window._sf_target_prod = window._sf_target_prod || {};
-
-            const initToggleHook = function() {
-                if (window.App && window.App.ControllerManager && window.GameConst) {
-                    const orig_applyFunc = window.App.ControllerManager.applyFunc;
-                    window.App.ControllerManager.applyFunc = function(controller, funcId, param) {
-                        if (funcId === window.GameConst.MAPOBJECT_TOGGLE_AUTOMATION && param) {
-                            let objName = param.configData ? (param.configData.name_ar || param.configData.name) : "Machine";
-                            let uid = param.map_unique_id || param.unique_id || param.id;
-
-                            if (!param.automatic) {
-                                let userInput = prompt("🎯 Smart Target Production for [" + objName + "]\n\nHow many products do you want to make?\n(Leave empty and click OK for infinite operation)", "");
-                                
-                                if (userInput !== null && userInput.trim() !== "") {
-                                    let count = parseInt(userInput);
-                                    if (!isNaN(count) && count > 0) {
-                                        window._sf_target_prod[uid] = { count: count, name: objName };
-                                    }
-                                }
-                            } else {
-                                if (window._sf_target_prod[uid]) {
-                                    delete window._sf_target_prod[uid];
-                                }
-                            }
-                        }
-                        return orig_applyFunc.apply(this, arguments);
-                    };
-                    console.log("✅ [TargetProduction] Main Context Hooked: MAPOBJECT_TOGGLE_AUTOMATION");
-                } else {
-                    setTimeout(initToggleHook, 2000);
-                }
-            };
-            setTimeout(initToggleHook, 3000);
-
-            const initNetHook = function() {
-                if (window.NetUtils && window.NetUtils.enqueue) {
-                    const orig_enqueue = window.NetUtils.enqueue;
-                    window.NetUtils.enqueue = function(action, payload) {
-                        try {
-                            const targetActions = ['feed_animal', 'add_material', 'start_produce', 'produce', 'gear_start', 'collect_product', 'harvest'];
-                            if (payload && action && targetActions.some(a => action.includes(a))) {
-                                let uid = payload.unique_id || payload.machine_id || payload.id;
-                                if (uid && window._sf_target_prod[uid]) {
-                                    window._sf_target_prod[uid].count--;
-                                    
-                                    if (window._sf_target_prod[uid].count <= 0) {
-                                        delete window._sf_target_prod[uid];
-                                        
-                                        const layer = window.GF && window.GF.gameController && window.GF.gameController.gameView && window.GF.gameController.gameView.objLayer;
-                                        if (layer && layer.$children) {
-                                            const obj = layer.$children.find(c => c && (c.map_unique_id == uid || c.unique_id == uid || c.id == uid));
-                                            if (obj) {
-                                                obj.automatic = false;
-                                                if (typeof obj.automation_turn === 'function') {
-                                                    obj.automation_turn();
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        } catch(e) {}
-                        return orig_enqueue.apply(this, arguments);
-                    };
-                    console.log("✅ [TargetProduction] Main Context Hooked: NetUtils.enqueue");
-                } else {
-                    setTimeout(initNetHook, 2000);
-                }
-            };
-            setTimeout(initNetHook, 3500);
-        };
-
-        const tryInject = () => {
-            const headOrDoc = document.head || document.documentElement;
-            if (headOrDoc) {
-                const script = document.createElement('script');
-                script.textContent = '(' + fnStr + ')();';
-                headOrDoc.appendChild(script);
-                script.remove();
-            } else {
-                // If head isn't available yet, wait for DOMContentLoaded
-                window.addEventListener('DOMContentLoaded', tryInject, { once: true });
-            }
-        };
-        
-        if (document.readyState === 'loading') {
-            window.addEventListener('DOMContentLoaded', tryInject, { once: true });
-        } else {
-            tryInject();
-        }
-    }
-};
-
-window.SF.modules = window.SF.modules || [];
-window.SF.modules.push(new SF.TargetProductionModule());
-
-
-// --- File: features/AutoFarmModule.js ---
 // --- features\AutoFarmModule.js ---
 window.SF = window.SF || {};
 
@@ -2346,7 +2174,6 @@ SF.modules.register(new SF.AutoFarmModule());
 
 
 
-// --- File: features/CropinatorModule.js ---
 // --- features\CropinatorModule.js ---
 window.SF = window.SF || {};
 
@@ -2772,7 +2599,6 @@ new SF.CropinatorModule();
 
 
 
-// --- File: config/MachineBuilderAccounts.js ---
 // ملف إعدادات حسابات بناء الآلات
 // انسخ كل المفاتيح (الكوكيز) والصقها هنا تحت بعضها مباشرة
 // بدون أي علامات تنصيص، وبدون فواصل، وبدون أي أكواد إضافية.
@@ -2817,7 +2643,6 @@ window.MachineBuilderAccounts = `
 `;
 
 
-// --- File: features/MachineBuilderModule.js ---
 // --- features/MachineBuilderModule.js ---
 window.SF = window.SF || {};
 
@@ -3754,7 +3579,6 @@ SF.MachineBuilderModule = class MachineBuilderModule extends SF.ModuleBase {
 SF.modules.register(new SF.MachineBuilderModule());
 
 
-// --- File: features/AlbumTrackerModule.js ---
 window.SF = window.SF || {};
 
 SF.AlbumTrackerModule = class AlbumTrackerModule extends SF.ModuleBase {
@@ -4688,7 +4512,6 @@ SF.AlbumTrackerModule = class AlbumTrackerModule extends SF.ModuleBase {
 SF.modules.register(new SF.AlbumTrackerModule());
 
 
-// --- File: features/MineModule.js ---
 window.SF = window.SF || {};
 
 SF.MineModule = class MineModule extends SF.ModuleBase {
@@ -4901,7 +4724,6 @@ SF.modules.register(new SF.MineModule());
 console.log('[SF-MineModule] ✅ Registration complete. Total modules:', SF.modules.getModules().length);
 
 
-// --- File: features/BattlePassModule.js ---
 window.SF = window.SF || {};
 
 SF.BattlePassModule = class BattlePassModule extends SF.ModuleBase {
@@ -5177,7 +4999,6 @@ SF.BattlePassModule = class BattlePassModule extends SF.ModuleBase {
 new SF.BattlePassModule();
 
 
-// --- File: features/IslandPointBuyerModule.js ---
 window.SF = window.SF || {};
 
 SF.IslandPointBuyerModule = class IslandPointBuyerModule extends SF.ModuleBase {
@@ -5462,7 +5283,6 @@ SF.IslandPointBuyerModule = class IslandPointBuyerModule extends SF.ModuleBase {
 SF.modules.register(new SF.IslandPointBuyerModule());
 
 
-// --- File: features/StoreFlipFixModule.js ---
 // --- features\StoreFlipFixModule.js ---
 window.SF = window.SF || {};
 
@@ -5583,7 +5403,6 @@ SF.StoreFlipFixModule = class StoreFlipFixModule extends SF.ModuleBase {
 new SF.StoreFlipFixModule();
 
 
-// --- File: features/StoreRevealModule.js ---
 // --- features\StoreRevealModule.js ---
 window.SF = window.SF || {};
 
@@ -5800,7 +5619,6 @@ SF.StoreRevealModule = class StoreRevealModule extends SF.ModuleBase {
 new SF.StoreRevealModule();
 
 
-// --- File: features/AutoMegaHarvestModule.js ---
 window.SF = window.SF || {};
 
 SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
@@ -6494,7 +6312,6 @@ if (window.SF && window.SF.modules) {
 }
 
 
-// --- File: features/SessionExtractorModule.js ---
 window.SF = window.SF || {};
 
 SF.SessionExtractorModule = class SessionExtractorModule extends SF.ModuleBase {
@@ -6651,7 +6468,6 @@ if (window.SF && window.SF.modules) {
 }
 
 
-// --- File: features/MonopolySmartHelper.js ---
 // ==========================================
 // 🎲 Monopoly Smart Helper (Invisible Feature)
 // يظهر فقط كشريط علوي داخل الفعالية، قراءة دقيقة وتبديل دقيق
@@ -7072,7 +6888,6 @@ if (window.SF && window.SF.modules) {
 })();
 
 
-// --- File: features/MiniSlot2AutoModule.js ---
 // ==========================================
 // 🎰 MiniSlot2 Auto-Spin Module (دوّر وأربح)
 // شريط تحكم ذكي للعب التلقائي بعدد محدد
