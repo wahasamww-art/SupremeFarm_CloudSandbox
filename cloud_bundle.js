@@ -7563,7 +7563,8 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
                     id: cd.id || mo.id,
                     name: cd.name_ar || cd.name || `${objType} ${cd.id || mo.id}`,
                     x, y, mo, products: [],
-                    rawMaterialId: isAnimal ? (Array.isArray(cd.raw_material) ? cd.raw_material[0] : cd.raw_material) : null
+                    rawMaterialId: isAnimal ? (Array.isArray(cd.raw_material) ? cd.raw_material[0] : cd.raw_material) : null,
+                    productId: isAnimal ? (Array.isArray(cd.product) ? cd.product[0] : cd.product) : null
                 };
 
                 if (isMachine && cd.raw_material && cd.product) {
@@ -7615,13 +7616,14 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
             const running = sched?.running;
             const cycles = sched?.targetCycles || 0;
             const done = sched?.completedCycles || 0;
-            const invCount = item.rawMaterialId ? this._getInventoryCount(item.rawMaterialId) : 0;
-            const countColor = invCount > 0 ? '#2ecc71' : '#e74c3c';
+            const rawCount = item.rawMaterialId ? this._getInventoryCount(item.rawMaterialId) : 0;
+            const prodCount = item.productId ? this._getInventoryCount(item.productId) : 0;
+            const rawColor = rawCount > 0 ? '#2ecc71' : '#e74c3c';
             return `<div class="sf-ps-item" data-key="${item.key}" data-name="${item.name}" style="background:rgba(230,126,34,0.1);border:1px solid #e67e2244;border-radius:8px;padding:8px 12px;margin-bottom:6px;box-shadow:0 2px 4px rgba(0,0,0,0.2);">
                 <div style="display:flex;align-items:center;justify-content:space-between;">
                     <div style="display:flex;flex-direction:column;gap:4px;">
                         <span style="color:#e67e22;font-size:14px;font-weight:bold;display:flex;align-items:center;gap:6px;">🐄 <span>${item.name}</span></span>
-                        ${item.rawMaterialId ? `<span style="font-size:11px;color:${countColor};">في الحظيرة: ${invCount}</span>` : ''}
+                        ${(item.rawMaterialId || item.productId) ? `<span style="font-size:11px;color:#bbb;">طعام: <span style="color:${rawColor};">${rawCount}</span> | المنتَج في الحظيرة: <span style="color:#f39c12;">${prodCount}</span></span>` : ''}
                     </div>
                     <div style="display:flex;align-items:center;gap:6px;">
                         <span style="color:#aaa;font-size:12px;">دورات:</span>
@@ -7710,13 +7712,14 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
                     <div class="sf-ps-prod-list" style="max-height:150px;overflow-y:auto;padding-right:4px;">
                         ${item.products.map((p, i) => {
                             const pNameSafe = (p.name || '').replace(/"/g, '&quot;');
-                            const invCount = p.rawMaterialId ? this._getInventoryCount(p.rawMaterialId) : 0;
-                            const countColor = invCount > 0 ? '#2ecc71' : '#e74c3c';
+                            const rawCount = p.rawMaterialId ? this._getInventoryCount(p.rawMaterialId) : 0;
+                            const prodCount = p.productId ? this._getInventoryCount(p.productId) : 0;
+                            const rawColor = rawCount > 0 ? '#2ecc71' : '#e74c3c';
                             return `
                         <div class="sf-ps-prod-item" data-name="${pNameSafe}" style="display:flex;align-items:center;justify-content:space-between;background:rgba(255,255,255,0.05);padding:6px 8px;border-radius:4px;margin-bottom:4px;">
                             <div style="display:flex;flex-direction:column;flex:1;">
                                 <span style="font-size:13px;color:#ecf0f1;">${p.name}</span>
-                                <span style="font-size:11px;color:${countColor};">في الحظيرة: ${invCount}</span>
+                                <span style="font-size:11px;color:#bbb;">مواد خام: <span style="color:${rawColor};">${rawCount}</span> | المنتَج في الحظيرة: <span style="color:#f39c12;">${prodCount}</span></span>
                             </div>
                             <div style="display:flex;align-items:center;gap:6px;">
                                 <input type="number" min="0" value="1" class="sf-ps-prod-qty" data-idx="${i}" style="width:45px;background:#111;color:#fff;border:1px solid #555;border-radius:4px;text-align:center;font-size:13px;padding:4px;outline:none;" title="0 = بلا حدود">
