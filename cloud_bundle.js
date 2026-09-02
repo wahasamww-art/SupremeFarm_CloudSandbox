@@ -7678,7 +7678,7 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
 
         if (!this.badges[key]) {
             const b = document.createElement('div');
-            b.style.cssText = 'position:absolute;background:rgba(0,0,0,0.85);color:#fff;padding:1px 5px;border-radius:3px;font-size:8px;font-family:sans-serif;white-space:nowrap;transform:translate(-50%,-100%);border:1px solid #2ecc71;';
+            b.style.cssText = 'position:absolute;background:rgba(0,0,0,0.9);color:#fff;padding:4px 8px;border-radius:5px;font-size:14px;font-weight:bold;font-family:sans-serif;white-space:nowrap;transform:translate(-50%,-100%);border:2px solid #2ecc71;box-shadow:0 2px 5px rgba(0,0,0,0.5);pointer-events:none;text-shadow:1px 1px 1px #000;';
             this._ensureBadgeContainer();
             this._badgeContainer.appendChild(b);
             this.badges[key] = b;
@@ -7715,7 +7715,7 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
                 if (!mo || typeof mo.localToGlobal !== 'function') { badge.style.display = 'none'; return; }
                 const p = new gw.egret.Point(0, 0);
                 mo.localToGlobal(0, 0, p);
-                const sx = rect.left + p.x * scX, sy = rect.top + p.y * scY - 8;
+                const sx = rect.left + p.x * scX, sy = rect.top + p.y * scY - 30;
                 if (sx > rect.left - 30 && sx < rect.right + 30 && sy > rect.top - 30 && sy < rect.bottom + 30) {
                     badge.style.left = sx + 'px'; badge.style.top = sy + 'px'; badge.style.display = '';
                 } else { badge.style.display = 'none'; }
@@ -7733,6 +7733,7 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
         const keys = Object.keys(this.schedules).filter(k => this.schedules[k].running);
         if (keys.length === 0) { this._stopLoop(); return; }
         keys.forEach(key => { try { this._processItem(key); } catch(e) { this._log(`❌ ${key}: ${e.message}`); } });
+        try { unsafeWindow.NetUtils.flush(); } catch(e) {}
     }
 
     _processItem(key) {
@@ -7751,13 +7752,6 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
         const gc = gw.GF?.gameController;
         if (!gc) return;
 
-        // Waiting for product change to take effect
-        if (this._waitingProductChange[key] !== undefined) {
-            const curSel = parseInt(sd.selected_raw_material);
-            if (curSel === this._waitingProductChange[key]) { delete this._waitingProductChange[key]; }
-            else return;
-        }
-
         // Collect if products ready
         const hasProducts = sd.products && ((Array.isArray(sd.products) && sd.products.length > 0) || (typeof sd.products === 'number' && sd.products > 0));
         if (hasProducts) {
@@ -7771,7 +7765,9 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
                     if (sched.currentQueueIdx >= sched.queue.length) {
                         sched.running = false;
                         this._log(`🎉 ${item.name}: اكتمل!`);
-                        this._renderMachines(); this._updateBadge(key); return;
+                        this._renderMachines(); this._updateBadge(key);
+                        try { gw.NetUtils.flush(); } catch(e) {}
+                        return;
                     }
                     const next = sched.queue[sched.currentQueueIdx];
                     if (next && next.productIndex >= 0) {
@@ -7779,11 +7775,15 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
                         if (curSel !== next.productIndex) {
                             this._log(`🔄 ${item.name} → ${next.name}`);
                             try { gw.NetUtils.enqueue('save_selected_material.save_data', { id: item.id, x: item.x, y: item.y, flip: 0, material: next.productIndex }); } catch(e) {}
-                            this._waitingProductChange[key] = next.productIndex;
+                            // Update locally to bypass waiting
+                            sd.selected_raw_material = next.productIndex;
+                            if (mo.selected_raw_material !== undefined) mo.selected_raw_material = next.productIndex;
+                            if (typeof mo.setRawMaterial === 'function') { try { mo.setRawMaterial(next.productIndex); } catch(e) {} }
                         }
                     }
                 }
             }
+            try { gw.NetUtils.flush(); } catch(e) {}
             this._updateBadge(key); this._renderMachines(); return;
         }
 
@@ -7799,7 +7799,14 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
                 if (curSel !== cur.productIndex) {
                     this._log(`🔄 ${item.name} → ${cur.name}`);
                     try { gw.NetUtils.enqueue('save_selected_material.save_data', { id: item.id, x: item.x, y: item.y, flip: 0, material: cur.productIndex }); } catch(e) {}
-                    this._waitingProductChange[key] = cur.productIndex;
+                    
+                    // Update locally to bypass waiting
+                    sd.selected_raw_material = cur.productIndex;
+                    if (mo.selected_raw_material !== undefined) mo.selected_raw_material = cur.productIndex;
+                    if (typeof mo.setRawMaterial === 'function') { try { mo.setRawMaterial(cur.productIndex); } catch(e) {} }
+                    
+                    // Flush immediately so it can be refilled on next tick
+                    try { gw.NetUtils.flush(); } catch(e) {}
                     return;
                 }
             }
@@ -7833,7 +7840,7 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
         const needsFeed = sd.raw_materials === 0 || sd.raw_materials === '0' || sd.raw_materials === false;
         if (needsFeed) {
             try {
-                const matId = mo.raw_material_id;
+                const matId = mo.raw_material_id || mo.configData?.raw_material;
                 if (matId && gc._feedMapObject && (!mo.canFeed || mo.canFeed())) { gc._feedMapObject(mo, matId, false); }
             } catch(e) {}
         }
