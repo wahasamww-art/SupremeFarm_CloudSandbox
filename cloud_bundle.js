@@ -7471,14 +7471,25 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
         const dict = gw.GameGridData?.uidDictionary;
         if (!dict) return;
 
+        const currentScene = gw.GF?.loginModel?.AppData?.scene_select || 1;
+        if (this._lastScene !== currentScene) {
+            this.items = [];
+            Object.values(this.badges).forEach(b => b.remove());
+            this.badges = {};
+            this._lastScene = currentScene;
+        }
+
         let changed = false;
         const currentUids = new Set(Object.keys(dict));
 
-        // 1. Remove missing items
+        // 1. Remove missing items (sold or removed in CURRENT scene)
         for (let i = this.items.length - 1; i >= 0; i--) {
             const item = this.items[i];
             if (!item.mo || !currentUids.has(String(item.mo.map_unique_id))) {
-                if (this.schedules[item.key]) delete this.schedules[item.key];
+                if (this.schedules[item.key]) {
+                    this.schedules[item.key].running = false;
+                    delete this.schedules[item.key];
+                }
                 if (this.badges[item.key]) { this.badges[item.key].remove(); delete this.badges[item.key]; }
                 this.items.splice(i, 1);
                 changed = true;
@@ -7498,7 +7509,7 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
             const objType = isMachine ? 'Machine' : 'Animal';
             const x = parseInt(sd.x || sd.map_x) || 0;
             const y = parseInt(sd.y || sd.map_y) || 0;
-            const newKey = `${objType[0]}_${cd.id || mo.id}_${x}_${y}`;
+            const newKey = `${objType[0]}_${currentScene}_${cd.id || mo.id}_${x}_${y}`;
 
             let item = this.items.find(i => i.mo && i.mo.map_unique_id === mo.map_unique_id);
             if (item) {
