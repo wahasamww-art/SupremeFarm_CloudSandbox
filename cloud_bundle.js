@@ -7743,11 +7743,6 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
         if (!html) html = '<div style="color:#777;font-size:13px;text-align:center;padding:10px;">لا يوجد عناصر تطابق الفلتر الحالي</div>';
 
         container.innerHTML = html;
-        
-        const searchInput = this.container?.querySelector('#sf-ps-search-animal');
-        if (searchInput && searchInput.value) {
-            this._filterList('animal', searchInput.value);
-        }
     }
 
     // ═══════════════════════════════════════
@@ -7909,11 +7904,6 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
         if (!html) html = '<div style="color:#777;font-size:13px;text-align:center;padding:10px;">لا يوجد عناصر تطابق الفلتر الحالي</div>';
 
         container.innerHTML = html;
-        
-        const searchInput = this.container?.querySelector('#sf-ps-search-machine');
-        if (searchInput && searchInput.value) {
-            this._filterList('machine', searchInput.value);
-        }
     }
 
     _filterList(type, query) {
@@ -8091,15 +8081,6 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
         const gw = unsafeWindow;
         const canvas = document.querySelector('canvas');
         if (!canvas) return;
-        
-        let hideAll = false;
-        try {
-            if (gw.GF && gw.GF.windowManager && typeof gw.GF.windowManager.getOpenWindows === 'function') {
-                const wins = gw.GF.windowManager.getOpenWindows();
-                if (wins && wins.length > 0) hideAll = true;
-            }
-        } catch(e) {}
-
         const rect = canvas.getBoundingClientRect();
         let stageW, stageH;
         try { const s = gw.egret.lifecycle.stage; stageW = s.stageWidth; stageH = s.stageHeight; } catch(e) { stageW = canvas.width; stageH = canvas.height; }
@@ -8108,10 +8089,7 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
         Object.keys(this.badges).forEach(key => {
             const badge = this.badges[key];
             const item = this.items.find(i => i.key === key);
-            if (!badge || !item || hideAll) {
-                if (badge) badge.style.display = 'none';
-                return;
-            }
+            if (!badge || !item) return;
             try {
                 const mo = this._getFreshMO(item);
                 if (!mo || typeof mo.localToGlobal !== 'function') { badge.style.display = 'none'; return; }
