@@ -7357,6 +7357,440 @@ if (window.SF && window.SF.modules) {
 })();
 
 
+// --- File: features/ProductionSchedulerModule.js ---
+// --- features\ProductionSchedulerModule.js ---
+window.SF = window.SF || {};
+
+SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.ModuleBase {
+    constructor() {
+        super('production_scheduler', 'جدولة الإنتاج', '🏭');
+        this.items = [];
+        this.schedules = {};
+        this.loopTimer = null;
+        this.loopSpeed = 2000;
+        this._logLines = [];
+    }
+
+    render() {
+        return `
+        <div class="sf-card">
+            <div style="display:flex; gap:8px; margin-bottom:12px; flex-wrap:wrap; justify-content:center;">
+                <button id="sf-ps-scan" class="sf-btn" style="flex:1; min-width:140px;">🔍 فحص الخريطة</button>
+            </div>
+
+            <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px; background:rgba(0,0,0,0.3); padding:8px; border-radius:6px;">
+                <span style="font-size:12px; color:#aaa;">⏱️ سرعة:</span>
+                <select id="sf-ps-speed" style="flex:1; background:#1a1a2e; color:#fff; border:1px solid #333; border-radius:4px; padding:4px;">
+                    <option value="500">⚡ فوري (0.5 ث)</option>
+                    <option value="1000">🚀 سريع (1 ث)</option>
+                    <option value="2000" selected>⏩ متوسط (2 ث)</option>
+                    <option value="5000">🐌 عادي (5 ث)</option>
+                </select>
+            </div>
+
+            <div id="sf-ps-items" style="max-height:400px; overflow-y:auto;"></div>
+
+            <div style="display:flex; gap:8px; margin-top:12px;">
+                <button id="sf-ps-start-all" class="sf-btn" style="flex:1; background:#27ae60;">▶️ تشغيل الكل</button>
+                <button id="sf-ps-stop-all" class="sf-btn" style="flex:1; background:#c0392b;">⏹️ إيقاف الكل</button>
+            </div>
+
+            <div id="sf-ps-log" style="max-height:120px; overflow-y:auto; margin-top:10px; font-size:11px; color:#888; background:rgba(0,0,0,0.3); padding:6px; border-radius:4px; direction:rtl;"></div>
+        </div>`;
+    }
+
+    bindEvents() {
+        const c = this.container;
+        if (!c) return;
+        c.querySelector('#sf-ps-scan')?.addEventListener('click', () => this.scanMap());
+        c.querySelector('#sf-ps-speed')?.addEventListener('change', (e) => {
+            this.loopSpeed = parseInt(e.target.value) || 2000;
+            if (this.loopTimer) { this._stopLoop(); this._startLoop(); }
+            this._log(`سرعة الفحص: ${this.loopSpeed}ms`);
+        });
+        c.querySelector('#sf-ps-start-all')?.addEventListener('click', () => this._startAll());
+        c.querySelector('#sf-ps-stop-all')?.addEventListener('click', () => this._stopAll());
+    }
+
+    // ═══════════════════════════════════════
+    // SCAN
+    // ═══════════════════════════════════════
+    scanMap() {
+        const gw = unsafeWindow;
+        const itemsDiv = this.container?.querySelector('#sf-ps-items');
+        if (!itemsDiv) return;
+        itemsDiv.innerHTML = '⏳ جاري الفحص...';
+        this.items = [];
+
+        try {
+            const moList = gw.GameGridData?.uidDictionary
+                ? Object.values(gw.GameGridData.uidDictionary) : [];
+
+            moList.forEach(mo => {
+                if (!mo || !mo.configData) return;
+                const cn = mo.className || mo.configData?.className || '';
+                if (cn !== 'Machine' && cn !== 'Animal') return;
+
+                const cd = mo.configData;
+                const sd = mo.serverData || {};
+                const key = `${cn === 'Machine' ? 'M' : 'A'}_${cd.id}_${sd.x || sd.map_x}_${sd.y || sd.map_y}`;
+
+                const item = {
+                    key, type: cn, id: cd.id,
+                    name: cd.name_ar || cd.name || `${cn} ${cd.id}`,
+                    x: parseInt(sd.x || sd.map_x) || 0,
+                    y: parseInt(sd.y || sd.map_y) || 0,
+                    mo, products: []
+                };
+
+                if (cn === 'Machine' && cd.raw_material && cd.product) {
+                    const rawMats = cd.raw_material[0];
+                    const prods = cd.product;
+                    if (Array.isArray(rawMats) && Array.isArray(prods)) {
+                        for (let i = 0; i < Math.min(rawMats.length, prods.length); i++) {
+                            let pName = '';
+                            try {
+                                const pConfig = gw.Config?.Store_GetItemData(prods[i]);
+                                pName = pConfig ? (pConfig.name_ar || pConfig.name) : '';
+                            } catch(e) {}
+                            item.products.push({
+                                index: i, rawMaterialId: rawMats[i],
+                                productId: prods[i], name: pName || `منتج #${i + 1}`
+                            });
+                        }
+                    }
+                }
+                this.items.push(item);
+            });
+            this._renderItems(itemsDiv);
+        } catch(e) {
+            itemsDiv.innerHTML = `<span style="color:#ff6b6b">خطأ: ${e.message}</span>`;
+        }
+    }
+
+    _renderItems(container) {
+        if (this.items.length === 0) {
+            container.innerHTML = '<span style="color:#f39c12">لم يتم العثور على آلات أو حيوانات.</span>';
+            return;
+        }
+        let html = '';
+        const machines = this.items.filter(i => i.type === 'Machine');
+        const animals = this.items.filter(i => i.type === 'Animal');
+
+        if (machines.length > 0) {
+            html += '<div style="color:#3498db; font-weight:bold; margin-bottom:6px; font-size:13px;">🏭 الآلات</div>';
+            machines.forEach(m => { html += this._renderMachineCard(m); });
+        }
+        if (animals.length > 0) {
+            html += '<div style="color:#e67e22; font-weight:bold; margin:10px 0 6px; font-size:13px;">🐄 الحيوانات</div>';
+            animals.forEach(a => { html += this._renderAnimalCard(a); });
+        }
+        container.innerHTML = html;
+
+        container.querySelectorAll('.sf-ps-start-btn').forEach(btn => {
+            btn.addEventListener('click', () => this._startOne(btn.dataset.key));
+        });
+        container.querySelectorAll('.sf-ps-stop-btn').forEach(btn => {
+            btn.addEventListener('click', () => this._stopOne(btn.dataset.key));
+        });
+    }
+
+    _renderMachineCard(item) {
+        const sched = this.schedules[item.key];
+        const running = sched?.running || false;
+        let productsHtml = '';
+
+        if (item.products.length > 1) {
+            item.products.forEach((p, idx) => {
+                const qty = sched?.queue?.find(q => q.productIndex === idx)?.target || 0;
+                productsHtml += `
+                <div style="display:flex; align-items:center; gap:6px; margin:3px 0; font-size:11px;">
+                    <span style="flex:1; color:#ccc; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${p.name}">${p.name}</span>
+                    <input type="number" min="0" value="${qty}" data-key="${item.key}" data-pidx="${idx}"
+                        class="sf-ps-qty" style="width:50px; background:#1a1a2e; color:#fff; border:1px solid #444; border-radius:3px; padding:2px 4px; text-align:center; font-size:11px;">
+                </div>`;
+            });
+        } else {
+            productsHtml = `<div style="font-size:11px; color:#888;">منتج واحد — أدخل العدد:
+                <input type="number" min="0" value="0" data-key="${item.key}" data-pidx="0"
+                    class="sf-ps-qty" style="width:50px; background:#1a1a2e; color:#fff; border:1px solid #444; border-radius:3px; padding:2px 4px; text-align:center; font-size:11px; margin-right:6px;">
+            </div>`;
+        }
+
+        return `
+        <div class="sf-ps-card" style="background:rgba(52,152,219,0.1); border:1px solid #2c3e50; border-radius:6px; padding:8px; margin-bottom:6px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                <span style="font-weight:bold; font-size:12px; color:#3498db;">🏭 ${item.name}</span>
+                <div style="display:flex; gap:4px;">
+                    <button class="sf-ps-start-btn" data-key="${item.key}" style="background:#27ae60; border:none; color:#fff; padding:3px 8px; border-radius:3px; cursor:pointer; font-size:11px;">▶️</button>
+                    <button class="sf-ps-stop-btn" data-key="${item.key}" style="background:#c0392b; border:none; color:#fff; padding:3px 8px; border-radius:3px; cursor:pointer; font-size:11px;">⏹️</button>
+                </div>
+            </div>
+            <div class="sf-ps-products" style="max-height:150px; overflow-y:auto;">${productsHtml}</div>
+            <div class="sf-ps-status" data-key="${item.key}" style="font-size:11px; color:${running ? '#2ecc71' : '#666'}; margin-top:4px;">● ${running ? this._getStatus(item.key) : 'متوقف'}</div>
+        </div>`;
+    }
+
+    _renderAnimalCard(item) {
+        const sched = this.schedules[item.key];
+        const running = sched?.running || false;
+        const cycles = sched?.targetCycles || 0;
+
+        return `
+        <div class="sf-ps-card" style="background:rgba(230,126,34,0.1); border:1px solid #2c3e50; border-radius:6px; padding:8px; margin-bottom:6px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                <span style="font-weight:bold; font-size:12px; color:#e67e22;">🐄 ${item.name}</span>
+                <div style="display:flex; gap:4px;">
+                    <button class="sf-ps-start-btn" data-key="${item.key}" style="background:#27ae60; border:none; color:#fff; padding:3px 8px; border-radius:3px; cursor:pointer; font-size:11px;">▶️</button>
+                    <button class="sf-ps-stop-btn" data-key="${item.key}" style="background:#c0392b; border:none; color:#fff; padding:3px 8px; border-radius:3px; cursor:pointer; font-size:11px;">⏹️</button>
+                </div>
+            </div>
+            <div style="display:flex; align-items:center; gap:6px; font-size:12px;">
+                <span style="color:#aaa;">عدد الدورات:</span>
+                <input type="number" min="0" value="${cycles}" data-key="${item.key}"
+                    class="sf-ps-cycles" style="width:55px; background:#1a1a2e; color:#fff; border:1px solid #444; border-radius:3px; padding:2px 4px; text-align:center; font-size:11px;">
+                <span style="color:#666; font-size:10px;">(0 = لا نهائي)</span>
+            </div>
+            <div class="sf-ps-status" data-key="${item.key}" style="font-size:11px; color:${running ? '#2ecc71' : '#666'}; margin-top:4px;">● ${running ? this._getStatus(item.key) : 'متوقف'}</div>
+        </div>`;
+    }
+
+    // ═══════════════════════════════════════
+    // SCHEDULE MANAGEMENT
+    // ═══════════════════════════════════════
+    _readFromUI(key) {
+        const item = this.items.find(i => i.key === key);
+        if (!item) return null;
+
+        if (item.type === 'Machine') {
+            const queue = [];
+            const inputs = this.container?.querySelectorAll(`.sf-ps-qty[data-key="${key}"]`) || [];
+            inputs.forEach(inp => {
+                const idx = parseInt(inp.dataset.pidx);
+                const target = parseInt(inp.value) || 0;
+                if (target > 0 && item.products[idx]) {
+                    queue.push({
+                        productIndex: idx,
+                        rawMaterialId: item.products[idx].rawMaterialId,
+                        productId: item.products[idx].productId,
+                        name: item.products[idx].name,
+                        target, done: 0
+                    });
+                }
+            });
+            return { queue, currentQueueIdx: 0, running: true, completedCycles: 0, targetCycles: 0 };
+        } else {
+            const inp = this.container?.querySelector(`.sf-ps-cycles[data-key="${key}"]`);
+            return { queue: [], currentQueueIdx: 0, running: true, completedCycles: 0, targetCycles: parseInt(inp?.value) || 0 };
+        }
+    }
+
+    _startOne(key) {
+        const sched = this._readFromUI(key);
+        if (!sched) return;
+        const item = this.items.find(i => i.key === key);
+
+        if (item?.type === 'Machine' && sched.queue.length === 0) {
+            sched.queue = [{ productIndex: -1, name: 'المنتج الحالي', target: 0, done: 0 }];
+        }
+
+        this.schedules[key] = sched;
+        this._updateStatus(key, '▶️ يعمل...');
+        this._log(`✅ بدأ: ${item?.name || key}`);
+        this._startLoop();
+    }
+
+    _stopOne(key) {
+        if (this.schedules[key]) {
+            this.schedules[key].running = false;
+            this._updateStatus(key, '⏹️ متوقف');
+            this._log(`⏹️ توقف: ${this.items.find(i => i.key === key)?.name || key}`);
+        }
+        if (!Object.values(this.schedules).some(s => s.running)) this._stopLoop();
+    }
+
+    _startAll() { this.items.forEach(item => this._startOne(item.key)); }
+    _stopAll() { Object.keys(this.schedules).forEach(k => this._stopOne(k)); this._stopLoop(); }
+
+    _getStatus(key) {
+        const sched = this.schedules[key];
+        if (!sched?.running) return 'متوقف';
+        const item = this.items.find(i => i.key === key);
+
+        if (item?.type === 'Machine') {
+            if (sched.queue.length === 0) return 'لا منتجات';
+            const cur = sched.queue[sched.currentQueueIdx];
+            if (!cur) return '✅ اكتمل!';
+            if (cur.target === 0) return `🔄 ${cur.name} (لا نهائي) — ${cur.done} تم`;
+            const done = sched.queue.reduce((s, q) => s + q.done, 0);
+            const total = sched.queue.reduce((s, q) => s + q.target, 0);
+            return `🔄 ${cur.name} ${cur.done}/${cur.target} | ${done}/${total}`;
+        } else {
+            const t = sched.targetCycles === 0 ? '∞' : sched.targetCycles;
+            return `🔄 دورة ${sched.completedCycles}/${t}`;
+        }
+    }
+
+    _updateStatus(key, text) {
+        const el = this.container?.querySelector(`.sf-ps-status[data-key="${key}"]`);
+        if (el) {
+            el.style.color = this.schedules[key]?.running ? '#2ecc71' : '#666';
+            el.textContent = `● ${text || this._getStatus(key)}`;
+        }
+    }
+
+    // ═══════════════════════════════════════
+    // MAIN LOOP
+    // ═══════════════════════════════════════
+    _startLoop() {
+        if (this.loopTimer) return;
+        this._log(`🔄 حلقة الفحص (${this.loopSpeed}ms)`);
+        this.loopTimer = setInterval(() => this._checkAll(), this.loopSpeed);
+    }
+
+    _stopLoop() {
+        if (this.loopTimer) { clearInterval(this.loopTimer); this.loopTimer = null; }
+    }
+
+    _checkAll() {
+        const keys = Object.keys(this.schedules).filter(k => this.schedules[k].running);
+        if (keys.length === 0) { this._stopLoop(); return; }
+        keys.forEach(key => {
+            try { this._processItem(key); } catch(e) { this._log(`❌ ${key}: ${e.message}`); }
+        });
+    }
+
+    _processItem(key) {
+        const sched = this.schedules[key];
+        const item = this.items.find(i => i.key === key);
+        if (!item || !sched?.running) return;
+
+        const mo = this._getFreshMO(item);
+        if (!mo) return;
+        const sd = mo.serverData || {};
+
+        if (item.type === 'Machine') this._processMachine(key, item, mo, sd, sched);
+        else this._processAnimal(key, item, mo, sd, sched);
+    }
+
+    _processMachine(key, item, mo, sd, sched) {
+        const gw = unsafeWindow;
+        const gc = gw.GF?.gameController;
+
+        const hasProducts = sd.products && (
+            (Array.isArray(sd.products) && sd.products.length > 0) ||
+            (typeof sd.products === 'number' && sd.products > 0));
+
+        if (hasProducts) {
+            this._log(`📦 حصاد: ${item.name}`);
+            try { if (gc?._collectMapObject) gc._collectMapObject(mo); } catch(e) {}
+
+            const cur = sched.queue[sched.currentQueueIdx];
+            if (cur) {
+                cur.done++;
+                if (cur.target > 0 && cur.done >= cur.target) {
+                    sched.currentQueueIdx++;
+                    if (sched.currentQueueIdx >= sched.queue.length) {
+                        sched.running = false;
+                        this._updateStatus(key, '✅ اكتمل!');
+                        this._log(`🎉 ${item.name}: اكتمل الجدول!`);
+                        return;
+                    }
+                }
+            }
+            this._updateStatus(key);
+            return;
+        }
+
+        const rawMats = sd.raw_materials;
+        const isIdle = !rawMats || (Array.isArray(rawMats) && rawMats.every(r => !r || (Array.isArray(r) && r.length === 0)));
+
+        if (isIdle) {
+            const cur = sched.queue[sched.currentQueueIdx];
+            if (cur && cur.productIndex >= 0) {
+                const curSel = parseInt(sd.selected_raw_material) || 0;
+                if (curSel !== cur.productIndex && curSel !== cur.productIndex + 1) {
+                    this._log(`🔄 تبديل: ${item.name} → ${cur.name}`);
+                    try {
+                        gw.NetUtils.enqueue('save_selected_material.save_data', {
+                            id: item.id, x: item.x, y: item.y, flip: 0, material: cur.productIndex
+                        });
+                    } catch(e) {}
+                    return;
+                }
+            }
+
+            this._log(`🔧 تعبئة: ${item.name}`);
+            try {
+                if (gc?._refillMapObject) gc._refillMapObject(mo);
+                else if (gc?.refillMapObject) gc.refillMapObject(mo);
+                else if (gc?._feedMapObject) gc._feedMapObject(mo);
+            } catch(e) {}
+            this._updateStatus(key);
+        }
+    }
+
+    _processAnimal(key, item, mo, sd, sched) {
+        const gc = unsafeWindow.GF?.gameController;
+
+        if (sched.targetCycles > 0 && sched.completedCycles >= sched.targetCycles) {
+            sched.running = false;
+            this._updateStatus(key, `✅ اكتمل ${sched.completedCycles} دورة`);
+            this._log(`🎉 ${item.name}: ${sched.completedCycles} دورة`);
+            return;
+        }
+
+        const hasProducts = (typeof sd.products === 'number' && sd.products > 0) ||
+                           (Array.isArray(sd.products) && sd.products.length > 0);
+
+        if (hasProducts) {
+            this._log(`📦 حصاد: ${item.name}`);
+            try { if (gc?._collectMapObject) gc._collectMapObject(mo); } catch(e) {}
+            sched.completedCycles++;
+            this._updateStatus(key);
+            return;
+        }
+
+        const needsFeed = sd.raw_materials === 0 || sd.raw_materials === '0' || sd.raw_materials === false;
+        if (needsFeed) {
+            this._log(`🍽️ تغذية: ${item.name}`);
+            try {
+                if (gc?._feedMapObject) gc._feedMapObject(mo);
+                else if (gc?.feedMapObject) gc.feedMapObject(mo);
+            } catch(e) {}
+            this._updateStatus(key);
+        }
+    }
+
+    // ═══════════════════════════════════════
+    // HELPERS
+    // ═══════════════════════════════════════
+    _getFreshMO(item) {
+        try {
+            const moList = unsafeWindow.GameGridData?.uidDictionary
+                ? Object.values(unsafeWindow.GameGridData.uidDictionary) : [];
+            return moList.find(mo => {
+                if (!mo?.configData) return false;
+                const sd = mo.serverData || {};
+                return mo.configData.id === item.id &&
+                    (parseInt(sd.x || sd.map_x) || 0) === item.x &&
+                    (parseInt(sd.y || sd.map_y) || 0) === item.y;
+            }) || null;
+        } catch(e) { return null; }
+    }
+
+    _log(msg) {
+        const ts = new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        this._logLines.unshift(`[${ts}] ${msg}`);
+        if (this._logLines.length > 50) this._logLines.length = 50;
+        const el = this.container?.querySelector('#sf-ps-log');
+        if (el) el.innerHTML = this._logLines.join('<br>');
+    }
+};
+
+SF.modules.register(new SF.ProductionSchedulerModule());
+
+
 // --- System Initialization ---
 (function() {
     'use strict';
