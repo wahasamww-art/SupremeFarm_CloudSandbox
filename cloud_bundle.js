@@ -21,7 +21,7 @@
 
 // ===================================================================
 // SupremeFarm Modular - Cloud Distribution Bundle
-// Generated at: 2026-09-02T20:08:32.795Z
+// Generated at: 2026-09-02T19:57:41.583Z
 // ===================================================================
 
 var SF = window.SF || {};
@@ -143,7 +143,7 @@ SF.StorageManager = class StorageManager {
                 let val = GM_getValue(key);
                 return val ? JSON.parse(val) : defaultVal;
             }
-            let val = SF.StorageManager.get(key);
+            let val = localStorage.getItem(key);
             return val ? JSON.parse(val) : defaultVal;
         } catch(e) { return defaultVal; }
     }
@@ -152,7 +152,7 @@ SF.StorageManager = class StorageManager {
         if (typeof GM_setValue !== 'undefined') {
             GM_setValue(key, JSON.stringify(val));
         } else {
-            SF.StorageManager.set(key, JSON.stringify(val));
+            localStorage.setItem(key, JSON.stringify(val));
         }
     }
 
@@ -823,7 +823,7 @@ SF.SplashScreen = class SplashScreen {
 
 
 // --- File: ui/UIManager.js ---
-// --- ui/UIManager.js ---
+// --- ui\UIManager.js ---
 window.SF = window.SF || {};
 
 SF.UIManager = class UIManager {
@@ -845,16 +845,6 @@ SF.UIManager = class UIManager {
             // Hide panel initially so it doesn't clutter the screen
             this.app.classList.add('sf-hidden');
         }
-        
-        // Bulletproof: Force UI to stay in DOM
-        setInterval(() => {
-            if (this.topBar && document.body && !document.body.contains(this.topBar)) {
-                document.body.appendChild(this.topBar);
-            }
-            if (this.app && document.body && !document.body.contains(this.app)) {
-                document.body.appendChild(this.app);
-            }
-        }, 2000);
     }
 
     injectCSS() {
@@ -2705,7 +2695,7 @@ SF.MachineBuilderModule = class MachineBuilderModule extends SF.ModuleBase {
 
     function getSavedState() {
         try {
-            let state = SF.StorageManager.get(STATE_KEY);
+            let state = localStorage.getItem(STATE_KEY);
             let gameDay = getGameDayString();
             if (state) {
                 let parsed = JSON.parse(state);
@@ -2716,7 +2706,7 @@ SF.MachineBuilderModule = class MachineBuilderModule extends SF.ModuleBase {
     }
 
     function saveState(index) {
-        SF.StorageManager.set(STATE_KEY, JSON.stringify({
+        localStorage.setItem(STATE_KEY, JSON.stringify({
             date: getGameDayString(),
             index: index
         }));
@@ -5609,7 +5599,7 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
     constructor() {
         super('autoharvest_pro', 'الحصاد السريع', '🚜');
         this.isRunning = false;
-        this.blacklist = JSON.parse(SF.StorageManager.get('sf_mega_harvest_blacklist') || '{}');
+        this.blacklist = JSON.parse(localStorage.getItem('sf_mega_harvest_blacklist') || '{}');
         this.clearBlacklistIfNeeded();
         
         // Settings
@@ -5627,7 +5617,7 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
     }
 
     clearBlacklistIfNeeded() {
-        let lastCleared = SF.StorageManager.get('sf_mega_harvest_last_clear');
+        let lastCleared = localStorage.getItem('sf_mega_harvest_last_clear');
         let now = new Date();
         let targetClearTime = new Date();
         targetClearTime.setHours(7, 0, 0, 0);
@@ -5639,13 +5629,13 @@ SF.AutoMegaHarvestModule = class AutoMegaHarvestModule extends SF.ModuleBase {
         if (!lastCleared || new Date(parseInt(lastCleared)) < targetClearTime) {
             this.blacklist = {};
             this.saveBlacklist();
-            SF.StorageManager.set('sf_mega_harvest_last_clear', Date.now().toString());
+            localStorage.setItem('sf_mega_harvest_last_clear', Date.now().toString());
             console.log("[AutoMegaHarvest] تم تصفير القائمة السوداء تلقائياً (تجاوزت الساعة 7 صباحاً).");
         }
     }
 
     saveBlacklist() {
-        SF.StorageManager.set('sf_mega_harvest_blacklist', JSON.stringify(this.blacklist));
+        localStorage.setItem('sf_mega_harvest_blacklist', JSON.stringify(this.blacklist));
     }
 
     getStore() {
@@ -8137,19 +8127,11 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
             if (gw.App?.ControllerManager?.getControllerModel("WindowManager")?.getOpenWindows && gw.App.ControllerManager.getControllerModel("WindowManager").getOpenWindows().length > 0) hideAll = true;
             if (gw.GF?.guiManager?.getOpenWindows && gw.GF.guiManager.getOpenWindows().length > 0) hideAll = true;
             
-            // Robust check via Egret LayerManager checking visibility
+            // Robust check via Egret LayerManager
             if (gw.LayerManager) {
-                const isVisible = (layer) => {
-                    if (!layer || layer.numChildren === 0) return false;
-                    const children = layer.$children || layer.children || [];
-                    for (let i = 0; i < children.length; i++) {
-                        if (children[i].visible !== false && children[i].alpha !== 0) return true;
-                    }
-                    return false;
-                };
-                if (isVisible(gw.LayerManager.UI_Popup)) hideAll = true;
-                if (isVisible(gw.LayerManager.UI_Message)) hideAll = true;
-                if (isVisible(gw.LayerManager.UI_Tutorial)) hideAll = true;
+                if (gw.LayerManager.UI_Popup && gw.LayerManager.UI_Popup.numChildren > 0) hideAll = true;
+                if (gw.LayerManager.UI_Message && gw.LayerManager.UI_Message.numChildren > 0) hideAll = true;
+                if (gw.LayerManager.UI_Tutorial && gw.LayerManager.UI_Tutorial.numChildren > 0) hideAll = true;
             }
         } catch(e) {}
 
