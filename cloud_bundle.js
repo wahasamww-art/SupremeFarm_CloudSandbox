@@ -1,4 +1,4 @@
-﻿// ==UserScript==
+// ==UserScript==
 // @name         حصاد مظبوط المدمج
 // @namespace    https://supreme-farm.local
 // @version      2.1.0
@@ -7377,6 +7377,7 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
         this._waitingProductChange = {};
         this.activeMachineKey = null;
         this.activeFilter = 'all';
+        this._missingCounter = {}; // عداد غياب لكل item ← حماية Race Condition
     }
 
     _normalizeArabic(text) {
@@ -7561,16 +7562,35 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
         let changed = false;
         const currentUids = new Set(Object.keys(dict));
 
-        // 1. Remove missing items (sold or removed in CURRENT scene)
+        // ══════════════════════════════════════════════════════════════════════
+        // GRACE PERIOD FIX — حل Race Condition بين uidDictionary و scene_select
+        //
+        // السبب الجذري للبـاغ:
+        //   عند الذهاب لمزرعة أخرى أو الحصاد فيها والرجوع بسرعة،
+        //   يتغير uidDictionary فوراً بينما scene_select لم يتغير بعد.
+        //   → الآلات "تختفي" مع بقاء currentScene نفسه
+        //   → الكود القديم يعتقد أنها بيعت → يحذف الجدولة!
+        //
+        // الحل: عداد غياب لكل item. إذا غابت 3 دورات متتالية (≈9 ثوان)
+        //   فقط نحذفها — يمنح وقتاً لـ scene_select للتزامن.
+        // ══════════════════════════════════════════════════════════════════════
+        const MISSING_THRESHOLD = 3;
+
+        // 1. Check for missing items — apply grace period before deletion
         for (let i = this.items.length - 1; i >= 0; i--) {
             const item = this.items[i];
             if (!item.mo || !currentUids.has(String(item.mo.map_unique_id))) {
-                // ══════════════════════════════════════════════════════════════
-                // BUG FIX: حماية ضد Race Condition عند تنقل AutoFarm
-                // عند زيارة مزرعة أخرى، يتغير uidDictionary قبل scene_select
-                // فتظهر الآلات/الحيوانات "مفقودة" بينما هي مجرد في مزرعة أخرى.
-                // الحل: احذف الجدولة فقط إذا كان المنتج ينتمي للـ scene الحالي.
-                // ══════════════════════════════════════════════════════════════
+                // زيادة عداد الغياب
+                this._missingCounter[item.key] = (this._missingCounter[item.key] || 0) + 1;
+
+                if (this._missingCounter[item.key] < MISSING_THRESHOLD) {
+                    // لا نزال في فترة الانتظار — لا نحذف شيئاً بعد
+                    continue;
+                }
+
+                // تجاوزت الحد → مفقودة فعلاً (بيع أو إزالة حقيقية)
+                delete this._missingCounter[item.key];
+
                 const itemScene = parseInt((item.key || '').split('_')[1]) || -1;
                 const itemBelongsToCurrentScene = (itemScene === currentScene);
 
@@ -7582,6 +7602,9 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
                 if (this.badges[item.key]) { this.badges[item.key].remove(); delete this.badges[item.key]; }
                 this.items.splice(i, 1);
                 changed = true;
+            } else {
+                // item موجودة → أعد ضبط عداد الغياب
+                delete this._missingCounter[item.key];
             }
         }
 
@@ -7698,13 +7721,17 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
             this._renderAnimals();
             this._renderMachines();
             this._saveSchedules();
-            // ══════════════════════════════════════════════════════════════
-            // BUG FIX: إعادة تشغيل الـ loop عند العودة للمزرعة الأصلية
-            // عند إضافة عناصر جديدة، تأكد أن الـ loop يعمل إذا كان في جداول نشطة
-            // ══════════════════════════════════════════════════════════════
-            if (Object.values(this.schedules).some(s => s.running)) {
-                this._startLoop();
-            }
+        }
+
+        // ══════════════════════════════════════════════════════════════════════
+        // LOOP RESUME FIX — استئناف مستقل عن changed
+        //
+        // السبب: إذا عادت نفس الآلات بنفس الـ key (لم يتغير شيء في items)،
+        // فـ changed = false والـ loop لا يُستأنف رغم وجود جداول نشطة.
+        // الحل: نتحقق دائماً من الجداول النشطة بعد كل sync.
+        // ══════════════════════════════════════════════════════════════════════
+        if (Object.values(this.schedules).some(s => s.running)) {
+            this._startLoop();
         }
     }
 
