@@ -1,4 +1,4 @@
-﻿// ==UserScript==
+// ==UserScript==
 // @name         حصاد مظبوط المدمج
 // @namespace    https://supreme-farm.local
 // @version      2.1.0
