@@ -1,4 +1,4 @@
-// ==UserScript==
+﻿// ==UserScript==
 // @name         حصاد مظبوط المدمج
 // @namespace    https://supreme-farm.local
 // @version      2.1.0
@@ -7365,6 +7365,7 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
         super('production_scheduler', 'جدولة الإنتاج', '🏭');
         this.items = [];
         this.schedules = (window.SF && window.SF.StorageManager) ? window.SF.StorageManager.get('sf-production-schedules', {}) : {};
+        this.favorites = (window.SF && window.SF.StorageManager) ? window.SF.StorageManager.get('sf-ps-favorites', {}) : {};
         this.badges = {};
         this.loopTimer = null;
         this.posTimer = null;
@@ -7389,6 +7390,7 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
     _saveSchedules() {
         if (!window.SF || !window.SF.StorageManager) return;
         window.SF.StorageManager.set('sf-production-schedules', this.schedules);
+        window.SF.StorageManager.set('sf-ps-favorites', this.favorites);
     }
 
     render() {
@@ -7477,6 +7479,19 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
                 const qtyInput = parent.querySelector('.sf-ps-prod-qty');
                 this._addToQueue(tgt.dataset.key, idx, parseInt(qtyInput.value) || 0);
             }
+            else if (tgt.classList.contains('sf-ps-add-chain-btn')) {
+                const idx = parseInt(tgt.dataset.idx);
+                const parent = tgt.closest('.sf-ps-prod-item');
+                const qtyInput = parent.querySelector('.sf-ps-prod-qty');
+                this._addChainToQueue(tgt.dataset.key, idx, parseInt(qtyInput.value) || 0);
+            }
+            else if (tgt.classList.contains('sf-ps-fav-btn')) {
+                this._toggleFavorite(tgt.dataset.key);
+            }
+            else if (tgt.classList.contains('sf-ps-nav-btn')) {
+                const item = this.items.find(i => i.key === tgt.dataset.key);
+                if (item) this._navigateToItem(item);
+            }
         });
 
         this._scheduleAutoInit();
@@ -7550,10 +7565,20 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
         for (let i = this.items.length - 1; i >= 0; i--) {
             const item = this.items[i];
             if (!item.mo || !currentUids.has(String(item.mo.map_unique_id))) {
-                if (this.schedules[item.key]) {
+                // ══════════════════════════════════════════════════════════════
+                // BUG FIX: حماية ضد Race Condition عند تنقل AutoFarm
+                // عند زيارة مزرعة أخرى، يتغير uidDictionary قبل scene_select
+                // فتظهر الآلات/الحيوانات "مفقودة" بينما هي مجرد في مزرعة أخرى.
+                // الحل: احذف الجدولة فقط إذا كان المنتج ينتمي للـ scene الحالي.
+                // ══════════════════════════════════════════════════════════════
+                const itemScene = parseInt((item.key || '').split('_')[1]) || -1;
+                const itemBelongsToCurrentScene = (itemScene === currentScene);
+
+                if (itemBelongsToCurrentScene && this.schedules[item.key]) {
                     this.schedules[item.key].running = false;
                     delete this.schedules[item.key];
                 }
+                // إذا كان المنتج من مزرعة أخرى، احتفظ بجدولته ← فقط أزله من items
                 if (this.badges[item.key]) { this.badges[item.key].remove(); delete this.badges[item.key]; }
                 this.items.splice(i, 1);
                 changed = true;
@@ -7673,8 +7698,16 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
             this._renderAnimals();
             this._renderMachines();
             this._saveSchedules();
+            // ══════════════════════════════════════════════════════════════
+            // BUG FIX: إعادة تشغيل الـ loop عند العودة للمزرعة الأصلية
+            // عند إضافة عناصر جديدة، تأكد أن الـ loop يعمل إذا كان في جداول نشطة
+            // ══════════════════════════════════════════════════════════════
+            if (Object.values(this.schedules).some(s => s.running)) {
+                this._startLoop();
+            }
         }
     }
+
 
     // ═══════════════════════════════════════
     // PANEL UI — Animals
@@ -7690,6 +7723,7 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
             const running = sched?.running;
             const cycles = sched?.targetCycles || 0;
             const done = sched?.completedCycles || 0;
+            const isFav = !!this.favorites[item.key];
             const reqHtml = (item.reqMats || []).map(rm => {
                 const count = this._getInventoryCount(rm.id);
                 const color = count > 0 ? '#2ecc71' : '#e74c3c';
@@ -7698,10 +7732,10 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
             
             const prodCount = item.productId ? this._getInventoryCount(item.productId) : 0;
             
-            return `<div class="sf-ps-item sf-ps-item-animal" data-key="${item.key}" data-name="${item.name}" style="background:rgba(230,126,34,0.1);border:1px solid #e67e2244;border-radius:8px;padding:8px 12px;margin-bottom:6px;box-shadow:0 2px 4px rgba(0,0,0,0.2);">
+            return `<div class="sf-ps-item sf-ps-item-animal" data-key="${item.key}" data-name="${item.name}" style="background:rgba(230,126,34,0.1);border:1px solid ${isFav ? '#f39c12' : '#e67e2244'};border-radius:8px;padding:8px 12px;margin-bottom:6px;box-shadow:0 2px 4px rgba(0,0,0,0.2);">
                 <div style="display:flex;align-items:center;justify-content:space-between;">
                     <div style="display:flex;flex-direction:column;gap:4px;">
-                        <span style="color:#e67e22;font-size:14px;font-weight:bold;display:flex;align-items:center;gap:6px;">🐄 <span>${item.name}</span></span>
+                        <span style="color:#e67e22;font-size:14px;font-weight:bold;display:flex;align-items:center;gap:6px;">🐄 <span>${item.name}</span>${isFav ? ' <span style="color:#f39c12;font-size:12px;">⭐</span>' : ''}</span>
                         ${(reqHtml || prodCount > 0) ? `
                         <div style="font-size:11px;color:#bbb;display:flex;flex-wrap:wrap;gap:4px;line-height:1.4;margin-top:2px;">
                             ${reqHtml}
@@ -7710,6 +7744,8 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
                         ` : ''}
                     </div>
                     <div style="display:flex;align-items:center;gap:6px;">
+                        <button class="sf-ps-fav-btn" data-key="${item.key}" style="background:${isFav ? 'rgba(243,156,18,0.3)' : 'rgba(255,255,255,0.05)'};border:1px solid ${isFav ? '#f39c12' : '#555'};color:${isFav ? '#f39c12' : '#777'};padding:4px 7px;border-radius:4px;cursor:pointer;font-size:14px;" title="${isFav ? 'إزالة من المفضلة' : 'إضافة للمفضلة'}">${isFav ? '⭐' : '☆'}</button>
+                        <button class="sf-ps-nav-btn" data-key="${item.key}" style="background:rgba(52,152,219,0.15);border:1px solid #3498db44;color:#3498db;padding:4px 7px;border-radius:4px;cursor:pointer;font-size:14px;" title="انتقل لهذا الحيوان">🎯</button>
                         <span style="color:#aaa;font-size:12px;">دورات:</span>
                         <input type="number" min="0" value="${cycles}" class="sf-ps-cycles" data-key="${item.key}" style="width:45px;background:#1a1a2e;color:#fff;border:1px solid #555;border-radius:4px;text-align:center;font-size:13px;padding:4px;outline:none;" title="0 = مستمر بدون توقف">
                         ${running
@@ -7723,8 +7759,11 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
             </div>`;
         };
 
-        const running = animals.filter(item => this.schedules[item.key]?.running);
-        const idle = animals.filter(item => !this.schedules[item.key]?.running);
+        // Sort: favorites first
+        const sortByFav = (a, b) => (this.favorites[b.key] ? 1 : 0) - (this.favorites[a.key] ? 1 : 0);
+
+        const running = animals.filter(item => this.schedules[item.key]?.running).sort(sortByFav);
+        const idle = animals.filter(item => !this.schedules[item.key]?.running).sort(sortByFav);
 
         let html = '';
         if (this.activeFilter === 'all' || this.activeFilter === 'running') {
@@ -7743,7 +7782,13 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
         if (!html) html = '<div style="color:#777;font-size:13px;text-align:center;padding:10px;">لا يوجد عناصر تطابق الفلتر الحالي</div>';
 
         container.innerHTML = html;
+        
+        const searchInput = this.container?.querySelector('#sf-ps-search-animal');
+        if (searchInput && searchInput.value) {
+            this._filterList('animal', searchInput.value);
+        }
     }
+
 
     // ═══════════════════════════════════════
     // PANEL UI — Machines
@@ -7820,7 +7865,27 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
                             const reqHtml = (p.reqMats || []).map(rm => {
                                 const count = this._getInventoryCount(rm.id);
                                 const color = count > 0 ? '#2ecc71' : '#e74c3c';
-                                return `<span style="background:rgba(0,0,0,0.3);padding:2px 4px;border-radius:3px;margin-left:4px;">${rm.name}: <strong style="color:${color};">${count}</strong></span>`;
+                                
+                                const producer = this._findMachineProducing(rm.id);
+                                let chainHtml = '';
+                                if (producer) {
+                                    if (producer.status === 'placed') {
+                                        chainHtml = `<button class="sf-ps-manage-btn" data-key="${producer.key}" style="background:#2980b9;border:none;color:#fff;font-size:10px;padding:2px 4px;border-radius:3px;margin-right:4px;cursor:pointer;" title="اذهب إلى هذه الآلة لجدولتها">⚙️ ${producer.name}</button>`;
+                                    } else if (producer.status === 'missing') {
+                                        chainHtml = `<span style="background:rgba(231,76,60,0.2);color:#e74c3c;font-size:10px;padding:2px 4px;border-radius:3px;margin-right:4px;border:1px solid #e74c3c;" title="مفقودة! استخرجها من المستودع أو المتجر">❗️ ${producer.name}</span>`;
+                                    } else if (producer.status === 'animal') {
+                                        chainHtml = `<span style="background:rgba(230,126,34,0.2);color:#e67e22;font-size:10px;padding:2px 4px;border-radius:3px;margin-right:4px;border:1px solid #e67e22;" title="ينتجها حيوان">${producer.name}</span>`;
+                                    } else if (producer.status === 'tree') {
+                                        chainHtml = `<span style="background:rgba(39,174,96,0.2);color:#27ae60;font-size:10px;padding:2px 4px;border-radius:3px;margin-right:4px;border:1px solid #27ae60;" title="من شجرة">${producer.name}</span>`;
+                                    } else if (producer.status === 'seed') {
+                                        chainHtml = `<span style="background:rgba(39,174,96,0.15);color:#2ecc71;font-size:10px;padding:2px 4px;border-radius:3px;margin-right:4px;border:1px solid #2ecc71;" title="بذرة أو محصول زراعي">${producer.name}</span>`;
+                                    }
+                                }
+                                
+                                return `<span style="background:rgba(0,0,0,0.3);padding:2px 4px;border-radius:3px;margin-left:4px;display:inline-flex;align-items:center;">
+                                    ${rm.name}: <strong style="color:${color};margin:0 4px;">${count}</strong>
+                                    ${chainHtml}
+                                </span>`;
                             }).join('');
                             
                             const prodCount = p.productId ? this._getInventoryCount(p.productId) : 0;
@@ -7836,7 +7901,8 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
                             </div>
                             <div style="display:flex;align-items:center;gap:6px;">
                                 <input type="number" min="0" value="1" class="sf-ps-prod-qty" data-idx="${i}" style="width:45px;background:#111;color:#fff;border:1px solid #555;border-radius:4px;text-align:center;font-size:13px;padding:4px;outline:none;" title="0 = بلا حدود">
-                                <button class="sf-ps-add-prod-btn" data-key="${item.key}" data-idx="${i}" style="background:#8e44ad;border:none;color:#fff;padding:4px 12px;border-radius:4px;cursor:pointer;font-size:12px;font-weight:bold;">+ إضافة</button>
+                                <button class="sf-ps-add-chain-btn" data-key="${item.key}" data-idx="${i}" style="background:#27ae60;border:none;color:#fff;padding:4px 12px;border-radius:4px;cursor:pointer;font-size:12px;font-weight:bold;box-shadow:0 0 5px rgba(39,174,96,0.5);" title="جدولة هذا المنتج وكل مواده الخام">➕ جدولة ذكية</button>
+                                <button class="sf-ps-add-prod-btn" data-key="${item.key}" data-idx="${i}" style="background:#8e44ad;border:none;color:#fff;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:12px;font-weight:bold;">إضافة</button>
                             </div>
                         </div>
                         `;
@@ -7866,14 +7932,17 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
             const sched = this.schedules[item.key];
             const running = sched?.running;
             const queue = sched?.queue || [];
+            const isFav = !!this.favorites[item.key];
             
-            return `<div class="sf-ps-item sf-ps-item-machine" data-key="${item.key}" data-name="${item.name}" style="background:rgba(52,152,219,0.1);border:1px solid #3498db44;border-radius:8px;padding:8px 12px;margin-bottom:6px;box-shadow:0 2px 4px rgba(0,0,0,0.2);">
+            return `<div class="sf-ps-item sf-ps-item-machine" data-key="${item.key}" data-name="${item.name}" style="background:rgba(52,152,219,0.1);border:1px solid ${isFav ? '#f39c12' : '#3498db44'};border-radius:8px;padding:8px 12px;margin-bottom:6px;box-shadow:0 2px 4px rgba(0,0,0,0.2);">
                 <div style="display:flex;align-items:center;justify-content:space-between;">
                     <div style="display:flex;flex-direction:column;gap:4px;">
-                        <span style="color:#3498db;font-size:14px;font-weight:bold;display:flex;align-items:center;gap:6px;">⚙ <span>${item.name}</span></span>
+                        <span style="color:#3498db;font-size:14px;font-weight:bold;display:flex;align-items:center;gap:6px;">⚙ <span>${item.name}</span>${isFav ? ' <span style="color:#f39c12;font-size:12px;">⭐</span>' : ''}</span>
                         <span style="font-size:11px;color:#aaa;">${queue.length > 0 ? `الجدولة: ${queue.length} منتجات` : 'لا يوجد منتجات مجدولة'}</span>
                     </div>
                     <div style="display:flex;gap:6px;align-items:center;">
+                        <button class="sf-ps-fav-btn" data-key="${item.key}" style="background:${isFav ? 'rgba(243,156,18,0.3)' : 'rgba(255,255,255,0.05)'};border:1px solid ${isFav ? '#f39c12' : '#555'};color:${isFav ? '#f39c12' : '#777'};padding:5px 8px;border-radius:4px;cursor:pointer;font-size:14px;" title="${isFav ? 'إزالة من المفضلة' : 'إضافة للمفضلة'}">${isFav ? '⭐' : '☆'}</button>
+                        <button class="sf-ps-nav-btn" data-key="${item.key}" style="background:rgba(52,152,219,0.15);border:1px solid #3498db44;color:#3498db;padding:5px 8px;border-radius:4px;cursor:pointer;font-size:14px;" title="انتقل لهذه الآلة">🎯</button>
                         <button class="sf-ps-manage-btn" data-key="${item.key}" style="background:#34495e;border:1px solid #2c3e50;color:#fff;padding:6px 12px;border-radius:4px;cursor:pointer;font-size:12px;font-weight:bold;">⚙️ إدارة</button>
                         ${running
                             ? `<button class="sf-ps-stop-btn" data-key="${item.key}" style="background:#c0392b;border:none;color:#fff;padding:6px 10px;border-radius:4px;cursor:pointer;font-size:12px;font-weight:bold;">⏹</button>`
@@ -7884,8 +7953,11 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
             </div>`;
         };
 
-        const running = machines.filter(item => this.schedules[item.key]?.running);
-        const idle = machines.filter(item => !this.schedules[item.key]?.running);
+        // Sort: favorites first
+        const sortByFav = (a, b) => (this.favorites[b.key] ? 1 : 0) - (this.favorites[a.key] ? 1 : 0);
+
+        const running = machines.filter(item => this.schedules[item.key]?.running).sort(sortByFav);
+        const idle = machines.filter(item => !this.schedules[item.key]?.running).sort(sortByFav);
 
         let html = '';
         if (this.activeFilter === 'all' || this.activeFilter === 'running') {
@@ -7904,7 +7976,13 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
         if (!html) html = '<div style="color:#777;font-size:13px;text-align:center;padding:10px;">لا يوجد عناصر تطابق الفلتر الحالي</div>';
 
         container.innerHTML = html;
+        
+        const searchInput = this.container?.querySelector('#sf-ps-search-machine');
+        if (searchInput && searchInput.value) {
+            this._filterList('machine', searchInput.value);
+        }
     }
+
 
     _filterList(type, query) {
         const listId = type === 'animal' ? '#sf-ps-animals-list' : '#sf-ps-machines-list';
@@ -7953,19 +8031,43 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
                     q.rawMaterialId = matId; // Auto-fix legacy schedules
                 }
             }
-            
             let hasStock = true;
-            if (matId) {
+            let missingName = null;
+            
+            if (item && item.products) {
+                const p = item.products.find(prod => prod.index === q.productIndex);
+                if (p && p.reqMats && p.reqMats.length > 0) {
+                    for (let rm of p.reqMats) {
+                        const invCount = this._getInventoryCount(rm.id);
+                        if (invCount < 1) {
+                            hasStock = false;
+                            missingName = rm.name || this._getItemSourceHint(rm.id);
+                            break;
+                        }
+                    }
+                } else if (matId) {
+                    // Fallback to legacy matId if reqMats not available
+                    const invCount = this._getInventoryCount(matId);
+                    if (invCount < 1) {
+                        hasStock = false;
+                        missingName = this._getItemSourceHint(matId);
+                    }
+                }
+            } else if (matId) {
                 const invCount = this._getInventoryCount(matId);
                 if (invCount < 1) {
                     hasStock = false;
-                    q.error = `ينقصك: ${this._getItemSourceHint(matId)}`;
-                } else {
-                    q.error = null;
+                    missingName = this._getItemSourceHint(matId);
                 }
             }
 
-            if (hasStock && (q.target === 0 || q.done < q.target)) {
+            if (!hasStock) {
+                q.error = `ينقصك: ${missingName}`;
+            } else {
+                q.error = null;
+            }
+
+            if (q.target === 0 || q.done < q.target) {
                 sched.currentQueueIdx = i;
                 found = true;
                 break;
@@ -8081,6 +8183,31 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
         const gw = unsafeWindow;
         const canvas = document.querySelector('canvas');
         if (!canvas) return;
+        
+        let hideAll = false;
+        try {
+            if (gw.GF?.windowManager?.getOpenWindows && gw.GF.windowManager.getOpenWindows().length > 0) hideAll = true;
+            if (gw.App?.PopUpManager?.getPopUps && gw.App.PopUpManager.getPopUps().length > 0) hideAll = true;
+            if (gw.PopUpManager?.getPopUps && gw.PopUpManager.getPopUps().length > 0) hideAll = true;
+            if (gw.App?.ControllerManager?.getControllerModel("WindowManager")?.getOpenWindows && gw.App.ControllerManager.getControllerModel("WindowManager").getOpenWindows().length > 0) hideAll = true;
+            if (gw.GF?.guiManager?.getOpenWindows && gw.GF.guiManager.getOpenWindows().length > 0) hideAll = true;
+            
+            // Robust check via Egret LayerManager checking visibility
+            if (gw.LayerManager) {
+                const isVisible = (layer) => {
+                    if (!layer || layer.numChildren === 0) return false;
+                    const children = layer.$children || layer.children || [];
+                    for (let i = 0; i < children.length; i++) {
+                        if (children[i].visible !== false && children[i].alpha !== 0) return true;
+                    }
+                    return false;
+                };
+                if (isVisible(gw.LayerManager.UI_Popup)) hideAll = true;
+                if (isVisible(gw.LayerManager.UI_Message)) hideAll = true;
+                if (isVisible(gw.LayerManager.UI_Tutorial)) hideAll = true;
+            }
+        } catch(e) {}
+
         const rect = canvas.getBoundingClientRect();
         let stageW, stageH;
         try { const s = gw.egret.lifecycle.stage; stageW = s.stageWidth; stageH = s.stageHeight; } catch(e) { stageW = canvas.width; stageH = canvas.height; }
@@ -8089,7 +8216,10 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
         Object.keys(this.badges).forEach(key => {
             const badge = this.badges[key];
             const item = this.items.find(i => i.key === key);
-            if (!badge || !item) return;
+            if (!badge || !item || hideAll) {
+                if (badge) badge.style.display = 'none';
+                return;
+            }
             try {
                 const mo = this._getFreshMO(item);
                 if (!mo || typeof mo.localToGlobal !== 'function') { badge.style.display = 'none'; return; }
@@ -8177,18 +8307,39 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
                     if (typeof mo.setRawMaterial === 'function') { try { mo.setRawMaterial(next.productIndex); } catch(e) {} }
                     try { gw.NetUtils.flush(); } catch(e) {}
                 }
+                if (next.error) {
+                    this._updateBadge(key);
+                    return; // Pause and wait for material
+                }
                 
                 try {
-                    const slot = 1;
-                    const matId = next.rawMaterialId || (mo.getRawMaterialId ? mo.getRawMaterialId(slot) : null);
-                    if (matId && gc._refillMapObject) { 
-                        gc._refillMapObject(mo, matId, slot, false); 
-                        this._updateBadge(key); 
+                    const p = item.products.find(prod => prod.index === next.productIndex);
+                    if (p && p.reqMats && p.reqMats.length > 0 && gc._refillMapObject) {
+                        // Multi-slot refill
+                        for (let s = 0; s < p.reqMats.length; s++) {
+                            const mId = p.reqMats[s].id;
+                            const slotNum = s + 1; // slots are usually 1-indexed
+                            try { gc._refillMapObject(mo, mId, slotNum, false); } catch(e) {}
+                        }
+                        this._updateBadge(key);
                         this._log(`▶ بدء ${item.name}: ${next.name}`);
-                    } else if (!matId) {
-                        this._log(`⚠️ تعذر معرفة مكون ${next.name}`);
+                    } else {
+                        // Fallback to single slot
+                        const slot = 1;
+                        const matId = next.rawMaterialId || (mo.getRawMaterialId ? mo.getRawMaterialId(slot) : null);
+                        if (matId && gc._refillMapObject) { 
+                            gc._refillMapObject(mo, matId, slot, false); 
+                            this._updateBadge(key); 
+                            this._log(`▶ بدء ${item.name}: ${next.name}`);
+                        } else if (!matId) {
+                            if (gc._clickMapObject) gc._clickMapObject(mo);
+                            this._updateBadge(key);
+                            this._log(`▶ بدء (نقرة) ${item.name}: ${next.name}`);
+                        }
                     }
-                } catch(e) {}
+                } catch(e) {
+                    this._log(`⚠️ خطأ في تشغيل ${item.name}`);
+                }
             }
         }
     }
@@ -8229,6 +8380,118 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
             } catch(e) {}
         }
     }
+
+    // ═══════════════════════════════════════
+    // ═══════════════════════════════════════
+    // CHAIN CRAFTING & DEPENDENCY RESOLUTION
+    // ═══════════════════════════════════════
+    _findMachineProducing(productId) {
+        // 1. Check placed machines on the farm
+        for (let i = 0; i < this.items.length; i++) {
+            let itm = this.items[i];
+            if (itm.type === 'Machine' && itm.products) {
+                let p = itm.products.find(x => x.productId == productId);
+                if (p) return { status: 'placed', name: itm.name, key: itm.key };
+            }
+        }
+
+        // 2. Check placed animals on the farm (they produce items too)
+        for (let i = 0; i < this.items.length; i++) {
+            let itm = this.items[i];
+            if (itm.type === 'Animal' && itm.productId == productId) {
+                return { status: 'animal', name: `🐄 ${itm.name} (موجود في المزرعة)`, key: itm.key };
+            }
+        }
+
+        // 3. Search Config.originData for machine/animal/seed/tree matching this productId
+        try {
+            const gw = unsafeWindow;
+            if (gw.Config && gw.Config.originData) {
+                let items = gw.Config.originData.items || gw.Config.originData;
+                for (let k in items) {
+                    let cd = items[k];
+                    if (!cd || !cd.product) continue;
+
+                    let prods = cd.product;
+                    if (typeof prods === 'string') { try { prods = JSON.parse(prods); } catch(e) { prods = prods.split(','); } }
+                    if (!Array.isArray(prods)) prods = [prods];
+
+                    const matches = prods.includes(String(productId)) || prods.includes(Number(productId));
+                    if (!matches) continue;
+
+                    const itemName = cd.name_ar || cd.name || `#${cd.id}`;
+                    const itemType = (cd.type || '').toLowerCase();
+                    const subType = (cd.sub_type || '').toLowerCase();
+
+                    if (itemType === 'machines') {
+                        return { status: 'missing', name: `⚙️ ${itemName} (غير موضوعة)` };
+                    } else if (itemType === 'animals' || subType === 'working') {
+                        return { status: 'animal', name: `🐄 ${itemName} (حيوان غير موجود)` };
+                    } else if (itemType === 'trees') {
+                        return { status: 'tree', name: `🌳 ${itemName} (شجرة)` };
+                    } else if (itemType === 'seeds' || itemType === 'crops') {
+                        return { status: 'seed', name: `🌱 ${itemName} (بذرة/محصول)` };
+                    } else {
+                        return { status: 'missing', name: `❓ ${itemName}` };
+                    }
+                }
+            }
+        } catch(e) {}
+        return { status: 'missing', name: '❓ مصدر غير معروف' };
+    }
+
+
+    _addChainToQueue(key, prodIdx, targetQty) {
+        const item = this.items.find(i => i.key === key);
+        if (!item || !item.products[prodIdx]) return;
+        
+        const p = item.products[prodIdx];
+        this._addToQueue(key, prodIdx, targetQty);
+        
+        // Collect all dependent machine keys before starting any
+        const dependentKeys = [];
+        this._collectDependencyKeys(p, targetQty, dependentKeys);
+        
+        // Auto-start main machine
+        this._startOne(key);
+        
+        // Auto-start all dependent machines that got queued
+        dependentKeys.forEach(depKey => {
+            const s = this.schedules[depKey];
+            if (s && s.queue.length > 0) {
+                this._startOne(depKey);
+            }
+        });
+        
+        this._log(`🚀 جدولة ذكية: تم تشغيل ${1 + dependentKeys.length} آلة تلقائياً`);
+    }
+
+    _collectDependencyKeys(productConfig, targetQty, resultKeys) {
+        if (!productConfig.reqMats) return;
+        
+        productConfig.reqMats.forEach(rm => {
+            const producer = this._findMachineProducing(rm.id);
+            if (producer && producer.status === 'placed') {
+                const pItem = this.items.find(i => i.key === producer.key);
+                if (pItem) {
+                    const childProdIdx = pItem.products.findIndex(x => x.productId == rm.id);
+                    if (childProdIdx !== -1) {
+                        this._addToQueue(producer.key, childProdIdx, targetQty);
+                        this._log(`🔗 جدولة ذكية: تمت جدولة ${targetQty || '∞'} لآلة ${producer.name}`);
+                        if (!resultKeys.includes(producer.key)) resultKeys.push(producer.key);
+                        this._collectDependencyKeys(pItem.products[childProdIdx], targetQty, resultKeys);
+                    }
+                }
+            } else if (producer && producer.status === 'missing') {
+                this._log(`❗️ السلسلة ناقصة: ${producer.name} غير موجودة لإنتاج ${rm.name}.`);
+            } else if (producer && producer.status === 'animal') {
+                this._log(`🐄 السلسلة: ${rm.name} ينتجها ${producer.name} (حيوان).`);
+            } else if (producer && (producer.status === 'seed' || producer.status === 'tree')) {
+                this._log(`🌱 السلسلة: ${rm.name} مصدرها ${producer.name}.`);
+            }
+        });
+    }
+
 
     // ═══════════════════════════════════════
     // HELPERS
@@ -8309,6 +8572,87 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
                 return (cd.id || mo.id) === item.id && (parseInt(sd.x || sd.map_x) || 0) === item.x && (parseInt(sd.y || sd.map_y) || 0) === item.y;
             }) || null;
         } catch(e) { return null; }
+    }
+
+    // ═══════════════════════════════════════
+    // FAVORITES
+    // ═══════════════════════════════════════
+    _toggleFavorite(key) {
+        if (this.favorites[key]) {
+            delete this.favorites[key];
+        } else {
+            this.favorites[key] = true;
+        }
+        this._saveSchedules();
+        this._renderMachines();
+        this._renderAnimals();
+    }
+
+    // ═══════════════════════════════════════
+    // NAVIGATE TO ITEM
+    // ═══════════════════════════════════════
+    _navigateToItem(item) {
+        const gw = unsafeWindow;
+        const mo = this._getFreshMO(item);
+
+        // 1. If item is on the map — pan camera and click it
+        if (mo) {
+            try {
+                const gc = gw.GF?.gameController;
+                if (gc) {
+                    // Center camera on this item
+                    if (typeof gc._clickMapObject === 'function') {
+                        gc._clickMapObject(mo);
+                        this._log(`🎯 انتقل إلى: ${item.name}`);
+                        return;
+                    }
+                }
+            } catch(e) {}
+
+            // Fallback: try to pan to coords
+            try {
+                const mapCtrl = gw.GF?.mapController || gw.App?.ControllerManager?.getControllerModel?.('Map');
+                if (mapCtrl && typeof mapCtrl.centerOnObject === 'function') {
+                    mapCtrl.centerOnObject(mo);
+                    this._log(`🎯 تمت المركزة على: ${item.name}`);
+                    return;
+                }
+                if (mapCtrl && typeof mapCtrl.panTo === 'function') {
+                    mapCtrl.panTo(item.x, item.y);
+                    this._log(`🎯 تمت المركزة على: ${item.name}`);
+                    return;
+                }
+            } catch(e) {}
+
+            this._log(`🎯 ${item.name} موجود في الموقع (${item.x}, ${item.y})`);
+            return;
+        }
+
+        // 2. Item not on map — try to open store/warehouse
+        this._log(`🔍 ${item.name} غير موجود على الأرض — جاري البحث...`);
+        try {
+            // Try warehouse/storage window
+            const wm = gw.GF?.windowManager || gw.App?.ControllerManager?.getControllerModel?.('WindowManager');
+            if (wm) {
+                // Try opening the storage/warehouse
+                const openFns = ['openWarehouse', 'showWarehouse', 'openStorage', 'showStorage', 'openShop', 'openStore'];
+                for (const fn of openFns) {
+                    if (typeof wm[fn] === 'function') {
+                        try { wm[fn](); this._log(`🏪 تم فتح المخزن/المتجر للبحث عن ${item.name}`); return; } catch(e2) {}
+                    }
+                }
+            }
+        } catch(e) {}
+
+        // 3. Check if item is in barn/storage by ID
+        if (item.id) {
+            const count = this._getInventoryCount(item.id);
+            if (count > 0) {
+                this._log(`📦 ${item.name} موجود في المستودع (${count} قطعة)`);
+            } else {
+                this._log(`🛒 ${item.name} غير موجود — يمكن شراؤه من المتجر`);
+            }
+        }
     }
 
     _log(msg) {
