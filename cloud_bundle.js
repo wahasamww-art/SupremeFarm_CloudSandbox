@@ -7360,8 +7360,6 @@ if (window.SF && window.SF.modules) {
 // --- features\ProductionSchedulerModule.js ---
 window.SF = window.SF || {};
 
-window.SF = window.SF || {};
-
 SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.ModuleBase {
     constructor() {
         super('production_scheduler', 'جدولة الإنتاج', '🏭');
@@ -7478,12 +7476,6 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
                 const parent = tgt.closest('.sf-ps-prod-item');
                 const qtyInput = parent.querySelector('.sf-ps-prod-qty');
                 this._addToQueue(tgt.dataset.key, idx, parseInt(qtyInput.value) || 0);
-            }
-            else if (tgt.classList.contains('sf-ps-add-chain-btn')) {
-                const idx = parseInt(tgt.dataset.idx);
-                const parent = tgt.closest('.sf-ps-prod-item');
-                const qtyInput = parent.querySelector('.sf-ps-prod-qty');
-                this._addChainToQueue(tgt.dataset.key, idx, parseInt(qtyInput.value) || 0);
             }
         });
 
@@ -7751,11 +7743,6 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
         if (!html) html = '<div style="color:#777;font-size:13px;text-align:center;padding:10px;">لا يوجد عناصر تطابق الفلتر الحالي</div>';
 
         container.innerHTML = html;
-        
-        const searchInput = this.container?.querySelector('#sf-ps-search-animal');
-        if (searchInput && searchInput.value) {
-            this._filterList('animal', searchInput.value);
-        }
     }
 
     // ═══════════════════════════════════════
@@ -7833,21 +7820,7 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
                             const reqHtml = (p.reqMats || []).map(rm => {
                                 const count = this._getInventoryCount(rm.id);
                                 const color = count > 0 ? '#2ecc71' : '#e74c3c';
-                                
-                                const producer = this._findMachineProducing(rm.id);
-                                let chainHtml = '';
-                                if (producer) {
-                                    if (producer.status === 'placed') {
-                                        chainHtml = `<button class="sf-ps-manage-btn" data-key="${producer.key}" style="background:#2980b9;border:none;color:#fff;font-size:10px;padding:2px 4px;border-radius:3px;margin-right:4px;cursor:pointer;" title="اذهب إلى هذه الآلة لجدولتها">⚙️ ${producer.name}</button>`;
-                                    } else if (producer.status === 'missing') {
-                                        chainHtml = `<span style="background:rgba(231,76,60,0.2);color:#e74c3c;font-size:10px;padding:2px 4px;border-radius:3px;margin-right:4px;border:1px solid #e74c3c;" title="مفقودة! استخرجها من المستودع أو المتجر">❗️ ${producer.name}</span>`;
-                                    }
-                                }
-                                
-                                return `<span style="background:rgba(0,0,0,0.3);padding:2px 4px;border-radius:3px;margin-left:4px;display:inline-flex;align-items:center;">
-                                    ${rm.name}: <strong style="color:${color};margin:0 4px;">${count}</strong>
-                                    ${chainHtml}
-                                </span>`;
+                                return `<span style="background:rgba(0,0,0,0.3);padding:2px 4px;border-radius:3px;margin-left:4px;">${rm.name}: <strong style="color:${color};">${count}</strong></span>`;
                             }).join('');
                             
                             const prodCount = p.productId ? this._getInventoryCount(p.productId) : 0;
@@ -7863,8 +7836,7 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
                             </div>
                             <div style="display:flex;align-items:center;gap:6px;">
                                 <input type="number" min="0" value="1" class="sf-ps-prod-qty" data-idx="${i}" style="width:45px;background:#111;color:#fff;border:1px solid #555;border-radius:4px;text-align:center;font-size:13px;padding:4px;outline:none;" title="0 = بلا حدود">
-                                <button class="sf-ps-add-chain-btn" data-key="${item.key}" data-idx="${i}" style="background:#27ae60;border:none;color:#fff;padding:4px 12px;border-radius:4px;cursor:pointer;font-size:12px;font-weight:bold;box-shadow:0 0 5px rgba(39,174,96,0.5);" title="جدولة هذا المنتج وكل مواده الخام">➕ جدولة ذكية</button>
-                                <button class="sf-ps-add-prod-btn" data-key="${item.key}" data-idx="${i}" style="background:#8e44ad;border:none;color:#fff;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:12px;font-weight:bold;">إضافة</button>
+                                <button class="sf-ps-add-prod-btn" data-key="${item.key}" data-idx="${i}" style="background:#8e44ad;border:none;color:#fff;padding:4px 12px;border-radius:4px;cursor:pointer;font-size:12px;font-weight:bold;">+ إضافة</button>
                             </div>
                         </div>
                         `;
@@ -7932,11 +7904,6 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
         if (!html) html = '<div style="color:#777;font-size:13px;text-align:center;padding:10px;">لا يوجد عناصر تطابق الفلتر الحالي</div>';
 
         container.innerHTML = html;
-        
-        const searchInput = this.container?.querySelector('#sf-ps-search-machine');
-        if (searchInput && searchInput.value) {
-            this._filterList('machine', searchInput.value);
-        }
     }
 
     _filterList(type, query) {
@@ -7986,43 +7953,19 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
                     q.rawMaterialId = matId; // Auto-fix legacy schedules
                 }
             }
-            let hasStock = true;
-            let missingName = null;
             
-            if (item && item.products) {
-                const p = item.products.find(prod => prod.index === q.productIndex);
-                if (p && p.reqMats && p.reqMats.length > 0) {
-                    for (let rm of p.reqMats) {
-                        const invCount = this._getInventoryCount(rm.id);
-                        if (invCount < 1) {
-                            hasStock = false;
-                            missingName = rm.name || this._getItemSourceHint(rm.id);
-                            break;
-                        }
-                    }
-                } else if (matId) {
-                    // Fallback to legacy matId if reqMats not available
-                    const invCount = this._getInventoryCount(matId);
-                    if (invCount < 1) {
-                        hasStock = false;
-                        missingName = this._getItemSourceHint(matId);
-                    }
-                }
-            } else if (matId) {
+            let hasStock = true;
+            if (matId) {
                 const invCount = this._getInventoryCount(matId);
                 if (invCount < 1) {
                     hasStock = false;
-                    missingName = this._getItemSourceHint(matId);
+                    q.error = `ينقصك: ${this._getItemSourceHint(matId)}`;
+                } else {
+                    q.error = null;
                 }
             }
 
-            if (!hasStock) {
-                q.error = `ينقصك: ${missingName}`;
-            } else {
-                q.error = null;
-            }
-
-            if (q.target === 0 || q.done < q.target) {
+            if (hasStock && (q.target === 0 || q.done < q.target)) {
                 sched.currentQueueIdx = i;
                 found = true;
                 break;
@@ -8138,31 +8081,6 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
         const gw = unsafeWindow;
         const canvas = document.querySelector('canvas');
         if (!canvas) return;
-        
-        let hideAll = false;
-        try {
-            if (gw.GF?.windowManager?.getOpenWindows && gw.GF.windowManager.getOpenWindows().length > 0) hideAll = true;
-            if (gw.App?.PopUpManager?.getPopUps && gw.App.PopUpManager.getPopUps().length > 0) hideAll = true;
-            if (gw.PopUpManager?.getPopUps && gw.PopUpManager.getPopUps().length > 0) hideAll = true;
-            if (gw.App?.ControllerManager?.getControllerModel("WindowManager")?.getOpenWindows && gw.App.ControllerManager.getControllerModel("WindowManager").getOpenWindows().length > 0) hideAll = true;
-            if (gw.GF?.guiManager?.getOpenWindows && gw.GF.guiManager.getOpenWindows().length > 0) hideAll = true;
-            
-            // Robust check via Egret LayerManager checking visibility
-            if (gw.LayerManager) {
-                const isVisible = (layer) => {
-                    if (!layer || layer.numChildren === 0) return false;
-                    const children = layer.$children || layer.children || [];
-                    for (let i = 0; i < children.length; i++) {
-                        if (children[i].visible !== false && children[i].alpha !== 0) return true;
-                    }
-                    return false;
-                };
-                if (isVisible(gw.LayerManager.UI_Popup)) hideAll = true;
-                if (isVisible(gw.LayerManager.UI_Message)) hideAll = true;
-                if (isVisible(gw.LayerManager.UI_Tutorial)) hideAll = true;
-            }
-        } catch(e) {}
-
         const rect = canvas.getBoundingClientRect();
         let stageW, stageH;
         try { const s = gw.egret.lifecycle.stage; stageW = s.stageWidth; stageH = s.stageHeight; } catch(e) { stageW = canvas.width; stageH = canvas.height; }
@@ -8171,10 +8089,7 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
         Object.keys(this.badges).forEach(key => {
             const badge = this.badges[key];
             const item = this.items.find(i => i.key === key);
-            if (!badge || !item || hideAll) {
-                if (badge) badge.style.display = 'none';
-                return;
-            }
+            if (!badge || !item) return;
             try {
                 const mo = this._getFreshMO(item);
                 if (!mo || typeof mo.localToGlobal !== 'function') { badge.style.display = 'none'; return; }
@@ -8262,39 +8177,18 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
                     if (typeof mo.setRawMaterial === 'function') { try { mo.setRawMaterial(next.productIndex); } catch(e) {} }
                     try { gw.NetUtils.flush(); } catch(e) {}
                 }
-                if (next.error) {
-                    this._updateBadge(key);
-                    return; // Pause and wait for material
-                }
                 
                 try {
-                    const p = item.products.find(prod => prod.index === next.productIndex);
-                    if (p && p.reqMats && p.reqMats.length > 0 && gc._refillMapObject) {
-                        // Multi-slot refill
-                        for (let s = 0; s < p.reqMats.length; s++) {
-                            const mId = p.reqMats[s].id;
-                            const slotNum = s + 1; // slots are usually 1-indexed
-                            try { gc._refillMapObject(mo, mId, slotNum, false); } catch(e) {}
-                        }
-                        this._updateBadge(key);
+                    const slot = 1;
+                    const matId = next.rawMaterialId || (mo.getRawMaterialId ? mo.getRawMaterialId(slot) : null);
+                    if (matId && gc._refillMapObject) { 
+                        gc._refillMapObject(mo, matId, slot, false); 
+                        this._updateBadge(key); 
                         this._log(`▶ بدء ${item.name}: ${next.name}`);
-                    } else {
-                        // Fallback to single slot
-                        const slot = 1;
-                        const matId = next.rawMaterialId || (mo.getRawMaterialId ? mo.getRawMaterialId(slot) : null);
-                        if (matId && gc._refillMapObject) { 
-                            gc._refillMapObject(mo, matId, slot, false); 
-                            this._updateBadge(key); 
-                            this._log(`▶ بدء ${item.name}: ${next.name}`);
-                        } else if (!matId) {
-                            if (gc._clickMapObject) gc._clickMapObject(mo);
-                            this._updateBadge(key);
-                            this._log(`▶ بدء (نقرة) ${item.name}: ${next.name}`);
-                        }
+                    } else if (!matId) {
+                        this._log(`⚠️ تعذر معرفة مكون ${next.name}`);
                     }
-                } catch(e) {
-                    this._log(`⚠️ خطأ في تشغيل ${item.name}`);
-                }
+                } catch(e) {}
             }
         }
     }
@@ -8334,71 +8228,6 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
                 if (matId && gc._feedMapObject && (!mo.canFeed || mo.canFeed())) { gc._feedMapObject(mo, matId, false); }
             } catch(e) {}
         }
-    }
-
-    // ═══════════════════════════════════════
-    // ═══════════════════════════════════════
-    // CHAIN CRAFTING & DEPENDENCY RESOLUTION
-    // ═══════════════════════════════════════
-    _findMachineProducing(productId) {
-        for (let i = 0; i < this.items.length; i++) {
-            let itm = this.items[i];
-            if (itm.type === 'Machine' && itm.products) {
-                let p = itm.products.find(x => x.productId == productId);
-                if (p) return { status: 'placed', name: itm.name, key: itm.key };
-            }
-        }
-        
-        let missingMachineName = 'آلة مجهولة';
-        try {
-            const gw = unsafeWindow;
-            if (gw.Config && gw.Config.originData) {
-                let items = gw.Config.originData.items || gw.Config.originData;
-                for (let k in items) {
-                    let cd = items[k];
-                    if (cd && cd.type === 'machines' && cd.product) {
-                        let prods = cd.product;
-                        if (typeof prods === 'string') { try { prods = JSON.parse(prods); } catch(e) { prods = prods.split(','); } }
-                        if (!Array.isArray(prods)) prods = [prods];
-                        if (prods.includes(String(productId)) || prods.includes(Number(productId))) {
-                            missingMachineName = cd.name_ar || cd.name || `آلة ${cd.id}`;
-                            break;
-                        }
-                    }
-                }
-            }
-        } catch(e) {}
-        return { status: 'missing', name: missingMachineName };
-    }
-
-    _addChainToQueue(key, prodIdx, targetQty) {
-        const item = this.items.find(i => i.key === key);
-        if (!item || !item.products[prodIdx]) return;
-        
-        const p = item.products[prodIdx];
-        this._addToQueue(key, prodIdx, targetQty);
-        this._queueDependencies(p, targetQty);
-    }
-
-    _queueDependencies(productConfig, targetQty) {
-        if (!productConfig.reqMats) return;
-        
-        productConfig.reqMats.forEach(rm => {
-            const producer = this._findMachineProducing(rm.id);
-            if (producer && producer.status === 'placed') {
-                const pItem = this.items.find(i => i.key === producer.key);
-                if (pItem) {
-                    const childProdIdx = pItem.products.findIndex(x => x.productId == rm.id);
-                    if (childProdIdx !== -1) {
-                        this._addToQueue(producer.key, childProdIdx, targetQty);
-                        this._log(`🔗 جدولة ذكية: تمت جدولة ${targetQty || '∞'} لآلة ${producer.name}`);
-                        this._queueDependencies(pItem.products[childProdIdx], targetQty);
-                    }
-                }
-            } else if (producer && producer.status === 'missing') {
-                this._log(`❗️ السلسلة ناقصة: آلة ${producer.name} غير موجودة لإنتاج ${rm.name}.`);
-            }
-        });
     }
 
     // ═══════════════════════════════════════
@@ -8489,7 +8318,6 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
 
 // Register module
 SF.modules.register(new SF.ProductionSchedulerModule());
-
 
 
 // --- System Initialization ---
