@@ -1,8 +1,10 @@
-// ==UserScript==
-// @name         حصاد مظبوط المدمج
+﻿// ==UserScript==
+// @name         SupremeFarm Pro
 // @namespace    https://supreme-farm.local
-// @version      2.1.0
-// @description  نظام المزرعة الذكي - معمارية التوسعة اللانهائية
+// @version      2.2.0
+// @updateURL    https://raw.githubusercontent.com/wahasamww-art/SupremeFarm_CloudSandbox/main/cloud_bundle.js
+// @downloadURL  https://raw.githubusercontent.com/wahasamww-art/SupremeFarm_CloudSandbox/main/cloud_bundle.js
+// @description  Smart Farm System - Infinite Extension Architecture
 // @author       Supreme Farm Team
 // @match        *://*.centurygames.com/*
 // @match        *://*.apps.fbsbx.com/*
