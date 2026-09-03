@@ -1,4 +1,4 @@
-﻿// ==UserScript==
+// ==UserScript==
 // @name         حصاد مظبوط المدمج
 // @namespace    https://supreme-farm.local
 // @version      2.1.0
@@ -7997,45 +7997,11 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
         const listId = type === 'animal' ? '#sf-ps-animals-list' : '#sf-ps-machines-list';
         const container = this.container?.querySelector(listId);
         if (!container) return;
-        const q = this._normalizeArabic((query || '').trim().toLowerCase());
-        let visibleCount = 0;
+        const q = this._normalizeArabic(query.trim().toLowerCase());
         container.querySelectorAll('.sf-ps-item').forEach(el => {
             const itemName = this._normalizeArabic((el.dataset.name || '').toLowerCase());
-            const show = !q || itemName.includes(q);
-            el.style.display = show ? '' : 'none';
-            if (show) visibleCount++;
+            el.style.display = !q || itemName.includes(q) ? '' : 'none';
         });
-        const catalogId = `sf-ps-catalog-${type}`;
-        let catalogEl = container.querySelector(`#${catalogId}`);
-        if (catalogEl) catalogEl.remove();
-        if (q && q.length >= 2) {
-            try {
-                const pool = unsafeWindow.GF?.shopController?.shopModel?._allMachine || [];
-                const farmIds = new Set(this.items.map(i => i.id));
-                const itemType = type === 'animal' ? 'animals' : 'buildings';
-                const catalogMatches = pool.filter(cd => {
-                    if (!cd || !cd.name) return false;
-                    if (itemType === 'buildings' && cd.type !== 'buildings') return false;
-                    if (itemType === 'animals' && cd.type !== 'animals') return false;
-                    if (farmIds.has(cd.id)) return false;
-                    return this._normalizeArabic(cd.name.toLowerCase()).includes(q);
-                }).slice(0, 5);
-                if (catalogMatches.length > 0) {
-                    catalogEl = document.createElement('div');
-                    catalogEl.id = catalogId;
-                    catalogEl.style.cssText = 'border-top:1px solid #444;margin-top:6px;padding-top:6px;';
-                    catalogEl.innerHTML = `<div style="color:#aaa;font-size:11px;padding:2px 4px;">غير موجود في مزرعتك:</div>`;
-                    catalogMatches.forEach(cd => {
-                        const info = this._getItemBuyInfo(cd);
-                        const row = document.createElement('div');
-                        row.style.cssText = 'display:flex;align-items:center;gap:6px;padding:4px;background:rgba(0,0,0,0.2);border-radius:4px;margin:3px 0;font-size:12px;';
-                        row.innerHTML = `<span style="flex:1;color:#ccc;">${cd.name}</span><span style="color:#f39c12;font-size:11px;">${info.where}</span><span style="color:#aaa;font-size:11px;">${info.priceText}</span>`;
-                        catalogEl.appendChild(row);
-                    });
-                    container.appendChild(catalogEl);
-                }
-            } catch(e) {}
-        }
     }
 
     // ═══════════════════════════════════════
@@ -8384,32 +8350,6 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
                     this._log(`⚠️ خطأ في تشغيل ${item.name}`);
                 }
             }
-        } else {
-            // ═══════════════════════════════════════════════════════════════════
-            // BUSY-WRONG-PRODUCT FIX — الآلة شغالة على منتج مختلف عن المطلوب
-            //
-            // السبب: _addChainToQueue أضافت منتجاً للـ queue لكن الآلة كانت
-            // تعمل بالفعل على منتج آخر (raw_materials ممتلئة، لا products جاهزة).
-            // النتيجة القديمة: تعلق صامت — لا حصاد ولا إعادة تشغيل.
-            //
-            // الحل: أرسل أمر تغيير المنتج مسبقاً — الآلة ستغير فور انتهاء
-            // الدفعة الحالية وتبدأ تلقائياً على المنتج المجدول.
-            // ═══════════════════════════════════════════════════════════════════
-            this._recalcQueueIdx(sched);
-            const next = sched.queue[sched.currentQueueIdx];
-            if (next && next.productIndex >= 0) {
-                const curSel = parseInt(sd.selected_raw_material) || 0;
-                if (curSel !== next.productIndex) {
-                    this._log(`[Scheduler] ${item.name}: busy — pre-set next product: "${next.name}"`);
-                    try { gw.NetUtils.enqueue('save_selected_material.save_data', { id: item.id, x: item.x, y: item.y, flip: 0, material: next.productIndex }); } catch(e) {}
-                    sd.selected_raw_material = next.productIndex;
-                    if (mo.selected_raw_material !== undefined) mo.selected_raw_material = next.productIndex;
-                    if (typeof mo.setRawMaterial === "function") { try { mo.setRawMaterial(next.productIndex); } catch(e) {} }
-                    try { gw.NetUtils.flush(); } catch(e) {}
-                    this._updateBadge(key);
-                }
-            }
-        }
         }
     }
 
@@ -8654,31 +8594,15 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
         }
         this._saveSchedules();
         this._renderMachines();
-    _getItemSourceHint(id) {
-        try {
-            const pool = unsafeWindow.GF?.shopController?.shopModel?._allMachine || [];
-            const cd = pool.find(x => x.id == id);
-            if (cd) return cd.name || 'مكون مطلوب';
-            const cfg = unsafeWindow.Config?.Store_GetItemData ? unsafeWindow.Config.Store_GetItemData(id) : null;
-            if (cfg) return cfg.name || cfg.localeName || 'مجهول';
-        } catch(e) {}
-        return 'مكون مطلوب';
+        this._renderAnimals();
     }
 
-    _getItemBuyInfo(cd) {
-        if (!cd) return { where: '🛒 المتجر', priceText: '' };
-        const type = cd.type || '';
-        const subType = cd.sub_type || '';
-        let where = '🛒 المتجر';
-        if (type === 'animals') where = '🐄 متجر الحيوانات';
-        else if (type === 'buildings' && subType === 'working') where = '🏭 المتجر - الآلات';
-        else if (type === 'buildings') where = '🏗️ المتجر - المباني';
-        let priceText = '';
-        if (cd.rp_price) priceText = `${cd.rp_price} 💎`;
-        else if (cd.price) priceText = `${cd.price} 🪙`;
-        if (cd.level > 1) priceText += ` (LV${cd.level}+)`;
-        return { where, priceText };
-    }
+    // ═══════════════════════════════════════
+    // NAVIGATE TO ITEM
+    // ═══════════════════════════════════════
+    _navigateToItem(item) {
+        const gw = unsafeWindow;
+        const mo = this._getFreshMO(item);
 
         // 1. If item is on the map — pan camera and click it
         if (mo) {
@@ -8726,56 +8650,17 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
                         try { wm[fn](); this._log(`🏪 تم فتح المخزن/المتجر للبحث عن ${item.name}`); return; } catch(e2) {}
                     }
                 }
-    _navigateToItem(item) {
-        const gw = unsafeWindow;
-        const mo = this._getFreshMO(item);
-        if (mo) {
-            try {
-                const gc = gw.GF?.gameController;
-                if (gc && typeof gc._clickMapObject === 'function') {
-                    gc._clickMapObject(mo);
-                    this._log(`🎯 انتقل إلى: ${item.name}`);
-                    return;
-                }
-            } catch(e) {}
-            try {
-                const mapCtrl = gw.GF?.mapController;
-                if (mapCtrl && typeof mapCtrl.centerOnObject === 'function') {
-                    mapCtrl.centerOnObject(mo);
-                    this._log(`🎯 تمت المركزة على: ${item.name}`);
-                    return;
-                }
-                if (mapCtrl && typeof mapCtrl.panTo === 'function') {
-                    mapCtrl.panTo(item.x, item.y);
-                    this._log(`🎯 تمت المركزة على: ${item.name} (${item.x}, ${item.y})`);
-                    return;
-                }
-            } catch(e) {}
-            this._log(`🎯 ${item.name} موجود في الموقع (${item.x}, ${item.y})`);
-            return;
-        }
-        try {
-            const pool = gw.GF?.shopController?.shopModel?._allMachine || [];
-            const cd = pool.find(x => x.id == item.id);
-            if (cd) {
-                const info = this._getItemBuyInfo(cd);
-                this._log(`🛒 ${item.name} غير موضوع — ${info.where} | السعر: ${info.priceText}`);
-                try {
-                    const sc = gw.GF?.shopController;
-                    if (sc) {
-                        const fns = ['openShop', 'showShop', 'openStore', 'show'];
-                        for (const fn of fns) {
-                            if (typeof sc[fn] === 'function') { sc[fn](cd.id); break; }
-                        }
-                    }
-                } catch(e2) {}
-                return;
             }
         } catch(e) {}
+
+        // 3. Check if item is in barn/storage by ID
         if (item.id) {
             const count = this._getInventoryCount(item.id);
-            if (count > 0) this._log(`📦 ${item.name} موجود في المستودع (${count} قطعة)`);
-            else this._log(`❓ ${item.name} غير موجود على الأرض ولا في المستودع`);
+            if (count > 0) {
+                this._log(`📦 ${item.name} موجود في المستودع (${count} قطعة)`);
+            } else {
+                this._log(`🛒 ${item.name} غير موجود — يمكن شراؤه من المتجر`);
+            }
         }
     }
 
@@ -8787,4 +8672,26 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
 // Register module
 SF.modules.register(new SF.ProductionSchedulerModule());
 
+
+// --- System Initialization ---
+(function() {
+    'use strict';
+    console.log('[SupremeFarm Modular] Initializing System V2.0 (Cloud Bundle)...');
+    const initApp = () => {
+        if(!window.SF) window.SF = {};
+        if(!window.SF.SplashScreen) {
+            window.SF.ui = new window.SF.UIManager();
+            return;
+        }
+        const splash = new window.SF.SplashScreen();
+        splash.show(() => {
+            window.SF.ui = new window.SF.UIManager();
+        });
+    };
+
+    if (document.readyState === 'complete' || document.readyState === 'interactive') {
+        initApp();
+    } else {
+        window.addEventListener('DOMContentLoaded', initApp);
+    }
 })();
