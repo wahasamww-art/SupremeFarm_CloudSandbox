@@ -7563,50 +7563,32 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
         const currentUids = new Set(Object.keys(dict));
 
         // ══════════════════════════════════════════════════════════════════════
-        // GRACE PERIOD FIX — حل Race Condition بين uidDictionary و scene_select
+        // DEFINITIVE FIX — لا نحذف الجدولة أبداً تلقائياً
         //
-        // السبب الجذري للبـاغ:
-        //   عند الذهاب لمزرعة أخرى أو الحصاد فيها والرجوع بسرعة،
-        //   يتغير uidDictionary فوراً بينما scene_select لم يتغير بعد.
-        //   → الآلات "تختفي" مع بقاء currentScene نفسه
-        //   → الكود القديم يعتقد أنها بيعت → يحذف الجدولة!
+        // السبب الجذري للبـاغ الحقيقي:
+        //   عند زيارة مزرعة الجار، scene_select قد لا يتغير أو يتأخر،
+        //   لكن uidDictionary يتغير فوراً → الآلات "تختفي".
+        //   أي threshold زمني (3 دورات، 10 دورات...) سيفشل لو مكثت أطول.
         //
-        // الحل: عداد غياب لكل item. إذا غابت 3 دورات متتالية (≈9 ثوان)
-        //   فقط نحذفها — يمنح وقتاً لـ scene_select للتزامن.
+        // الحل الجذري الصحيح:
+        //   ← نحذف الـ item من items فقط (لإعادة الفحص عند العودة).
+        //   ← لا نمس this.schedules أبداً هنا.
+        //   ← _processItem يحمي تلقائياً بـ: if (!item) return
+        //   ← الجدولة تنجو في الذاكرة + Storage وتستأنف عند العودة.
         // ══════════════════════════════════════════════════════════════════════
-        const MISSING_THRESHOLD = 3;
 
-        // 1. Check for missing items — apply grace period before deletion
+        // 1. Remove items absent from dict — preserve schedules untouched
         for (let i = this.items.length - 1; i >= 0; i--) {
             const item = this.items[i];
             if (!item.mo || !currentUids.has(String(item.mo.map_unique_id))) {
-                // زيادة عداد الغياب
-                this._missingCounter[item.key] = (this._missingCounter[item.key] || 0) + 1;
-
-                if (this._missingCounter[item.key] < MISSING_THRESHOLD) {
-                    // لا نزال في فترة الانتظار — لا نحذف شيئاً بعد
-                    continue;
-                }
-
-                // تجاوزت الحد → مفقودة فعلاً (بيع أو إزالة حقيقية)
-                delete this._missingCounter[item.key];
-
-                const itemScene = parseInt((item.key || '').split('_')[1]) || -1;
-                const itemBelongsToCurrentScene = (itemScene === currentScene);
-
-                if (itemBelongsToCurrentScene && this.schedules[item.key]) {
-                    this.schedules[item.key].running = false;
-                    delete this.schedules[item.key];
-                }
-                // إذا كان المنتج من مزرعة أخرى، احتفظ بجدولته ← فقط أزله من items
+                // أزل الـ item من القائمة فقط — الجدولة تبقى سليمة
                 if (this.badges[item.key]) { this.badges[item.key].remove(); delete this.badges[item.key]; }
                 this.items.splice(i, 1);
                 changed = true;
-            } else {
-                // item موجودة → أعد ضبط عداد الغياب
-                delete this._missingCounter[item.key];
             }
         }
+        // امسح _missingCounter لأننا لم نعد نحتاجه
+        this._missingCounter = {};
 
         // 2. Add new or update moved items
         Object.values(dict).forEach(mo => {
