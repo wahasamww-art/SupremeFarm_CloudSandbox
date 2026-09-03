@@ -1,4 +1,4 @@
-﻿// SupremeFarm Pro — cloud_bundle.js
+﻿// SupremeFarm Pro ? cloud_bundle.js
 // This file is fetched and executed by the Supreme Loader userscript.
 // Do NOT install this file directly in Tampermonkey.
 // Repo: https://github.com/wahasamww-art/SupremeFarm_CloudSandbox
@@ -7983,6 +7983,8 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
         const container = this.container?.querySelector(listId);
         if (!container) return;
         const q = this._normalizeArabic((query || '').trim().toLowerCase());
+
+        // 1. فلترة العناصر الموجودة على الأرض
         let visibleCount = 0;
         container.querySelectorAll('.sf-ps-item').forEach(el => {
             const itemName = this._normalizeArabic((el.dataset.name || '').toLowerCase());
@@ -7990,33 +7992,44 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
             el.style.display = show ? '' : 'none';
             if (show) visibleCount++;
         });
+
+        // 2. إذا كان هناك بحث — أضف نتائج من كتالوج اللعبة (غير موجودة على الأرض)
         const catalogId = `sf-ps-catalog-${type}`;
         let catalogEl = container.querySelector(`#${catalogId}`);
         if (catalogEl) catalogEl.remove();
+
         if (q && q.length >= 2) {
             try {
                 const pool = unsafeWindow.GF?.shopController?.shopModel?._allMachine || [];
                 const farmIds = new Set(this.items.map(i => i.id));
                 const itemType = type === 'animal' ? 'animals' : 'buildings';
+
                 const catalogMatches = pool.filter(cd => {
                     if (!cd || !cd.name) return false;
                     if (itemType === 'buildings' && cd.type !== 'buildings') return false;
                     if (itemType === 'animals' && cd.type !== 'animals') return false;
-                    if (farmIds.has(cd.id)) return false;
+                    if (farmIds.has(cd.id)) return false; // موجودة بالفعل في القائمة
                     return this._normalizeArabic(cd.name.toLowerCase()).includes(q);
                 }).slice(0, 5);
+
                 if (catalogMatches.length > 0) {
                     catalogEl = document.createElement('div');
                     catalogEl.id = catalogId;
                     catalogEl.style.cssText = 'border-top:1px solid #444;margin-top:6px;padding-top:6px;';
                     catalogEl.innerHTML = `<div style="color:#aaa;font-size:11px;padding:2px 4px;">غير موجود في مزرعتك:</div>`;
+
                     catalogMatches.forEach(cd => {
-                        const info = this._getItemBuyInfo(cd);
+                        const buyInfo = this._getItemBuyInfo(cd);
                         const row = document.createElement('div');
                         row.style.cssText = 'display:flex;align-items:center;gap:6px;padding:4px;background:rgba(0,0,0,0.2);border-radius:4px;margin:3px 0;font-size:12px;';
-                        row.innerHTML = `<span style="flex:1;color:#ccc;">${cd.name}</span><span style="color:#f39c12;font-size:11px;">${info.where}</span><span style="color:#aaa;font-size:11px;">${info.priceText}</span>`;
+                        row.innerHTML = `
+                            <span style="flex:1;color:#ccc;">${cd.name}</span>
+                            <span style="color:#f39c12;font-size:11px;">${buyInfo.where}</span>
+                            <span style="color:#aaa;font-size:11px;">${buyInfo.priceText}</span>
+                        `;
                         catalogEl.appendChild(row);
                     });
+
                     container.appendChild(catalogEl);
                 }
             } catch(e) {}
@@ -8395,7 +8408,6 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
                 }
             }
         }
-        }
     }
 
     _processAnimal(key, item, mo, sd, sched) {
@@ -8606,13 +8618,30 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
 
     _getItemSourceHint(id) {
         try {
+            const pool = unsafeWindow.GF?.shopController?.shopModel?._allMachine || [];
+            const cd = pool.find(x => x.id == id);
+            if (cd) return cd.name || 'مكون مطلوب';
             const gw = unsafeWindow;
-            const cd = gw.Config?.Store_GetItemData ? gw.Config.Store_GetItemData(id) : null;
-            if (cd) {
-                return cd.name || cd.localeName || 'مجهول';
-            }
+            const cfg = gw.Config?.Store_GetItemData ? gw.Config.Store_GetItemData(id) : null;
+            if (cfg) return cfg.name || cfg.localeName || 'مجهول';
         } catch(e) {}
         return 'مكون مطلوب';
+    }
+
+    _getItemBuyInfo(cd) {
+        // cd: عنصر من _allMachine
+        if (!cd) return { where: '🛒 المتجر', priceText: '' };
+        const type = cd.type || '';
+        const subType = cd.sub_type || '';
+        let where = '🛒 المتجر';
+        if (type === 'animals') where = '🐄 متجر الحيوانات';
+        else if (type === 'buildings' && subType === 'working') where = '🏭 المتجر - الآلات';
+        else if (type === 'buildings') where = '🏗️ المتجر - المباني';
+        let priceText = '';
+        if (cd.rp_price) priceText = `${cd.rp_price} 💎`;
+        else if (cd.price) priceText = `${cd.price} 🪙`;
+        if (cd.level > 1) priceText += ` (LV${cd.level}+)`;
+        return { where, priceText };
     }
 
     _getFreshMO(item) {
@@ -8639,81 +8668,17 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
         }
         this._saveSchedules();
         this._renderMachines();
-    _getItemSourceHint(id) {
-        try {
-            const pool = unsafeWindow.GF?.shopController?.shopModel?._allMachine || [];
-            const cd = pool.find(x => x.id == id);
-            if (cd) return cd.name || 'مكون مطلوب';
-            const cfg = unsafeWindow.Config?.Store_GetItemData ? unsafeWindow.Config.Store_GetItemData(id) : null;
-            if (cfg) return cfg.name || cfg.localeName || 'مجهول';
-        } catch(e) {}
-        return 'مكون مطلوب';
+        this._renderAnimals();
     }
 
-    _getItemBuyInfo(cd) {
-        if (!cd) return { where: '🛒 المتجر', priceText: '' };
-        const type = cd.type || '';
-        const subType = cd.sub_type || '';
-        let where = '🛒 المتجر';
-        if (type === 'animals') where = '🐄 متجر الحيوانات';
-        else if (type === 'buildings' && subType === 'working') where = '🏭 المتجر - الآلات';
-        else if (type === 'buildings') where = '🏗️ المتجر - المباني';
-        let priceText = '';
-        if (cd.rp_price) priceText = `${cd.rp_price} 💎`;
-        else if (cd.price) priceText = `${cd.price} 🪙`;
-        if (cd.level > 1) priceText += ` (LV${cd.level}+)`;
-        return { where, priceText };
-    }
-
-        // 1. If item is on the map — pan camera and click it
-        if (mo) {
-            try {
-                const gc = gw.GF?.gameController;
-                if (gc) {
-                    // Center camera on this item
-                    if (typeof gc._clickMapObject === 'function') {
-                        gc._clickMapObject(mo);
-                        this._log(`🎯 انتقل إلى: ${item.name}`);
-                        return;
-                    }
-                }
-            } catch(e) {}
-
-            // Fallback: try to pan to coords
-            try {
-                const mapCtrl = gw.GF?.mapController || gw.App?.ControllerManager?.getControllerModel?.('Map');
-                if (mapCtrl && typeof mapCtrl.centerOnObject === 'function') {
-                    mapCtrl.centerOnObject(mo);
-                    this._log(`🎯 تمت المركزة على: ${item.name}`);
-                    return;
-                }
-                if (mapCtrl && typeof mapCtrl.panTo === 'function') {
-                    mapCtrl.panTo(item.x, item.y);
-                    this._log(`🎯 تمت المركزة على: ${item.name}`);
-                    return;
-                }
-            } catch(e) {}
-
-            this._log(`🎯 ${item.name} موجود في الموقع (${item.x}, ${item.y})`);
-            return;
-        }
-
-        // 2. Item not on map — try to open store/warehouse
-        this._log(`🔍 ${item.name} غير موجود على الأرض — جاري البحث...`);
-        try {
-            // Try warehouse/storage window
-            const wm = gw.GF?.windowManager || gw.App?.ControllerManager?.getControllerModel?.('WindowManager');
-            if (wm) {
-                // Try opening the storage/warehouse
-                const openFns = ['openWarehouse', 'showWarehouse', 'openStorage', 'showStorage', 'openShop', 'openStore'];
-                for (const fn of openFns) {
-                    if (typeof wm[fn] === 'function') {
-                        try { wm[fn](); this._log(`🏪 تم فتح المخزن/المتجر للبحث عن ${item.name}`); return; } catch(e2) {}
-                    }
-                }
+    // ═══════════════════════════════════════
+    // NAVIGATE TO ITEM
+    // ═══════════════════════════════════════
     _navigateToItem(item) {
         const gw = unsafeWindow;
         const mo = this._getFreshMO(item);
+
+        // 1. الآلة موجودة على الخريطة — انتقل إليها
         if (mo) {
             try {
                 const gc = gw.GF?.gameController;
@@ -8739,28 +8704,40 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
             this._log(`🎯 ${item.name} موجود في الموقع (${item.x}, ${item.y})`);
             return;
         }
+
+        // 2. غير موجود على الخريطة — ابحث في كتالوج اللعبة
         try {
             const pool = gw.GF?.shopController?.shopModel?._allMachine || [];
             const cd = pool.find(x => x.id == item.id);
             if (cd) {
                 const info = this._getItemBuyInfo(cd);
                 this._log(`🛒 ${item.name} غير موضوع — ${info.where} | السعر: ${info.priceText}`);
+                // حاول فتح المتجر
                 try {
                     const sc = gw.GF?.shopController;
                     if (sc) {
-                        const fns = ['openShop', 'showShop', 'openStore', 'show'];
-                        for (const fn of fns) {
-                            if (typeof sc[fn] === 'function') { sc[fn](cd.id); break; }
+                        const openFns = ['openShop', 'showShop', 'openStore', 'show'];
+                        for (const fn of openFns) {
+                            if (typeof sc[fn] === 'function') {
+                                sc[fn](cd.id);
+                                this._log(`🏪 تم فتح المتجر على: ${item.name}`);
+                                break;
+                            }
                         }
                     }
                 } catch(e2) {}
                 return;
             }
         } catch(e) {}
+
+        // 3. Fallback — فحص المستودع
         if (item.id) {
             const count = this._getInventoryCount(item.id);
-            if (count > 0) this._log(`📦 ${item.name} موجود في المستودع (${count} قطعة)`);
-            else this._log(`❓ ${item.name} غير موجود على الأرض ولا في المستودع`);
+            if (count > 0) {
+                this._log(`📦 ${item.name} موجود في المستودع (${count} قطعة)`);
+            } else {
+                this._log(`❓ ${item.name} غير موجود على الأرض ولا في المستودع`);
+            }
         }
     }
 
@@ -8772,4 +8749,26 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
 // Register module
 SF.modules.register(new SF.ProductionSchedulerModule());
 
+
+// --- System Initialization ---
+(function() {
+    'use strict';
+    console.log('[SupremeFarm Modular] Initializing System V2.0 (Cloud Bundle)...');
+    const initApp = () => {
+        if(!window.SF) window.SF = {};
+        if(!window.SF.SplashScreen) {
+            window.SF.ui = new window.SF.UIManager();
+            return;
+        }
+        const splash = new window.SF.SplashScreen();
+        splash.show(() => {
+            window.SF.ui = new window.SF.UIManager();
+        });
+    };
+
+    if (document.readyState === 'complete' || document.readyState === 'interactive') {
+        initApp();
+    } else {
+        window.addEventListener('DOMContentLoaded', initApp);
+    }
 })();
