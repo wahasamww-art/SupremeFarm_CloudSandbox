@@ -1,25 +1,8 @@
-﻿// ==UserScript==
-// @name         SupremeFarm Pro
-// @namespace    https://supreme-farm.local
-// @version      2.2.0
-// @updateURL    https://raw.githubusercontent.com/wahasamww-art/SupremeFarm_CloudSandbox/main/cloud_bundle.js
-// @downloadURL  https://raw.githubusercontent.com/wahasamww-art/SupremeFarm_CloudSandbox/main/cloud_bundle.js
-// @description  Smart Farm System - Infinite Extension Architecture
-// @author       Supreme Farm Team
-// @match        *://*.centurygames.com/*
-// @match        *://*.apps.fbsbx.com/*
-// @match        *://apps.facebook.com/familyfarm*
-// @match        *://*.familyfarm.com/*
-// @match        *://ff-us.centurygames.com/*
-// @match        *://farmbot-vip.online/*
-// @match        *://*.farmbot-vip.online/*
-// @require      https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js
-// @grant        unsafeWindow
-// @grant        GM_xmlhttpRequest
-// @grant        GM_setValue
-// @grant        GM_getValue
-// @run-at       document-end
-// ==/UserScript==
+﻿// SupremeFarm Pro — cloud_bundle.js
+// This file is fetched and executed by the Supreme Loader userscript.
+// Do NOT install this file directly in Tampermonkey.
+// Repo: https://github.com/wahasamww-art/SupremeFarm_CloudSandbox
+
 
 var SF = window.SF || {};
 window.SF = SF;
