@@ -1,11 +1,11 @@
-﻿// SupremeFarm Pro ? cloud_bundle.js
+// SupremeFarm Pro - cloud_bundle.js
 // This file is fetched and executed by the Supreme Loader userscript.
 // Do NOT install this file directly in Tampermonkey.
 // Repo: https://github.com/wahasamww-art/SupremeFarm_CloudSandbox
 
-
 var SF = window.SF || {};
 window.SF = SF;
+
 
 // --- File: core/EventBus.js ---
 // --- core\EventBus.js ---
@@ -4462,219 +4462,6 @@ SF.AlbumTrackerModule = class AlbumTrackerModule extends SF.ModuleBase {
 SF.modules.register(new SF.AlbumTrackerModule());
 
 
-// --- File: features/MineModule.js ---
-window.SF = window.SF || {};
-
-SF.MineModule = class MineModule extends SF.ModuleBase {
-    constructor() {
-        super('minesweeper', 'ماسح المنجم', '⛏️');
-        this.isRunning = false;
-        this.autoJumpTimeout = null;
-    }
-
-    render() {
-        return `
-            <style>
-                .sf-mine-btn {
-                    padding: 10px 15px;
-                    border: none;
-                    border-radius: 6px;
-                    font-weight: bold;
-                    cursor: pointer;
-                    width: 100%;
-                    transition: all 0.3s ease;
-                    font-family: inherit;
-                }
-                .sf-mine-btn:hover {
-                    opacity: 0.8;
-                }
-                .sf-mine-btn-start {
-                    background: #e1b12c;
-                    color: #2f3640;
-                }
-                .sf-mine-btn-stop {
-                    background: #ff4757;
-                    color: white;
-                }
-                .sf-mine-log {
-                    margin-top: 10px;
-                    padding: 8px;
-                    background: rgba(0,0,0,0.4);
-                    border-radius: 5px;
-                    border: 1px solid rgba(255,255,255,0.1);
-                    font-size: 11px;
-                    color: #a4b0be;
-                    text-align: right;
-                    min-height: 20px;
-                }
-            </style>
-            
-            <div class="sf-card">
-                <p style="color: var(--sf-text-muted); font-size: 13px; margin-bottom: 15px; text-align: center;">
-                    القفز التلقائي (+5) ومسح الهدايا مجاناً دون استهلاك أدوات.
-                </p>
-                
-                <button id="sf-mine-toggle-btn" class="sf-mine-btn sf-mine-btn-start">
-                    ▶️ تشغيل (Ghost Sweeper) +5
-                </button>
-
-                <div id="sf-mine-status-log" class="sf-mine-log">
-                    [النظام] جاهز للمسح الجراحي...
-                </div>
-            </div>
-        `;
-    }
-
-    bindEvents() {
-        const toggleBtn = this.container.querySelector('#sf-mine-toggle-btn');
-        if (toggleBtn) {
-            toggleBtn.onclick = () => {
-                if (this.isRunning) {
-                    this.stopAutoJump();
-                } else {
-                    this.startAutoJump();
-                }
-            };
-        }
-    }
-
-    logStatus(message) {
-        const logDiv = this.container.querySelector('#sf-mine-status-log');
-        if (logDiv) {
-            logDiv.innerText = message;
-        }
-        console.log(`[SF-MineModule] ${message}`);
-    }
-
-    updateUIButtonState() {
-        const btn = this.container.querySelector('#sf-mine-toggle-btn');
-        if (btn) {
-            if (this.isRunning) {
-                btn.innerText = "⏹️ إيقاف (Ghost Sweeper)";
-                btn.className = "sf-mine-btn sf-mine-btn-stop";
-            } else {
-                btn.innerText = "▶️ تشغيل (Ghost Sweeper) +5";
-                btn.className = "sf-mine-btn sf-mine-btn-start";
-            }
-        }
-    }
-
-    executeTacticalJump() {
-        if (!this.isRunning) return;
-
-        try {
-            let gw = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
-
-            if (!gw.NetUtils || !gw.App || !gw.App.ControllerManager) {
-                this.logStatus("⏳ في انتظار تحميل كلاسات اللعبة...");
-                this._scheduleRetry();
-                return;
-            }
-
-            // Null-safe access: ControllerConst may not exist yet
-            const digMiningConst = (gw.ControllerConst && gw.ControllerConst.DigMining !== undefined)
-                ? gw.ControllerConst.DigMining
-                : 'DigMining';
-
-            let digModel = gw.App.ControllerManager.getControllerModel(digMiningConst);
-            if (!digModel || typeof digModel.getCurrDepth !== 'function' || !digModel._mapList) {
-                this.logStatus("⚠️ يرجى فتح المنجم في اللعبة أولاً. في انتظار التحميل...");
-                this._scheduleRetry();
-                return;
-            }
-
-            let currentDepth = Number(digModel.getCurrDepth());
-            let targetDepth = currentDepth + 5;
-
-            // --- المسح الشامل (Ghost Sweep) للهدايا المخفية والمرئية ---
-            let itemsToClaim = [];
-            let mapList = digModel._mapList;
-
-            for (let x = 0; x < mapList.length; x++) {
-                let row = mapList[x];
-                if (!row) continue;
-                for (let y = 0; y < row.length; y++) {
-                    let block = row[y];
-                    // البحث عن أي بلوك يحتوي على "item" ولم يتم حصاده بعد
-                    if (block && block.hasOwnProperty("item") && !block.hasOwnProperty("claimed")) {
-                        itemsToClaim.push({ mx: x, my: y });
-                    }
-                }
-            }
-
-            // 3. تحديث العدادات محلياً وإرسال طلب الحصاد
-            if (itemsToClaim.length > 0) {
-                digModel.claimReward(itemsToClaim);
-                this.logStatus(`🎁 تم مسح ${itemsToClaim.length} عنصر مجاناً! (طبقة ${currentDepth} → ${targetDepth})`);
-            } else {
-                this.logStatus(`🔍 لا توجد عناصر في الطبقة ${currentDepth}. جارٍ القفز → ${targetDepth}...`);
-            }
-
-            // 4. الطلب الأساسي للقفز
-            gw.NetUtils.enqueue("Mine/SetPos", {
-                mx: targetDepth,
-                port: "0_0_0_0_0_0_0",
-                needResponse: true
-            });
-
-            // جدولة الدورة القادمة
-            this._scheduleNextJump();
-
-        } catch (err) {
-            console.error("[SF-MineModule] Exception:", err);
-            this.logStatus("❌ خطأ: " + err.message);
-            this.stopAutoJump(true); // true = preserve error message
-        }
-    }
-
-    _scheduleNextJump() {
-        if (!this.isRunning) return;
-        let jitter = Math.floor(Math.random() * 500) + 300;
-        let nextRunDelay = 2500 + jitter;
-        this.autoJumpTimeout = setTimeout(() => this.executeTacticalJump(), nextRunDelay);
-    }
-
-    _scheduleRetry() {
-        if (!this.isRunning) return;
-        this._retryCount = (this._retryCount || 0) + 1;
-        if (this._retryCount > 15) {
-            this.logStatus("❌ فشل الاتصال بالمنجم بعد 15 محاولة. تأكد من فتح المنجم ثم أعد التشغيل.");
-            this.stopAutoJump(true);
-            return;
-        }
-        this.logStatus(`⏳ محاولة ${this._retryCount}/15 — في انتظار تحميل المنجم...`);
-        this.autoJumpTimeout = setTimeout(() => this.executeTacticalJump(), 2000);
-    }
-
-    startAutoJump() {
-        if (this.isRunning) return;
-        this.isRunning = true;
-        this._retryCount = 0;
-        this.updateUIButtonState();
-        this.logStatus("▶️ بدء القفز والمسح...");
-        this.executeTacticalJump();
-    }
-
-    stopAutoJump(preserveMessage = false) {
-        if (!this.isRunning) return;
-        this.isRunning = false;
-        this._retryCount = 0;
-        if (this.autoJumpTimeout) {
-            clearTimeout(this.autoJumpTimeout);
-            this.autoJumpTimeout = null;
-        }
-        this.updateUIButtonState();
-        if (!preserveMessage) {
-            this.logStatus("⏹️ تم الإيقاف.");
-        }
-    }
-};
-
-console.log('[SF-MineModule] ✅ MineModule class defined. Registering now...');
-SF.modules.register(new SF.MineModule());
-console.log('[SF-MineModule] ✅ Registration complete. Total modules:', SF.modules.getModules().length);
-
-
 // --- File: features/BattlePassModule.js ---
 window.SF = window.SF || {};
 
@@ -7342,7 +7129,13 @@ if (window.SF && window.SF.modules) {
 
 
 // --- File: features/ProductionSchedulerModule.js ---
-// --- features\ProductionSchedulerModule.js ---
+﻿// ==UserScript==
+// @name         SupremeFarm — Production Scheduler Module
+// @description  Smart production scheduling for Family Farm
+// @version      3.0
+// ==/UserScript==
+// NOTE: This file is the SOURCE. Build output is build/cloud_bundle.js
+
 window.SF = window.SF || {};
 
 SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.ModuleBase {
