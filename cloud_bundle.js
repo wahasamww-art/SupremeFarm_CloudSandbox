@@ -7129,7 +7129,7 @@ if (window.SF && window.SF.modules) {
 
 
 // --- File: features/ProductionSchedulerModule.js ---
-﻿// ==UserScript==
+// ==UserScript==
 // @name         SupremeFarm — Production Scheduler Module
 // @description  Smart production scheduling for Family Farm
 // @version      3.0
@@ -7326,6 +7326,11 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
     // ═══════════════════════════════════════
     _syncItems() {
         const gw = unsafeWindow;
+        // 🚨 حماية من مزرعة الجار: لا تقم بأي مزامنة أو جدولة خارج المزرعة الخاصة بك
+        if (gw.GF?.friendsModel && !gw.GF.friendsModel.atMyHome) {
+            return;
+        }
+
         const dict = gw.GameGridData?.uidDictionary;
         if (!dict) return;
 
@@ -8019,6 +8024,9 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
         if (!canvas) return;
         
         let hideAll = false;
+        if (gw.GF?.friendsModel && !gw.GF.friendsModel.atMyHome) {
+            hideAll = true;
+        }
         try {
             if (gw.GF?.windowManager?.getOpenWindows && gw.GF.windowManager.getOpenWindows().length > 0) hideAll = true;
             if (gw.App?.PopUpManager?.getPopUps && gw.App.PopUpManager.getPopUps().length > 0) hideAll = true;
@@ -8070,32 +8078,49 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
     // ═══════════════════════════════════════
     // MAIN LOOP
     // ═══════════════════════════════════════
-    _startLoop() { if (this.loopTimer) return; this.loopTimer = setInterval(() => this._checkAll(), this.loopSpeed); }
-    _stopLoop() { if (this.loopTimer) { clearInterval(this.loopTimer); this.loopTimer = null; } }
+    _startLoop() { 
+        if (this.loopTimer) return; 
+        this._runLoop();
+    }
+    
+    _stopLoop() { 
+        if (this.loopTimer) { clearTimeout(this.loopTimer); this.loopTimer = null; } 
+    }
+
+    _runLoop() {
+        const jitter = Math.random() * 1000 - 500;
+        this.loopTimer = setTimeout(() => {
+            this._checkAll();
+            if (this.loopTimer) {
+                this._runLoop();
+            }
+        }, this.loopSpeed + jitter);
+    }
 
     _checkAll() {
+        const gw = unsafeWindow;
+        if (gw.GF?.friendsModel && !gw.GF.friendsModel.atMyHome) {
+            return;
+        }
+
         const keys = Object.keys(this.schedules).filter(k => this.schedules[k].running);
         if (keys.length === 0) { this._stopLoop(); return; }
-        keys.forEach(key => { try { this._processItem(key); } catch(e) { this._log(`❌ ${key}: ${e.message}`); } });
-        try { unsafeWindow.NetUtils.flush(); } catch(e) {}
-        this._saveSchedules();
+        
+        keys.forEach((key, index) => { 
+            setTimeout(() => {
+                try { this._processItem(key); } catch(e) { this._log(`❌ ${key}: ${e.message}`); } 
+            }, index * 10); 
+        });
+        
+        setTimeout(() => {
+            try { gw.NetUtils.flush(); } catch(e) {}
+            this._saveSchedules();
+        }, keys.length * 10 + 10);
     }
 
     _processItem(key) {
         const sched = this.schedules[key];
         const item = this.items.find(i => i.key === key);
-        if (!item || !sched?.running) return;
-        const mo = this._getFreshMO(item);
-        if (!mo) return;
-        const sd = mo.serverData || {};
-        if (item.type === 'Machine') this._processMachine(key, item, mo, sd, sched);
-        else this._processAnimal(key, item, mo, sd, sched);
-    }
-
-    _processMachine(key, item, mo, sd, sched) {
-        const gw = unsafeWindow;
-        const gc = gw.GF?.gameController;
-        if (!gc) return;
 
         // Collect if products ready
         const hasProducts = sd.products && ((Array.isArray(sd.products) && sd.products.length > 0) || parseInt(sd.products) > 0);
@@ -8134,7 +8159,7 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
                 const curSel = parseInt(sd.selected_raw_material) || 0;
                 if (curSel !== next.productIndex) {
                     this._log(`🔄 ${item.name} إلى ${next.name}`);
-                    try { gw.NetUtils.enqueue('save_selected_material.save_data', { id: item.id, x: item.x, y: item.y, flip: 0, material: next.productIndex }); } catch(e) {}
+                    try { gw.NetUtils.enqueue('save_selected_material.save_data', { id: Number(item.id), x: Number(item.x), y: Number(item.y), flip: 0, material: Number(next.productIndex) }); } catch(e) {}
                     // Update locally to bypass waiting
                     sd.selected_raw_material = next.productIndex;
                     if (mo.selected_raw_material !== undefined) mo.selected_raw_material = next.productIndex;
@@ -8192,7 +8217,7 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
                 const curSel = parseInt(sd.selected_raw_material) || 0;
                 if (curSel !== next.productIndex) {
                     this._log(`[Scheduler] ${item.name}: busy — pre-set next product: "${next.name}"`);
-                    try { gw.NetUtils.enqueue('save_selected_material.save_data', { id: item.id, x: item.x, y: item.y, flip: 0, material: next.productIndex }); } catch(e) {}
+                    try { gw.NetUtils.enqueue('save_selected_material.save_data', { id: Number(item.id), x: Number(item.x), y: Number(item.y), flip: 0, material: Number(next.productIndex) }); } catch(e) {}
                     sd.selected_raw_material = next.productIndex;
                     if (mo.selected_raw_material !== undefined) mo.selected_raw_material = next.productIndex;
                     if (typeof mo.setRawMaterial === "function") { try { mo.setRawMaterial(next.productIndex); } catch(e) {} }
@@ -8235,7 +8260,7 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
                         sched.error = null;
                     }
                 }
-                if (matId && gc._feedMapObject && (!mo.canFeed || mo.canFeed())) { gc._feedMapObject(mo, matId, false); }
+                if (matId && gc._feedMapObject && (!mo.canFeed || mo.canFeed())) { gc._feedMapObject(mo, Number(matId), false); }
             } catch(e) {}
         }
     }
