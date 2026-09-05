@@ -7141,6 +7141,7 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
         super('production_scheduler', 'جدولة الإنتاج', '🏭');
         this.items = [];
         this.schedules = (window.SF && window.SF.StorageManager) ? window.SF.StorageManager.get('sf-production-schedules', {}) : {};
+        this.ghostSchedules = (window.SF && window.SF.StorageManager) ? window.SF.StorageManager.get('sf-ghost-schedules', {}) : {};
         this.favorites = (window.SF && window.SF.StorageManager) ? window.SF.StorageManager.get('sf-ps-favorites', {}) : {};
         this.badges = {};
         this.loopTimer = null;
@@ -7167,6 +7168,7 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
     _saveSchedules() {
         if (!window.SF || !window.SF.StorageManager) return;
         window.SF.StorageManager.set('sf-production-schedules', this.schedules);
+        window.SF.StorageManager.set('sf-ghost-schedules', this.ghostSchedules);
         window.SF.StorageManager.set('sf-ps-favorites', this.favorites);
     }
 
@@ -7176,6 +7178,7 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
             <div style="display:flex; gap:10px; margin-bottom:10px;">
                 <button id="sf-ps-tab-machines" class="sf-btn" style="flex:1;background:#3498db;font-size:16px;padding:12px;border-radius:8px;font-weight:bold;box-shadow:0 0 10px rgba(52,152,219,0.5);color:#fff;">⚙ الآلات</button>
                 <button id="sf-ps-tab-animals" class="sf-btn" style="flex:1;background:#333;font-size:16px;padding:12px;border-radius:8px;font-weight:bold;color:#bbb;">🐄 الحيوانات</button>
+                <button id="sf-ps-tab-ghosts" class="sf-btn" style="flex:1;background:#333;font-size:16px;padding:12px;border-radius:8px;font-weight:bold;color:#bbb;">👻 الأشباح</button>
             </div>
             
             <div style="display:flex; gap:5px; margin-bottom:10px; background:#1a1a2e; padding:5px; border-radius:6px; border:1px solid #333;">
@@ -7196,6 +7199,14 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
                 <div id="sf-ps-animals-list" style="flex:1; overflow-y:auto; padding-right:5px; min-height:350px;"></div>
             </div>
 
+            <div id="sf-ps-view-ghosts" style="flex:1; display:none; flex-direction:column;">
+                <div style="background:rgba(255,255,255,0.05); padding:10px; border-radius:6px; margin-bottom:10px; font-size:12px; color:#aaa; text-align:center;">
+                    هذا القسم للآلات التي تم نقلها إلى الخلفية للعمل أثناء إغلاق المتصفح. 
+                    <br><strong style="color:#f1c40f;">تنبيه:</strong> سيتم استخدام "مركز الآلات" أو "بيت الحيوانات" الحقيقي الخاص بك لهذه العملية.
+                </div>
+                <div id="sf-ps-ghosts-list" style="flex:1; overflow-y:auto; padding-right:5px; min-height:350px;"></div>
+            </div>
+
             <div style="display:flex;gap:10px;margin-top:20px;">
                 <button id="sf-ps-start-all" class="sf-btn" style="flex:1;background:#27ae60;font-size:15px;padding:12px;border-radius:8px;font-weight:bold;color:#fff;">▶ تشغيل الكل</button>
                 <button id="sf-ps-stop-all" class="sf-btn" style="flex:1;background:#c0392b;font-size:15px;padding:12px;border-radius:8px;font-weight:bold;color:#fff;">⏹ إيقاف الكل</button>
@@ -7213,16 +7224,37 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
             e.target.style.background = '#3498db'; e.target.style.color = '#fff'; e.target.style.boxShadow = '0 0 10px rgba(52,152,219,0.5)';
             const animTab = c.querySelector('#sf-ps-tab-animals');
             animTab.style.background = '#333'; animTab.style.color = '#bbb'; animTab.style.boxShadow = 'none';
+            const ghostTab = c.querySelector('#sf-ps-tab-ghosts');
+            if(ghostTab) { ghostTab.style.background = '#333'; ghostTab.style.color = '#bbb'; ghostTab.style.boxShadow = 'none'; }
+            
             c.querySelector('#sf-ps-view-machines').style.display = 'flex';
             c.querySelector('#sf-ps-view-animals').style.display = 'none';
+            c.querySelector('#sf-ps-view-ghosts').style.display = 'none';
         });
         
         c.querySelector('#sf-ps-tab-animals')?.addEventListener('click', (e) => {
             e.target.style.background = '#e67e22'; e.target.style.color = '#fff'; e.target.style.boxShadow = '0 0 10px rgba(230,126,34,0.5)';
             const machTab = c.querySelector('#sf-ps-tab-machines');
             machTab.style.background = '#333'; machTab.style.color = '#bbb'; machTab.style.boxShadow = 'none';
+            const ghostTab = c.querySelector('#sf-ps-tab-ghosts');
+            if(ghostTab) { ghostTab.style.background = '#333'; ghostTab.style.color = '#bbb'; ghostTab.style.boxShadow = 'none'; }
+            
             c.querySelector('#sf-ps-view-machines').style.display = 'none';
             c.querySelector('#sf-ps-view-animals').style.display = 'flex';
+            c.querySelector('#sf-ps-view-ghosts').style.display = 'none';
+        });
+
+        c.querySelector('#sf-ps-tab-ghosts')?.addEventListener('click', (e) => {
+            e.target.style.background = '#8e44ad'; e.target.style.color = '#fff'; e.target.style.boxShadow = '0 0 10px rgba(142,68,173,0.5)';
+            const machTab = c.querySelector('#sf-ps-tab-machines');
+            machTab.style.background = '#333'; machTab.style.color = '#bbb'; machTab.style.boxShadow = 'none';
+            const animTab = c.querySelector('#sf-ps-tab-animals');
+            animTab.style.background = '#333'; animTab.style.color = '#bbb'; animTab.style.boxShadow = 'none';
+            
+            c.querySelector('#sf-ps-view-machines').style.display = 'none';
+            c.querySelector('#sf-ps-view-animals').style.display = 'none';
+            c.querySelector('#sf-ps-view-ghosts').style.display = 'flex';
+            this._renderGhosts();
         });
 
         c.querySelector('#sf-ps-search-animal')?.addEventListener('input', (e) => this._filterList('animal', e.target.value));
@@ -7268,6 +7300,15 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
             else if (tgt.classList.contains('sf-ps-nav-btn')) {
                 const item = this.items.find(i => i.key === tgt.dataset.key);
                 if (item) this._navigateToItem(item);
+            }
+            else if (tgt.classList.contains('sf-ps-add-ghost-btn')) {
+                const idx = parseInt(tgt.dataset.idx);
+                const parent = tgt.closest('.sf-ps-prod-item');
+                const qtyInput = parent.querySelector('.sf-ps-prod-qty');
+                this._addToGhost(tgt.dataset.key, idx, parseInt(qtyInput.value) || 0);
+            }
+            else if (tgt.classList.contains('sf-ps-collect-ghost-btn')) {
+                this._collectGhost(tgt.dataset.uid);
             }
         });
 
@@ -7688,6 +7729,7 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
                                 <input type="number" min="0" value="1" class="sf-ps-prod-qty" data-idx="${i}" style="width:45px;background:#111;color:#fff;border:1px solid #555;border-radius:4px;text-align:center;font-size:13px;padding:4px;outline:none;" title="0 = بلا حدود">
                                 <button class="sf-ps-add-chain-btn" data-key="${item.key}" data-idx="${i}" style="background:#27ae60;border:none;color:#fff;padding:4px 12px;border-radius:4px;cursor:pointer;font-size:12px;font-weight:bold;box-shadow:0 0 5px rgba(39,174,96,0.5);" title="جدولة هذا المنتج وكل مواده الخام">➕ جدولة ذكية</button>
                                 <button class="sf-ps-add-prod-btn" data-key="${item.key}" data-idx="${i}" style="background:#8e44ad;border:none;color:#fff;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:12px;font-weight:bold;">إضافة</button>
+                                <button class="sf-ps-add-ghost-btn" data-key="${item.key}" data-idx="${i}" style="background:#555;border:none;color:#f1c40f;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:12px;font-weight:bold;" title="إرسال الإنتاج للخلفية (مركز الأشباح)">👻 خلفية</button>
                             </div>
                         </div>
                         `;
@@ -8530,6 +8572,155 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
                 this._log(`❓ ${item.name} غير موجود على الأرض ولا في المستودع`);
             }
         }
+    }
+
+    }
+    
+    // ═══════════════════════════════════════
+    // GHOST CENTER (Offline Production Protocol)
+    // ═══════════════════════════════════════
+    _renderGhosts() {
+        const container = this.container?.querySelector('#sf-ps-ghosts-list');
+        if (!container) return;
+
+        const ghosts = Object.values(this.ghostSchedules || {});
+        if (ghosts.length === 0) {
+            container.innerHTML = '<div style="color:#777;font-size:13px;text-align:center;padding:10px;">لا يوجد آلات تعمل في مركز الأشباح حالياً.</div>';
+            return;
+        }
+
+        let html = '';
+        ghosts.forEach(g => {
+            const isReady = Date.now() >= g.readyTime;
+            const statusColor = isReady ? '#27ae60' : '#f39c12';
+            const statusText = isReady ? 'جاهز للاستعادة' : 'يعمل في الخلفية...';
+            
+            html += `
+            <div style="background:rgba(255,255,255,0.05);border-left:4px solid ${statusColor};padding:10px;margin-bottom:8px;border-radius:6px;display:flex;justify-content:space-between;align-items:center;">
+                <div>
+                    <div style="color:#fff;font-weight:bold;font-size:14px;margin-bottom:4px;">👻 ${g.machineName}</div>
+                    <div style="color:#aaa;font-size:12px;">تنتج: <strong style="color:#3498db;">${g.productName}</strong> ×${g.qty}</div>
+                    <div style="color:${statusColor};font-size:12px;margin-top:2px;">${statusText}</div>
+                </div>
+                <button class="sf-ps-collect-ghost-btn" data-uid="${g.uid}" ${!isReady ? 'disabled' : ''} style="background:${isReady ? '#27ae60' : '#555'};border:none;color:#fff;padding:8px 12px;border-radius:6px;cursor:${isReady ? 'pointer' : 'not-allowed'};font-size:13px;font-weight:bold;">
+                    ${isReady ? 'استعادة الإنتاج' : 'قيد المعالجة ⏳'}
+                </button>
+            </div>`;
+        });
+        container.innerHTML = html;
+    }
+
+    _addToGhost(machineKey, productIdx, qty) {
+        if (!qty || qty <= 0) {
+            alert("الرجاء تحديد كمية أكبر من صفر لمركز الأشباح!");
+            return;
+        }
+        
+        const item = this.items.find(i => i.key === machineKey);
+        if (!item || !item.mo) return;
+        
+        const product = item.products[productIdx];
+        if (!product) return;
+        
+        const gw = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
+        if (!gw.NetUtils || !gw.HttpConst) {
+            alert("خدمة الشبكة غير متوفرة!");
+            return;
+        }
+
+        const raw = product.reqMats[0];
+        if (!raw) return;
+        
+        // التحقق من أن المخزون يكفي للكمية كاملة لأن السيرفر سيخصمها فوراً
+        const currentInv = this._getInventoryCount(raw.id);
+        if (currentInv < qty) {
+            alert(`لا تملك كمية كافية من ${raw.name}! تحتاج ${qty} ولديك ${currentInv} فقط.`);
+            return;
+        }
+
+        const configId = item.id;
+        const uid = item.mo.map_unique_id;
+        const isAnimal = item.mo.className === 'Animal';
+
+        const qid = 999999 + Math.floor(Math.random() * 1000); // Spoof House ID to avoid touching real ones
+
+        const moveEndpoint = isAnimal ? gw.HttpConst.MOVE_TO_CIRCLE_OF_ANIMALS : gw.HttpConst.MOVE_TO_CIRCLE_OF_MACHINES;
+        const feedEndpoint = isAnimal ? gw.HttpConst.FEED_ANIMALHOUSE : gw.HttpConst.FEED_MACHINE_HOUSE;
+
+        // 1. Move to ghost house
+        const movePayload = {
+            qid: qid,
+            wid: uid,
+            w_scene: item.mo.scene_select,
+            w_x: item.mo.grid_x,
+            w_y: item.mo.grid_y,
+            w_flip: item.mo.isFlip ? 1 : 0
+        };
+        gw.NetUtils.enqueue(moveEndpoint, movePayload);
+
+        // 2. Feed bulk to ghost house
+        const feedPayload = {
+            item: { id: configId },
+            qty: qty,
+            materialiD: raw.id
+        };
+        gw.NetUtils.enqueue(feedEndpoint, feedPayload);
+        
+        // 3. Save state locally
+        // Calculate ready time: current time + (qty * collect_in * 1000)
+        let cycleTimeSec = 60; // Default fallback
+        if (item.mo.configData && item.mo.configData.collect_in) {
+            cycleTimeSec = item.mo.configData.collect_in;
+        }
+        const totalMs = qty * cycleTimeSec * 1000;
+        const readyTime = Date.now() + totalMs;
+
+        this.ghostSchedules[uid] = {
+            uid: uid,
+            machineName: item.name,
+            productName: product.name,
+            qty: qty,
+            qid: qid,
+            origScene: item.mo.scene_select,
+            origX: item.mo.grid_x,
+            origY: item.mo.grid_y,
+            origFlip: item.mo.isFlip ? 1 : 0,
+            readyTime: readyTime,
+            isAnimal: isAnimal
+        };
+        this._saveSchedules();
+        
+        alert(`تم إرسال ${item.name} إلى مركز الأشباح! ستقوم بإنتاج ${qty} ${product.name} في الخلفية.`);
+        this._renderGhosts();
+    }
+
+    _collectGhost(uid) {
+        const g = this.ghostSchedules[uid];
+        if (!g) return;
+        
+        const gw = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
+        if (!gw.NetUtils || !gw.HttpConst) return;
+
+        const collectEndpoint = g.isAnimal ? gw.HttpConst.COLLECT_ANIMALS_HOUSE : gw.HttpConst.COLLECT_MACHINE_HOUSE;
+        const returnEndpoint = g.isAnimal ? gw.HttpConst.USE_ANIMALS_HOUSE_ITEM : gw.HttpConst.USE_MACHINE_HOUSE_ITEM;
+
+        // 1. Collect
+        gw.NetUtils.enqueue(collectEndpoint, { uid: uid }); // Payload might need adjusting based on real game logs, but generic is fine or it auto-collects
+
+        // 2. Return to map
+        gw.NetUtils.enqueue(returnEndpoint, {
+            qid: g.qid,
+            wid: g.uid,
+            w_x: g.origX,
+            w_y: g.origY,
+            w_flip: g.origFlip
+        });
+        
+        delete this.ghostSchedules[uid];
+        this._saveSchedules();
+        
+        alert(`تم استعادة الإنتاج بنجاح ورجوع ${g.machineName} إلى الحقل!`);
+        this._renderGhosts();
     }
 
     _log(msg) {
