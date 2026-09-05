@@ -1817,7 +1817,7 @@ SF.AutoFarmModule = class AutoFarmModule extends SF.ModuleBase {
 
         // ── Phase 2: Match hives to crops via HashMap (O(H×F) instead of O(H×F×C)) ──
         let matches = [];
-        const YIELD_INTERVAL = 50; // yield every 50 matches to keep UI alive
+        const YIELD_INTERVAL = 500; // yield every 500 matches to keep UI alive
         let opsCounter = 0;
 
         for (let b = 0; b < beeHouses.length; b++) {
@@ -1881,8 +1881,8 @@ SF.AutoFarmModule = class AutoFarmModule extends SF.ModuleBase {
         const LoginProxyClass = gw.LoginProxy || (loginProxy ? loginProxy.constructor : null);
 
         // ── Phase 3: Send network payloads in small batches with generous yields ──
-        const BATCH_SIZE = 10;
-        const BATCH_DELAY_MS = 80;
+        const BATCH_SIZE = 200;
+        const BATCH_DELAY_MS = 0;
 
         for (let i = 0; i < matches.length; i += BATCH_SIZE) {
             const batch = matches.slice(i, i + BATCH_SIZE);
