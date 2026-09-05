@@ -8574,8 +8574,6 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
         }
     }
 
-    }
-    
     // ═══════════════════════════════════════
     // GHOST CENTER (Offline Production Protocol)
     // ═══════════════════════════════════════
