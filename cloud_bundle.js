@@ -8640,7 +8640,24 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
         const uid = item.mo.map_unique_id;
         const isAnimal = item.mo.className === 'Animal';
 
-        const qid = 999999 + Math.floor(Math.random() * 1000); // Spoof House ID to avoid touching real ones
+        let qid = null;
+        
+        // البحث عن مركز الآلات أو بيت الحيوانات الحقيقي الخاص باللاعب
+        if (gw.GameGridData && gw.GameGridData.uidDictionary) {
+            const houses = Object.values(gw.GameGridData.uidDictionary);
+            const targetClass = isAnimal ? 'AnimalHouse' : 'OpMachineHouse';
+            const foundHouse = houses.find(h => h.className === targetClass || (h.type && h.type.toLowerCase().includes(isAnimal ? 'animalhouse' : 'machinehouse')));
+            
+            if (foundHouse) {
+                qid = foundHouse.map_unique_id;
+                this._log(`تم العثور على المبنى الحقيقي: ${qid}`);
+            }
+        }
+
+        if (!qid) {
+            alert(`خطأ: لم نتمكن من العثور على ${isAnimal ? "بيت الحيوانات" : "مركز إدارة الآلات"} في مزرعتك! يجب أن تملك المبنى لكي تعمل هذه الميزة في الخلفية.`);
+            return;
+        }
 
         const moveEndpoint = isAnimal ? gw.HttpConst.MOVE_TO_CIRCLE_OF_ANIMALS : gw.HttpConst.MOVE_TO_CIRCLE_OF_MACHINES;
         const feedEndpoint = isAnimal ? gw.HttpConst.FEED_ANIMALHOUSE : gw.HttpConst.FEED_MACHINE_HOUSE;
@@ -8704,7 +8721,7 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
         const returnEndpoint = g.isAnimal ? gw.HttpConst.USE_ANIMALS_HOUSE_ITEM : gw.HttpConst.USE_MACHINE_HOUSE_ITEM;
 
         // 1. Collect
-        gw.NetUtils.enqueue(collectEndpoint, { uid: uid }); // Payload might need adjusting based on real game logs, but generic is fine or it auto-collects
+        gw.NetUtils.enqueue(collectEndpoint, { qid: g.qid, wid: g.uid }); 
 
         // 2. Return to map
         gw.NetUtils.enqueue(returnEndpoint, {
@@ -8719,7 +8736,7 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
         delete this.ghostSchedules[uid];
         this._saveSchedules();
         
-        alert(`تم استعادة الإنتاج بنجاح ورجوع ${g.machineName} إلى الحقل!`);
+        alert(`تم استعادة الإنتاج بنجاح ورجوع ${g.machineName} إلى الحقل!\n(ملاحظة: المنتجات تم إضافتها مباشرة إلى المستودع بشكل صامت، تفقد المستودع الخاص بك تجدها هناك)`);
         this._renderGhosts();
     }
 
