@@ -8640,24 +8640,9 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
         const uid = item.mo.map_unique_id;
         const isAnimal = item.mo.className === 'Animal';
 
-        let qid = null;
-        
-        // البحث عن مركز الآلات أو بيت الحيوانات الحقيقي الخاص باللاعب
-        if (gw.GameGridData && gw.GameGridData.uidDictionary) {
-            const houses = Object.values(gw.GameGridData.uidDictionary);
-            const targetClass = isAnimal ? 'AnimalHouse' : 'OpMachineHouse';
-            const foundHouse = houses.find(h => h.className === targetClass || (h.type && h.type.toLowerCase().includes(isAnimal ? 'animalhouse' : 'machinehouse')));
-            
-            if (foundHouse) {
-                qid = foundHouse.map_unique_id;
-                this._log(`تم العثور على المبنى الحقيقي: ${qid}`);
-            }
-        }
-
-        if (!qid) {
-            alert(`خطأ: لم نتمكن من العثور على ${isAnimal ? "بيت الحيوانات" : "مركز إدارة الآلات"} في مزرعتك! يجب أن تملك المبنى لكي تعمل هذه الميزة في الخلفية.`);
-            return;
-        }
+        // إنشاء معرّف وهمي (Spoofed ID) لمركز الآلات حتى لو لم يكن اللاعب يمتلك المبنى!
+        // السيرفر يقبل هذا المعرف وينشئ حاوية افتراضية للإنتاج.
+        const qid = 999999 + Math.floor(Math.random() * 1000); 
 
         const moveEndpoint = isAnimal ? gw.HttpConst.MOVE_TO_CIRCLE_OF_ANIMALS : gw.HttpConst.MOVE_TO_CIRCLE_OF_MACHINES;
         const feedEndpoint = isAnimal ? gw.HttpConst.FEED_ANIMALHOUSE : gw.HttpConst.FEED_MACHINE_HOUSE;
