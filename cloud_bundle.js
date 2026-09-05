@@ -8708,9 +8708,11 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
 
         // 2. Feed bulk to ghost house (STRICT TYPE CASTING)
         const feedPayload = {
-            item: { id: Number(configId) },
+            id: Number(configId),
+            wid: String(uid),
+            qid: Number(qid),
             qty: Number(qty),
-            materialiD: Number(raw.id)
+            raw_material_id: Number(raw.id)
         };
         this._sendGhostPayload(feedEndpoint, feedPayload);
         if (gw.NetUtils.flush) gw.NetUtils.flush();
@@ -8776,9 +8778,9 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
 
         let collectPayload = {};
         if (g.isAnimal) {
-            collectPayload = { wid: String(g.uid), qid: Number(g.qid), qty: Number(g.qty), productId: Number(g.productId) };
+            collectPayload = { id: Number(g.configId), wid: String(g.uid), qid: Number(g.qid), qty: Number(g.qty), productId: Number(g.productId) };
         } else {
-            collectPayload = { wid: String(g.uid), qid: Number(g.qid), qty: Number(g.qty), productID: Number(g.productId), isDoubleDrop: false };
+            collectPayload = { id: Number(g.configId), wid: String(g.uid), qid: Number(g.qid), qty: Number(g.qty), productID: Number(g.productId), isDoubleDrop: false };
         }
         
         this._sendGhostPayload(collectEndpoint, collectPayload);
