@@ -7327,7 +7327,8 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
     _syncItems() {
         const gw = unsafeWindow;
         // 🚨 حماية من مزرعة الجار: لا تقم بأي مزامنة أو جدولة خارج المزرعة الخاصة بك
-        if (gw.GF?.friendsModel && !gw.GF.friendsModel.atMyHome) {
+        const fModel = gw.GF?.friendsController?.model || gw.GF?.friendsModel;
+        if (fModel && fModel.atMyHome === false) {
             return;
         }
 
@@ -8024,7 +8025,8 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
         if (!canvas) return;
         
         let hideAll = false;
-        if (gw.GF?.friendsModel && !gw.GF.friendsModel.atMyHome) {
+        const fModel = gw.GF?.friendsController?.model || gw.GF?.friendsModel;
+        if (fModel && fModel.atMyHome === false) {
             hideAll = true;
         }
         try {
@@ -8099,7 +8101,8 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
 
     _checkAll() {
         const gw = unsafeWindow;
-        if (gw.GF?.friendsModel && !gw.GF.friendsModel.atMyHome) {
+        const fModel = gw.GF?.friendsController?.model || gw.GF?.friendsModel;
+        if (fModel && fModel.atMyHome === false) {
             return;
         }
 
