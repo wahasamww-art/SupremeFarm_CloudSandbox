@@ -257,10 +257,6 @@ SF.NetworkInterceptor = class NetworkInterceptor {
                 });
             });
 
-            if (isGame && body && (body instanceof ArrayBuffer || body instanceof Uint8Array)) {
-                arguments[0] = new Blob([body], { type: "application/x-amf" });
-            }
-
             return originalSend.apply(this, arguments);
         };
     }
@@ -7133,7 +7129,7 @@ if (window.SF && window.SF.modules) {
 
 
 // --- File: features/ProductionSchedulerModule.js ---
-// ==UserScript==
+﻿// ==UserScript==
 // @name         SupremeFarm — Production Scheduler Module
 // @description  Smart production scheduling for Family Farm
 // @version      3.0
@@ -8074,56 +8070,32 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
     // ═══════════════════════════════════════
     // MAIN LOOP
     // ═══════════════════════════════════════
-    _startLoop() { 
-        if (this.loopRunning) return; 
-        this.loopRunning = true;
-        this._runLoop();
-    }
-    
-    _stopLoop() { 
-        this.loopRunning = false; 
-    }
+    _startLoop() { if (this.loopTimer) return; this.loopTimer = setInterval(() => this._checkAll(), this.loopSpeed); }
+    _stopLoop() { if (this.loopTimer) { clearInterval(this.loopTimer); this.loopTimer = null; } }
 
-    _runLoop() {
-        if (!this.loopRunning) return;
-        
+    _checkAll() {
         const keys = Object.keys(this.schedules).filter(k => this.schedules[k].running);
-        if (keys.length === 0) { 
-            this._stopLoop(); 
-            return; 
-        }
-
-        // Process sequentially to prevent CPU throttling (Rule 5)
-        let i = 0;
-        const processNext = () => {
-            if (!this.loopRunning || i >= keys.length) {
-                try { unsafeWindow.NetUtils.flush(); } catch(e) {}
-                this._saveSchedules();
-                // Schedule next full cycle with human jitter (e.g. loopSpeed + random 0-500ms)
-                if (this.loopRunning) {
-                    const jitter = Math.floor(Math.random() * 500);
-                    setTimeout(() => this._runLoop(), this.loopSpeed + jitter);
-                }
-                return;
-            }
-            
-            const key = keys[i];
-            try { 
-                this._processItem(key); 
-            } catch(e) { 
-                this._log(`❌ ${key}: ${e.message}`); 
-            }
-            
-            i++;
-            setTimeout(processNext, 0); // Unblock call stack
-        };
-        
-        processNext();
+        if (keys.length === 0) { this._stopLoop(); return; }
+        keys.forEach(key => { try { this._processItem(key); } catch(e) { this._log(`❌ ${key}: ${e.message}`); } });
+        try { unsafeWindow.NetUtils.flush(); } catch(e) {}
+        this._saveSchedules();
     }
 
     _processItem(key) {
         const sched = this.schedules[key];
         const item = this.items.find(i => i.key === key);
+        if (!item || !sched?.running) return;
+        const mo = this._getFreshMO(item);
+        if (!mo) return;
+        const sd = mo.serverData || {};
+        if (item.type === 'Machine') this._processMachine(key, item, mo, sd, sched);
+        else this._processAnimal(key, item, mo, sd, sched);
+    }
+
+    _processMachine(key, item, mo, sd, sched) {
+        const gw = unsafeWindow;
+        const gc = gw.GF?.gameController;
+        if (!gc) return;
 
         // Collect if products ready
         const hasProducts = sd.products && ((Array.isArray(sd.products) && sd.products.length > 0) || parseInt(sd.products) > 0);
@@ -8162,7 +8134,7 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
                 const curSel = parseInt(sd.selected_raw_material) || 0;
                 if (curSel !== next.productIndex) {
                     this._log(`🔄 ${item.name} إلى ${next.name}`);
-                    try { gw.NetUtils.enqueue('save_selected_material.save_data', { id: Number(item.id), x: Number(item.x), y: Number(item.y), flip: 0, material: Number(next.productIndex) }); } catch(e) {}
+                    try { gw.NetUtils.enqueue('save_selected_material.save_data', { id: item.id, x: item.x, y: item.y, flip: 0, material: next.productIndex }); } catch(e) {}
                     // Update locally to bypass waiting
                     sd.selected_raw_material = next.productIndex;
                     if (mo.selected_raw_material !== undefined) mo.selected_raw_material = next.productIndex;
@@ -8181,7 +8153,7 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
                         for (let s = 0; s < p.reqMats.length; s++) {
                             const mId = p.reqMats[s].id;
                             const slotNum = s + 1; // slots are usually 1-indexed
-                            try { gc._refillMapObject(mo, Number(mId), slotNum, false); } catch(e) {}
+                            try { gc._refillMapObject(mo, mId, slotNum, false); } catch(e) {}
                         }
                         this._updateBadge(key);
                         this._log(`▶ بدء ${item.name}: ${next.name}`);
@@ -8190,7 +8162,7 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
                         const slot = 1;
                         const matId = next.rawMaterialId || (mo.getRawMaterialId ? mo.getRawMaterialId(slot) : null);
                         if (matId && gc._refillMapObject) { 
-                            gc._refillMapObject(mo, Number(matId), slot, false); 
+                            gc._refillMapObject(mo, matId, slot, false); 
                             this._updateBadge(key); 
                             this._log(`▶ بدء ${item.name}: ${next.name}`);
                         } else if (!matId) {
@@ -8220,7 +8192,7 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
                 const curSel = parseInt(sd.selected_raw_material) || 0;
                 if (curSel !== next.productIndex) {
                     this._log(`[Scheduler] ${item.name}: busy — pre-set next product: "${next.name}"`);
-                    try { gw.NetUtils.enqueue('save_selected_material.save_data', { id: Number(item.id), x: Number(item.x), y: Number(item.y), flip: 0, material: Number(next.productIndex) }); } catch(e) {}
+                    try { gw.NetUtils.enqueue('save_selected_material.save_data', { id: item.id, x: item.x, y: item.y, flip: 0, material: next.productIndex }); } catch(e) {}
                     sd.selected_raw_material = next.productIndex;
                     if (mo.selected_raw_material !== undefined) mo.selected_raw_material = next.productIndex;
                     if (typeof mo.setRawMaterial === "function") { try { mo.setRawMaterial(next.productIndex); } catch(e) {} }
@@ -8263,7 +8235,7 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
                         sched.error = null;
                     }
                 }
-                if (matId && gc._feedMapObject && (!mo.canFeed || mo.canFeed())) { gc._feedMapObject(mo, Number(matId), false); }
+                if (matId && gc._feedMapObject && (!mo.canFeed || mo.canFeed())) { gc._feedMapObject(mo, matId, false); }
             } catch(e) {}
         }
     }
