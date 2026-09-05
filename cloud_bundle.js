@@ -8076,7 +8076,7 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
     _checkAll() {
         const keys = Object.keys(this.schedules).filter(k => this.schedules[k].running);
         if (keys.length === 0) { this._stopLoop(); return; }
-        keys.forEach(key => { try { this._processItem(key); } catch(e) { this._log(\❌ \: \); } });
+        keys.forEach(key => { try { this._processItem(key); } catch(e) { this._log(`❌ ${key}: ${e.message}`); } });
         try { unsafeWindow.NetUtils.flush(); } catch(e) {}
         this._saveSchedules();
     }
