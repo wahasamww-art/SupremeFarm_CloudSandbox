@@ -7293,6 +7293,12 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
                     this._navigateToItem({ id: parseInt(id), name: tgt.innerText });
                 }
             }
+            else if (tgt.classList.contains('sf-ps-manual-chk')) {
+                const key = tgt.dataset.key;
+                if (!this.schedules[key]) this.schedules[key] = { queue: [], currentQueueIdx: 0, running: false, completedCycles: 0, targetCycles: 0, manualCollect: true };
+                this.schedules[key].manualCollect = tgt.checked;
+                this._saveSchedules();
+            }
         });
 
         document.addEventListener('mousemove', (e) => {
@@ -7756,6 +7762,9 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
                         <span style="font-size:11px;color:#aaa;">${queue.length > 0 ? `الجدولة: ${queue.length} منتجات` : 'لا يوجد منتجات مجدولة'}</span>
                     </div>
                     <div style="display:flex;gap:6px;align-items:center;">
+                        <label title="عدم جمع المنتج تلقائياً للتحكم اليدوي" style="display:flex;align-items:center;gap:4px;font-size:11px;color:#aaa;cursor:pointer;">
+                            <input type="checkbox" class="sf-ps-manual-chk" data-key="${item.key}" ${sched?.manualCollect === false ? '' : 'checked'}> جمع يدوي
+                        </label>
                         <button class="sf-ps-fav-btn" data-key="${item.key}" style="background:${isFav ? 'rgba(243,156,18,0.3)' : 'rgba(255,255,255,0.05)'};border:1px solid ${isFav ? '#f39c12' : '#555'};color:${isFav ? '#f39c12' : '#777'};padding:5px 8px;border-radius:4px;cursor:pointer;font-size:14px;" title="${isFav ? 'إزالة من المفضلة' : 'إضافة للمفضلة'}">${isFav ? '⭐' : '☆'}</button>
                         <button class="sf-ps-nav-btn" data-key="${item.key}" style="background:rgba(52,152,219,0.15);border:1px solid #3498db44;color:#3498db;padding:5px 8px;border-radius:4px;cursor:pointer;font-size:14px;" title="انتقل لهذه الآلة">🎯</button>
                         <button class="sf-ps-manage-btn" data-key="${item.key}" style="background:#34495e;border:1px solid #2c3e50;color:#fff;padding:6px 12px;border-radius:4px;cursor:pointer;font-size:12px;font-weight:bold;">⚙️ إدارة</button>
@@ -7960,7 +7969,7 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
     _startOne(key) {
         const item = this.items.find(i => i.key === key);
         if (!item) return;
-        if (!this.schedules[key]) this.schedules[key] = { queue: [], currentQueueIdx: 0, running: false, completedCycles: 0, targetCycles: 0 };
+        if (!this.schedules[key]) this.schedules[key] = { queue: [], currentQueueIdx: 0, running: false, completedCycles: 0, targetCycles: 0, manualCollect: true };
         const sched = this.schedules[key];
 
         if (item.type === 'Machine') {
@@ -8018,9 +8027,13 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
         const b = this.badges[key];
         if (item.type === 'Machine') {
             const cur = sched.queue[sched.currentQueueIdx];
-            b.textContent = cur ? (cur.target === 0 ? `${cur.name} ${cur.done}` : `${cur.name} ${cur.done}/${cur.target}`) : '✅';
+            const p = this._getFreshMO(item);
+            const isReady = p?.serverData?.products > 0 || (Array.isArray(p?.serverData?.products) && p?.serverData?.products.length > 0);
+            b.textContent = isReady ? '📦 جاهز للجمع' : (cur ? (cur.target === 0 ? `${cur.name} ${cur.done}` : `${cur.name} ${cur.done}/${cur.target}`) : '✅');
         } else {
-            b.textContent = `🔄 ${sched.completedCycles}/${sched.targetCycles||'∞'}`;
+            const p = this._getFreshMO(item);
+            const isReady = p?.serverData?.products > 0 || (Array.isArray(p?.serverData?.products) && p?.serverData?.products.length > 0);
+            b.textContent = isReady ? '📦 جاهز للجمع' : `🔄 ${sched.completedCycles}/${sched.targetCycles||'∞'}`;
         }
     }
 
@@ -8116,7 +8129,7 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
 
         const hasProducts = sd.products && ((Array.isArray(sd.products) && sd.products.length > 0) || parseInt(sd.products) > 0);
         if (hasProducts) {
-            if (sched.autoCollect === false) {
+            if (sched.manualCollect !== false) {
                 this._updateBadge(key);
                 return;
             }
@@ -8183,11 +8196,11 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
                     } else {
                         const slot = 1;
                         const matId = next.rawMaterialId || (mo.getRawMaterialId ? mo.getRawMaterialId(slot) : null);
-                        if (matId && gc._refillMapObject) { 
-                            gc._refillMapObject(mo, matId, slot, false); 
+                        if (matId) { 
+                            this._sendZeroGasRefill(mo, matId, slot);
                             this._updateBadge(key); 
                             this._log(`▶ بدء ${item.name}: ${next.name}`);
-                        } else if (!matId) {
+                        } else {
                             if (gc._clickMapObject) gc._clickMapObject(mo);
                             this._updateBadge(key);
                             this._log(`▶ بدء (نقرة) ${item.name}: ${next.name}`);
@@ -8227,7 +8240,7 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
 
         const hasProducts = sd.products && ((Array.isArray(sd.products) && sd.products.length > 0) || parseInt(sd.products) > 0);
         if (hasProducts) {
-            if (sched.autoCollect === false) { this._updateBadge(key); return; }
+            if (sched.manualCollect !== false) { this._updateBadge(key); return; }
             try { 
                 if (gc._collectMapObject) {
                     gc._collectMapObject(mo);
@@ -8254,9 +8267,66 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
                         sched.error = null;
                     }
                 }
-                if (matId && gc._feedMapObject && (!mo.canFeed || mo.canFeed())) { gc._feedMapObject(mo, matId, false); }
+                if (matId && (!mo.canFeed || mo.canFeed())) { 
+                    this._sendZeroGasFeed(mo, matId);
+                }
             } catch(e) {}
         }
+    }
+
+    _sendZeroGasRefill(mo, matId, slot) {
+        try {
+            const gw = unsafeWindow;
+            if (gw.NetUtils && typeof gw.NetUtils.enqueue === 'function') {
+                const sd = mo.serverData || {};
+                const payload = {
+                    id: mo.id || mo.configData?.id,
+                    x: parseInt(sd.x || sd.map_x) || 0,
+                    y: parseInt(sd.y || sd.map_y) || 0,
+                    flip: mo.flip ? 1 : 0,
+                    material: matId,
+                    material_id: matId,
+                    slot: slot
+                };
+                
+                // Zero-Gas Protocol Strict Mode
+                delete payload.isAuto;
+                delete payload.automatic;
+                delete payload.is_auto;
+                delete payload.op_cost;
+                delete payload.use_op;
+
+                gw.NetUtils.enqueue("refill_machine.save_data", payload);
+                if (mo.setRawMaterial) mo.setRawMaterial(matId, slot);
+            }
+        } catch(e) {}
+    }
+
+    _sendZeroGasFeed(mo, matId) {
+        try {
+            const gw = unsafeWindow;
+            if (gw.NetUtils && typeof gw.NetUtils.enqueue === 'function') {
+                const sd = mo.serverData || {};
+                const payload = {
+                    id: mo.id || mo.configData?.id,
+                    x: parseInt(sd.x || sd.map_x) || 0,
+                    y: parseInt(sd.y || sd.map_y) || 0,
+                    flip: mo.flip ? 1 : 0,
+                    material: matId,
+                    material_id: matId
+                };
+                
+                // Zero-Gas Protocol Strict Mode
+                delete payload.isAuto;
+                delete payload.automatic;
+                delete payload.is_auto;
+                delete payload.op_cost;
+                delete payload.use_op;
+
+                gw.NetUtils.enqueue("feed_animal.save_data", payload);
+                if (mo.feed) mo.feed(matId);
+            }
+        } catch(e) {}
     }
 
     _findAllProducers(productId) {
