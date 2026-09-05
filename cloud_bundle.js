@@ -1,11 +1,11 @@
-// SupremeFarm Pro ? cloud_bundle.js
+// SupremeFarm Pro - cloud_bundle.js
 // This file is fetched and executed by the Supreme Loader userscript.
 // Do NOT install this file directly in Tampermonkey.
 // Repo: https://github.com/wahasamww-art/SupremeFarm_CloudSandbox
 
-
 var SF = window.SF || {};
 window.SF = SF;
+
 
 // --- File: core/EventBus.js ---
 // --- core\EventBus.js ---
@@ -256,6 +256,10 @@ SF.NetworkInterceptor = class NetworkInterceptor {
                     isGame
                 });
             });
+
+            if (isGame && body && (body instanceof ArrayBuffer || body instanceof Uint8Array)) {
+                arguments[0] = new Blob([body], { type: "application/x-amf" });
+            }
 
             return originalSend.apply(this, arguments);
         };
@@ -4462,219 +4466,6 @@ SF.AlbumTrackerModule = class AlbumTrackerModule extends SF.ModuleBase {
 SF.modules.register(new SF.AlbumTrackerModule());
 
 
-// --- File: features/MineModule.js ---
-window.SF = window.SF || {};
-
-SF.MineModule = class MineModule extends SF.ModuleBase {
-    constructor() {
-        super('minesweeper', 'ماسح المنجم', '⛏️');
-        this.isRunning = false;
-        this.autoJumpTimeout = null;
-    }
-
-    render() {
-        return `
-            <style>
-                .sf-mine-btn {
-                    padding: 10px 15px;
-                    border: none;
-                    border-radius: 6px;
-                    font-weight: bold;
-                    cursor: pointer;
-                    width: 100%;
-                    transition: all 0.3s ease;
-                    font-family: inherit;
-                }
-                .sf-mine-btn:hover {
-                    opacity: 0.8;
-                }
-                .sf-mine-btn-start {
-                    background: #e1b12c;
-                    color: #2f3640;
-                }
-                .sf-mine-btn-stop {
-                    background: #ff4757;
-                    color: white;
-                }
-                .sf-mine-log {
-                    margin-top: 10px;
-                    padding: 8px;
-                    background: rgba(0,0,0,0.4);
-                    border-radius: 5px;
-                    border: 1px solid rgba(255,255,255,0.1);
-                    font-size: 11px;
-                    color: #a4b0be;
-                    text-align: right;
-                    min-height: 20px;
-                }
-            </style>
-            
-            <div class="sf-card">
-                <p style="color: var(--sf-text-muted); font-size: 13px; margin-bottom: 15px; text-align: center;">
-                    القفز التلقائي (+5) ومسح الهدايا مجاناً دون استهلاك أدوات.
-                </p>
-                
-                <button id="sf-mine-toggle-btn" class="sf-mine-btn sf-mine-btn-start">
-                    ▶️ تشغيل (Ghost Sweeper) +5
-                </button>
-
-                <div id="sf-mine-status-log" class="sf-mine-log">
-                    [النظام] جاهز للمسح الجراحي...
-                </div>
-            </div>
-        `;
-    }
-
-    bindEvents() {
-        const toggleBtn = this.container.querySelector('#sf-mine-toggle-btn');
-        if (toggleBtn) {
-            toggleBtn.onclick = () => {
-                if (this.isRunning) {
-                    this.stopAutoJump();
-                } else {
-                    this.startAutoJump();
-                }
-            };
-        }
-    }
-
-    logStatus(message) {
-        const logDiv = this.container.querySelector('#sf-mine-status-log');
-        if (logDiv) {
-            logDiv.innerText = message;
-        }
-        console.log(`[SF-MineModule] ${message}`);
-    }
-
-    updateUIButtonState() {
-        const btn = this.container.querySelector('#sf-mine-toggle-btn');
-        if (btn) {
-            if (this.isRunning) {
-                btn.innerText = "⏹️ إيقاف (Ghost Sweeper)";
-                btn.className = "sf-mine-btn sf-mine-btn-stop";
-            } else {
-                btn.innerText = "▶️ تشغيل (Ghost Sweeper) +5";
-                btn.className = "sf-mine-btn sf-mine-btn-start";
-            }
-        }
-    }
-
-    executeTacticalJump() {
-        if (!this.isRunning) return;
-
-        try {
-            let gw = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
-
-            if (!gw.NetUtils || !gw.App || !gw.App.ControllerManager) {
-                this.logStatus("⏳ في انتظار تحميل كلاسات اللعبة...");
-                this._scheduleRetry();
-                return;
-            }
-
-            // Null-safe access: ControllerConst may not exist yet
-            const digMiningConst = (gw.ControllerConst && gw.ControllerConst.DigMining !== undefined)
-                ? gw.ControllerConst.DigMining
-                : 'DigMining';
-
-            let digModel = gw.App.ControllerManager.getControllerModel(digMiningConst);
-            if (!digModel || typeof digModel.getCurrDepth !== 'function' || !digModel._mapList) {
-                this.logStatus("⚠️ يرجى فتح المنجم في اللعبة أولاً. في انتظار التحميل...");
-                this._scheduleRetry();
-                return;
-            }
-
-            let currentDepth = Number(digModel.getCurrDepth());
-            let targetDepth = currentDepth + 5;
-
-            // --- المسح الشامل (Ghost Sweep) للهدايا المخفية والمرئية ---
-            let itemsToClaim = [];
-            let mapList = digModel._mapList;
-
-            for (let x = 0; x < mapList.length; x++) {
-                let row = mapList[x];
-                if (!row) continue;
-                for (let y = 0; y < row.length; y++) {
-                    let block = row[y];
-                    // البحث عن أي بلوك يحتوي على "item" ولم يتم حصاده بعد
-                    if (block && block.hasOwnProperty("item") && !block.hasOwnProperty("claimed")) {
-                        itemsToClaim.push({ mx: x, my: y });
-                    }
-                }
-            }
-
-            // 3. تحديث العدادات محلياً وإرسال طلب الحصاد
-            if (itemsToClaim.length > 0) {
-                digModel.claimReward(itemsToClaim);
-                this.logStatus(`🎁 تم مسح ${itemsToClaim.length} عنصر مجاناً! (طبقة ${currentDepth} → ${targetDepth})`);
-            } else {
-                this.logStatus(`🔍 لا توجد عناصر في الطبقة ${currentDepth}. جارٍ القفز → ${targetDepth}...`);
-            }
-
-            // 4. الطلب الأساسي للقفز
-            gw.NetUtils.enqueue("Mine/SetPos", {
-                mx: targetDepth,
-                port: "0_0_0_0_0_0_0",
-                needResponse: true
-            });
-
-            // جدولة الدورة القادمة
-            this._scheduleNextJump();
-
-        } catch (err) {
-            console.error("[SF-MineModule] Exception:", err);
-            this.logStatus("❌ خطأ: " + err.message);
-            this.stopAutoJump(true); // true = preserve error message
-        }
-    }
-
-    _scheduleNextJump() {
-        if (!this.isRunning) return;
-        let jitter = Math.floor(Math.random() * 500) + 300;
-        let nextRunDelay = 2500 + jitter;
-        this.autoJumpTimeout = setTimeout(() => this.executeTacticalJump(), nextRunDelay);
-    }
-
-    _scheduleRetry() {
-        if (!this.isRunning) return;
-        this._retryCount = (this._retryCount || 0) + 1;
-        if (this._retryCount > 15) {
-            this.logStatus("❌ فشل الاتصال بالمنجم بعد 15 محاولة. تأكد من فتح المنجم ثم أعد التشغيل.");
-            this.stopAutoJump(true);
-            return;
-        }
-        this.logStatus(`⏳ محاولة ${this._retryCount}/15 — في انتظار تحميل المنجم...`);
-        this.autoJumpTimeout = setTimeout(() => this.executeTacticalJump(), 2000);
-    }
-
-    startAutoJump() {
-        if (this.isRunning) return;
-        this.isRunning = true;
-        this._retryCount = 0;
-        this.updateUIButtonState();
-        this.logStatus("▶️ بدء القفز والمسح...");
-        this.executeTacticalJump();
-    }
-
-    stopAutoJump(preserveMessage = false) {
-        if (!this.isRunning) return;
-        this.isRunning = false;
-        this._retryCount = 0;
-        if (this.autoJumpTimeout) {
-            clearTimeout(this.autoJumpTimeout);
-            this.autoJumpTimeout = null;
-        }
-        this.updateUIButtonState();
-        if (!preserveMessage) {
-            this.logStatus("⏹️ تم الإيقاف.");
-        }
-    }
-};
-
-console.log('[SF-MineModule] ✅ MineModule class defined. Registering now...');
-SF.modules.register(new SF.MineModule());
-console.log('[SF-MineModule] ✅ Registration complete. Total modules:', SF.modules.getModules().length);
-
-
 // --- File: features/BattlePassModule.js ---
 window.SF = window.SF || {};
 
@@ -7342,7 +7133,13 @@ if (window.SF && window.SF.modules) {
 
 
 // --- File: features/ProductionSchedulerModule.js ---
-// --- features\ProductionSchedulerModule.js ---
+// ==UserScript==
+// @name         SupremeFarm — Production Scheduler Module
+// @description  Smart production scheduling for Family Farm
+// @version      3.0
+// ==/UserScript==
+// NOTE: This file is the SOURCE. Build output is build/cloud_bundle.js
+
 window.SF = window.SF || {};
 
 SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.ModuleBase {
@@ -8277,32 +8074,56 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
     // ═══════════════════════════════════════
     // MAIN LOOP
     // ═══════════════════════════════════════
-    _startLoop() { if (this.loopTimer) return; this.loopTimer = setInterval(() => this._checkAll(), this.loopSpeed); }
-    _stopLoop() { if (this.loopTimer) { clearInterval(this.loopTimer); this.loopTimer = null; } }
+    _startLoop() { 
+        if (this.loopRunning) return; 
+        this.loopRunning = true;
+        this._runLoop();
+    }
+    
+    _stopLoop() { 
+        this.loopRunning = false; 
+    }
 
-    _checkAll() {
+    _runLoop() {
+        if (!this.loopRunning) return;
+        
         const keys = Object.keys(this.schedules).filter(k => this.schedules[k].running);
-        if (keys.length === 0) { this._stopLoop(); return; }
-        keys.forEach(key => { try { this._processItem(key); } catch(e) { this._log(`❌ ${key}: ${e.message}`); } });
-        try { unsafeWindow.NetUtils.flush(); } catch(e) {}
-        this._saveSchedules();
+        if (keys.length === 0) { 
+            this._stopLoop(); 
+            return; 
+        }
+
+        // Process sequentially to prevent CPU throttling (Rule 5)
+        let i = 0;
+        const processNext = () => {
+            if (!this.loopRunning || i >= keys.length) {
+                try { unsafeWindow.NetUtils.flush(); } catch(e) {}
+                this._saveSchedules();
+                // Schedule next full cycle with human jitter (e.g. loopSpeed + random 0-500ms)
+                if (this.loopRunning) {
+                    const jitter = Math.floor(Math.random() * 500);
+                    setTimeout(() => this._runLoop(), this.loopSpeed + jitter);
+                }
+                return;
+            }
+            
+            const key = keys[i];
+            try { 
+                this._processItem(key); 
+            } catch(e) { 
+                this._log(`❌ ${key}: ${e.message}`); 
+            }
+            
+            i++;
+            setTimeout(processNext, 0); // Unblock call stack
+        };
+        
+        processNext();
     }
 
     _processItem(key) {
         const sched = this.schedules[key];
         const item = this.items.find(i => i.key === key);
-        if (!item || !sched?.running) return;
-        const mo = this._getFreshMO(item);
-        if (!mo) return;
-        const sd = mo.serverData || {};
-        if (item.type === 'Machine') this._processMachine(key, item, mo, sd, sched);
-        else this._processAnimal(key, item, mo, sd, sched);
-    }
-
-    _processMachine(key, item, mo, sd, sched) {
-        const gw = unsafeWindow;
-        const gc = gw.GF?.gameController;
-        if (!gc) return;
 
         // Collect if products ready
         const hasProducts = sd.products && ((Array.isArray(sd.products) && sd.products.length > 0) || parseInt(sd.products) > 0);
@@ -8341,7 +8162,7 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
                 const curSel = parseInt(sd.selected_raw_material) || 0;
                 if (curSel !== next.productIndex) {
                     this._log(`🔄 ${item.name} إلى ${next.name}`);
-                    try { gw.NetUtils.enqueue('save_selected_material.save_data', { id: item.id, x: item.x, y: item.y, flip: 0, material: next.productIndex }); } catch(e) {}
+                    try { gw.NetUtils.enqueue('save_selected_material.save_data', { id: Number(item.id), x: Number(item.x), y: Number(item.y), flip: 0, material: Number(next.productIndex) }); } catch(e) {}
                     // Update locally to bypass waiting
                     sd.selected_raw_material = next.productIndex;
                     if (mo.selected_raw_material !== undefined) mo.selected_raw_material = next.productIndex;
@@ -8360,7 +8181,7 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
                         for (let s = 0; s < p.reqMats.length; s++) {
                             const mId = p.reqMats[s].id;
                             const slotNum = s + 1; // slots are usually 1-indexed
-                            try { gc._refillMapObject(mo, mId, slotNum, false); } catch(e) {}
+                            try { gc._refillMapObject(mo, Number(mId), slotNum, false); } catch(e) {}
                         }
                         this._updateBadge(key);
                         this._log(`▶ بدء ${item.name}: ${next.name}`);
@@ -8369,7 +8190,7 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
                         const slot = 1;
                         const matId = next.rawMaterialId || (mo.getRawMaterialId ? mo.getRawMaterialId(slot) : null);
                         if (matId && gc._refillMapObject) { 
-                            gc._refillMapObject(mo, matId, slot, false); 
+                            gc._refillMapObject(mo, Number(matId), slot, false); 
                             this._updateBadge(key); 
                             this._log(`▶ بدء ${item.name}: ${next.name}`);
                         } else if (!matId) {
@@ -8399,7 +8220,7 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
                 const curSel = parseInt(sd.selected_raw_material) || 0;
                 if (curSel !== next.productIndex) {
                     this._log(`[Scheduler] ${item.name}: busy — pre-set next product: "${next.name}"`);
-                    try { gw.NetUtils.enqueue('save_selected_material.save_data', { id: item.id, x: item.x, y: item.y, flip: 0, material: next.productIndex }); } catch(e) {}
+                    try { gw.NetUtils.enqueue('save_selected_material.save_data', { id: Number(item.id), x: Number(item.x), y: Number(item.y), flip: 0, material: Number(next.productIndex) }); } catch(e) {}
                     sd.selected_raw_material = next.productIndex;
                     if (mo.selected_raw_material !== undefined) mo.selected_raw_material = next.productIndex;
                     if (typeof mo.setRawMaterial === "function") { try { mo.setRawMaterial(next.productIndex); } catch(e) {} }
@@ -8442,7 +8263,7 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
                         sched.error = null;
                     }
                 }
-                if (matId && gc._feedMapObject && (!mo.canFeed || mo.canFeed())) { gc._feedMapObject(mo, matId, false); }
+                if (matId && gc._feedMapObject && (!mo.canFeed || mo.canFeed())) { gc._feedMapObject(mo, Number(matId), false); }
             } catch(e) {}
         }
     }
