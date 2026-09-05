@@ -8542,6 +8542,735 @@ SF.modules.register(new SF.ProductionSchedulerModule());
 
 
 
+// --- File: features/AutoMissionHelperModule.js ---
+// --- features/AutoMissionHelperModule.js ---
+window.SF = window.SF || {};
+
+SF.AutoMissionHelperModule = class AutoMissionHelperModule extends SF.ModuleBase {
+    constructor() {
+        super("auto_mission_helper", "مساعدة المهمات", "🎮");
+        this.altAccounts = [];
+        this.mainUid = "";
+        this.missionRegistry = [
+            {
+                id: "mysterious_flowerpot",
+                name: "الغابة المطيرة (Rainforest - Water)",
+                isActive: () => true,
+                getPayload: (mainUid) => ({
+                    "method": "MapCleanup/MysteriousFlowerpotWater",
+                    "data": { "toSnsids": [mainUid] }
+                })
+            },
+            {
+                id: "mc_partner_event",
+                name: "شريك الفعالية (Partner Event)",
+                isActive: () => true,
+                getPayload: (mainUid) => ({
+                    "method": "MapCleanup/PartnerEventInvite.save_data",
+                    "data": { "decorationId": 0, "toSnsids": [mainUid] }
+                })
+            },
+            {
+                id: "gift_rush",
+                name: "هدايا الاندفاع (Gift Rush)",
+                isActive: () => true,
+                getPayload: (mainUid) => ({
+                    "method": "Activity/GiftRush",
+                    "data": { "action": "sendGift", "toSnsids": [mainUid] }
+                })
+            },
+            {
+                id: "team_build",
+                name: "بناء الفريق (Team Build)",
+                isActive: () => true,
+                getPayload: (mainUid) => ({
+                    "method": "TeamBuild/Invite",
+                    "data": { "toSnsids": [mainUid] }
+                })
+            }
+        ];
+    }
+
+    getGF() {
+        if (typeof unsafeWindow !== 'undefined' && unsafeWindow.GF) return unsafeWindow.GF;
+        if (typeof window !== 'undefined' && window.GF) return window.GF;
+        if (typeof GF !== 'undefined') return GF;
+        return null;
+    }
+
+    render() {
+        const BOT_PREFIX = "bot-amh-";
+        return `
+        <style>
+        #${BOT_PREFIX}container {
+            position: fixed; top: 20px; left: 420px; width: 400px;
+            background: rgba(15, 20, 25, 0.95); border: 2px solid #ff00cc;
+            border-radius: 10px; padding: 15px; color: #fff;
+            font-family: 'Segoe UI', Tahoma, sans-serif; z-index: 999999;
+            box-shadow: 0 0 15px rgba(255, 0, 204, 0.5); backdrop-filter: blur(5px);
+        }
+        .${BOT_PREFIX}title { font-size: 16px; font-weight: bold; color: #ff00cc; text-align: center; margin-bottom: 15px; border-bottom: 1px solid #333; padding-bottom: 5px; }
+        .${BOT_PREFIX}btn { width: 100%; background: #ff00cc; color: #fff; border: none; padding: 8px; margin: 5px 0; font-weight: bold; cursor: pointer; border-radius: 4px; transition: 0.3s; }
+        .${BOT_PREFIX}btn:hover { background: #cc00aa; }
+        .${BOT_PREFIX}btn:disabled { background: #555; color: #888; cursor: not-allowed; }
+        .${BOT_PREFIX}checkbox-list { background: #111; border: 1px solid #ff00cc; border-radius: 4px; padding: 10px; max-height: 150px; overflow-y: auto; margin: 10px 0; }
+        .${BOT_PREFIX}mission-item { display: flex; align-items: center; margin-bottom: 5px; font-size: 13px; }
+        .${BOT_PREFIX}mission-item input { margin-right: 10px; }
+        .${BOT_PREFIX}log { background: #080c0f; border: 1px solid #550044; border-radius: 4px; height: 160px; overflow-y: auto; font-family: monospace; font-size: 11px; padding: 8px; color: #ff00ff; margin-top: 10px; box-sizing: border-box; }
+        .${BOT_PREFIX}log p { margin: 3px 0; border-bottom: 1px dashed #2a1a2a; padding-bottom: 2px; }
+        .${BOT_PREFIX}error { color: #ff4444; }
+        .${BOT_PREFIX}success { color: #00ffcc; }
+        .${BOT_PREFIX}info { color: #ffaa00; }
+        .${BOT_PREFIX}uid-box { font-size: 12px; color: #00ffcc; text-align: center; margin-bottom: 10px; padding: 5px; background: rgba(0,255,204,0.1); border-radius: 4px; }
+        </style>
+        <div class="sf-card" style="padding: 15px; color: #fff;">
+            <div class="${BOT_PREFIX}title">🎮 مساعد المهمات (Elite Mission Bot)</div>
+            
+            <div id="${BOT_PREFIX}uid-display" class="${BOT_PREFIX}uid-box">
+                جاري قراءة الـ ID الخاص بك...
+            </div>
+
+            <div style="font-size: 12px; color: #ccc; margin-bottom: 5px;">
+                المهام المدعومة (يرجى التأكد من توفرها في اللعبة):
+            </div>
+            
+            <div class="${BOT_PREFIX}checkbox-list" id="${BOT_PREFIX}mission-list">
+                <div style="color: #666; text-align: center; font-size: 12px;">جاري الفحص...</div>
+            </div>
+
+            <button id="${BOT_PREFIX}btn-execute" class="${BOT_PREFIX}btn">إرسال من المساعدين إلى حسابي</button>
+            
+            <div class="${BOT_PREFIX}log" id="${BOT_PREFIX}log-container"></div>
+        </div>
+        `;
+    }
+
+    log(msg, type = 'info') {
+        if (!this.container) return;
+        const logContainer = this.container.querySelector(`#bot-amh-log-container`);
+        if (!logContainer) return;
+        const time = new Date().toLocaleTimeString();
+        const p = document.createElement('p');
+        p.className = `bot-amh-${type}`;
+        p.innerHTML = `<span style="color:#555">[${time}]</span> ${msg}`;
+        logContainer.appendChild(p);
+        logContainer.scrollTop = logContainer.scrollHeight;
+        console.log(`[AutoMissionHelper] ${msg}`);
+    }
+
+    bindEvents() {
+        if (!this.container) return;
+        const btnExecute = this.container.querySelector('#bot-amh-btn-execute');
+        if (btnExecute) {
+            btnExecute.addEventListener('click', () => {
+                try {
+                    this.executeMissions();
+                } catch(e) {
+                    this.log(`Critical Click Error: ${e.message}`, 'error');
+                }
+            });
+        }
+    }
+
+    update() {
+        this.fetchMainUid();
+        this.scanActiveMissions();
+    }
+
+    fetchMainUid() {
+        const gf = this.getGF();
+        if (gf && gf.loginModel && gf.loginModel.AppData) {
+            this.mainUid = gf.loginModel.AppData.uid;
+            if (this.container) {
+                const uidBox = this.container.querySelector('#bot-amh-uid-display');
+                if (uidBox) {
+                    uidBox.innerHTML = `✅ الـ ID الخاص بك: <strong>${this.mainUid}</strong>`;
+                }
+            }
+        }
+    }
+
+    scanActiveMissions() {
+        if (!this.mainUid) {
+            this.log("لم يتم قراءة الـ UID بعد، تأكد من تحميل اللعبة بالكامل.", "error");
+            return;
+        }
+
+        if (!this.container) return;
+        const container = this.container.querySelector('#bot-amh-mission-list');
+        if (!container) return;
+        
+        container.innerHTML = '';
+        let found = 0;
+
+        this.missionRegistry.forEach(mission => {
+            try {
+                if (mission.isActive()) {
+                    found++;
+                    const div = document.createElement('div');
+                    div.className = 'bot-amh-mission-item';
+                    div.innerHTML = `
+                        <input type="checkbox" id="mh-cb-${mission.id}" value="${mission.id}" checked>
+                        <label for="mh-cb-${mission.id}">${mission.name}</label>
+                    `;
+                    container.appendChild(div);
+                }
+            } catch(e) {
+                // Ignore evaluation errors
+            }
+        });
+
+        if (found === 0) {
+            container.innerHTML = `<div style="color: #ffaa00; text-align: center; font-size: 12px;">لا يوجد مهمات مدعومة نشطة حالياً.</div>`;
+            this.log("لا يوجد مهمات مدعومة نشطة ظاهرة على الشاشة.", "warning");
+        } else {
+            this.log(`تم قراءة المهام تلقائياً بنجاح!`, "success");
+        }
+    }
+
+    loadAltAccounts() {
+        if (typeof unsafeWindow !== 'undefined' && unsafeWindow.MachineBuilderAccounts) {
+            this.altAccounts = unsafeWindow.MachineBuilderAccounts.map(acc => {
+                if(typeof acc === 'string') {
+                    const parts = acc.split('|');
+                    return { cookie: parts[0], name: parts.length > 1 ? parts[1] : "Bot" };
+                }
+                return acc;
+            });
+            return true;
+        } else if (typeof window !== 'undefined' && window.MachineBuilderAccounts) {
+            this.altAccounts = window.MachineBuilderAccounts.map(acc => {
+                if(typeof acc === 'string') {
+                    const parts = acc.split('|');
+                    return { cookie: parts[0], name: parts.length > 1 ? parts[1] : "Bot" };
+                }
+                return acc;
+            });
+            return true;
+        }
+        return false;
+    }
+
+    async executeMissions() {
+        try {
+            this.fetchMainUid(); // Double check UID before execution
+            if (!this.mainUid) {
+                this.log("خطأ: تعذر تحديد الـ UID الخاص بك.", "error");
+                return;
+            }
+
+            if (!this.container) return;
+            const checkboxes = this.container.querySelectorAll('#bot-amh-mission-list input[type="checkbox"]:checked');
+            const selectedIds = Array.from(checkboxes).map(cb => cb.value);
+
+            if (selectedIds.length === 0) {
+                this.log("يرجى تحديد مهمة واحدة على الأقل.", "error");
+                return;
+            }
+
+            if (!this.loadAltAccounts() || this.altAccounts.length === 0) {
+                this.log("خطأ: لا يوجد حسابات مساعدة في الإعدادات.", "error");
+                return;
+            }
+
+            const btnExecute = this.container.querySelector('#bot-amh-btn-execute');
+            if (btnExecute) btnExecute.disabled = true;
+
+            // Get payloads for selected missions
+            const payloads = [];
+            selectedIds.forEach(id => {
+                const mission = this.missionRegistry.find(m => m.id === id);
+                if (mission) {
+                    payloads.push(mission.getPayload(this.mainUid));
+                }
+            });
+
+            this.log(`بدء تنفيذ الإرسال لحسابك (${this.mainUid}) عبر ${this.altAccounts.length} حسابات...`, "success");
+
+            for (let i = 0; i < this.altAccounts.length; i++) {
+                const alt = this.altAccounts[i];
+                this.log(`[${i+1}/${this.altAccounts.length}] إرسال من الحساب: ${alt.name}...`, "info");
+                
+                try {
+                    let batchData = {
+                        "method": "execute_batch",
+                        "data": { "sequence": payloads }
+                    };
+
+                    const result = await this.ghostSendBatch(alt.cookie, null, batchData);
+                    
+                    if (result && result.sequence && result.sequence.length > 0) {
+                        this.log(`> تم إرسال الدعم بنجاح!`, "success");
+                    } else {
+                        this.log(`> فشل في الإرسال.`, "error");
+                    }
+
+                    // Jitter delay between accounts to prevent bans
+                    await new Promise(r => setTimeout(r, 400 + Math.random() * 300));
+
+                } catch (e) {
+                    this.log(`> خطأ في حساب ${alt.name}: ${e.message}`, "error");
+                }
+            }
+
+            this.log("✅ انتهت دورة الإرسال لجميع الحسابات. ادخل المهمة للتأكد!", "success");
+            if (btnExecute) btnExecute.disabled = false;
+        } catch (err) {
+            this.log(`حدث خطأ فادح: ${err.message}`, "error");
+            const btnExecute = this.container ? this.container.querySelector('#bot-amh-btn-execute') : null;
+            if (btnExecute) btnExecute.disabled = false;
+        }
+    }
+
+    // ==========================================
+    // Ghost Injection Network Methods
+    // ==========================================
+    
+    ghostSendBatch(cookieString, loginSession, batchData) {
+        return new Promise((resolve, reject) => {
+            const gf = this.getGF();
+            const url = gf && gf.loginModel ? gf.loginModel.GATEWAY_URL : "https://familyfarm.centurygame.com/gateway.php";
+            const uidMatch = cookieString.match(/SNS_USER_ID=([^;]+)/);
+            if (!uidMatch) return reject(new Error("No SNS_USER_ID in cookie"));
+            const uid = uidMatch[1];
+            
+            // Build signature
+            const timestamp = Math.floor(Date.now() / 1000);
+            const rawHashStr = uid + "_" + timestamp;
+            const hash = typeof md5 !== 'undefined' ? md5.hex(rawHashStr) : "";
+
+            const reqBody = {
+                "uid": uid,
+                "sessionKey": loginSession || "",
+                "unique_id": 99999 + Math.floor(Math.random() * 10000),
+                "startTime_log": timestamp,
+                "data": JSON.stringify(batchData),
+                "hash": hash
+            };
+
+            const params = new URLSearchParams();
+            for (let k in reqBody) { params.append(k, reqBody[k]); }
+
+            GM_xmlhttpRequest({
+                method: "POST",
+                url: url,
+                headers: {
+                    "Content-Type": "application/x-www-form-urlencoded",
+                    "Cookie": cookieString,
+                    "Origin": "https://familyfarm.centurygame.com",
+                    "Referer": "https://familyfarm.centurygame.com/"
+                },
+                data: params.toString(),
+                onload: (response) => {
+                    if (response.status === 200) {
+                        try {
+                            const resObj = JSON.parse(response.responseText);
+                            resolve(resObj);
+                        } catch (e) {
+                            reject(new Error("Failed to parse JSON"));
+                        }
+                    } else {
+                        reject(new Error("HTTP Status " + response.status));
+                    }
+                },
+                onerror: (err) => reject(err)
+            });
+        });
+    }
+};
+SF.modules.register(new SF.AutoMissionHelperModule());
+
+
+// --- File: features/AutoResponderModule.js ---
+// --- features\AutoResponderModule.js ---
+window.SF = window.SF || {};
+
+SF.AutoResponderModule = class AutoResponderModule extends SF.ModuleBase {
+    constructor() {
+        super('autoresponder', 'الرد التلقائي (المهمات)', '🤖');
+        this.pollInterval = null;
+        this.isRunning = false;
+        
+        // سجل للطلبات التي تم الرد عليها لمنع التكرار في نفس الجلسة
+        this.processedRequests = new Set();
+    }
+
+    render() {
+        return `
+            <div class="sf-card">
+                <h3 class="sf-card-title" style="color: #2ecc71;">🤖 محطة الاستجابة التلقائية (Ghost Protocol)</h3>
+                <p style="color: var(--sf-text-muted); font-size: 13px; margin-bottom: 15px;">
+                    هذا الموديول يعمل بصمت في الخلفية. يقوم بمسح الطلبات الواردة (مثل طلبات المساعدة في المهمات) 
+                    ويستخرج الـ ID الخاص بالمرسل تلقائياً، ثم يرسل الموافقة أو العنصر المطلوب دون أي تدخل يدوي.
+                </p>
+
+                <div style="display:flex; gap:10px; margin-top:10px;">
+                    <button class="sf-btn sf-btn-success" id="sf-btn-start-responder" style="flex:1;">تشغيل الرصد التلقائي</button>
+                    <button class="sf-btn sf-btn-danger" id="sf-btn-stop-responder" style="flex:1; display:none;">إيقاف الرصد</button>
+                </div>
+                
+                <div id="sf-responder-status" style="font-size:12px; text-align:center; margin-top:15px; color:var(--sf-text-muted); background:rgba(0,0,0,0.3); padding:10px; border-radius:6px; height: 100px; overflow-y: auto;">
+                    [النظام] في وضع السكون...
+                </div>
+            </div>
+        `;
+    }
+
+    init(container) {
+        super.init(container);
+        
+        const startBtn = document.getElementById('sf-btn-start-responder');
+        const stopBtn = document.getElementById('sf-btn-stop-responder');
+
+        if (startBtn) {
+            startBtn.addEventListener('click', () => {
+                this.startPolling();
+                startBtn.style.display = 'none';
+                stopBtn.style.display = 'block';
+            });
+        }
+
+        if (stopBtn) {
+            stopBtn.addEventListener('click', () => {
+                this.stopPolling();
+                startBtn.style.display = 'block';
+                stopBtn.style.display = 'none';
+            });
+        }
+    }
+
+    logStatus(message, isError = false) {
+        const statusDiv = document.getElementById('sf-responder-status');
+        if (!statusDiv) return;
+        const color = isError ? '#e74c3c' : '#2ecc71';
+        const time = new Date().toLocaleTimeString();
+        statusDiv.innerHTML += `<div style="color: ${color}; margin-bottom: 3px;">[${time}] ${message}</div>`;
+        statusDiv.scrollTop = statusDiv.scrollHeight;
+    }
+
+    startPolling() {
+        if (this.isRunning) return;
+        this.isRunning = true;
+        this.logStatus('بدأ الرصد التلقائي للطلبات...');
+
+        this.pollInterval = setInterval(() => {
+            this.processRequests();
+        }, 5000); // يفحص كل 5 ثواني
+    }
+
+    stopPolling() {
+        this.isRunning = false;
+        if (this.pollInterval) {
+            clearInterval(this.pollInterval);
+            this.pollInterval = null;
+        }
+        this.logStatus('تم إيقاف الرصد.', true);
+    }
+
+    processRequests() {
+        if (!unsafeWindow || !unsafeWindow.GF || !unsafeWindow.GF.loginModel) return;
+
+        const appData = unsafeWindow.GF.loginModel.AppData;
+        
+        // 1. معالجة طلبات الهدايا والمهمات (Wish Gifts / Mission Items)
+        if (appData.gifts_noreceived && Array.isArray(appData.gifts_noreceived)) {
+            let processedInLoop = 0;
+            
+            // نمر على مصفوفة الطلبات من النهاية للبداية لتجنب مشاكل الحذف أثناء الدوران
+            for (let i = appData.gifts_noreceived.length - 1; i >= 0; i--) {
+                const req = appData.gifts_noreceived[i];
+                
+                if (req && req.id && req.itemid && !this.processedRequests.has(req.id)) {
+                    this.processedRequests.add(req.id);
+                    
+                    this.logStatus(`تم رصد طلب من (UID: ${req.uid}) לעنصر: ${req.itemid}`);
+                    
+                    // حقن قبول الطلب (Ghost Protocol)
+                    // نستخدم البوابات المفتوحة مباشرة من NetUtils
+                    if (unsafeWindow.NetUtils && unsafeWindow.HttpConst) {
+                        try {
+                            unsafeWindow.NetUtils.enqueue(unsafeWindow.HttpConst.ACCEPT_WISH_GIFT, { 
+                                id: req.id, 
+                                item_id: req.itemid 
+                            });
+                            
+                            // إعطاء وهم للعبة أنه تمت إضافته
+                            if(typeof unsafeWindow.GF.loginModel.add_gifts === 'function') {
+                                unsafeWindow.GF.loginModel.add_gifts(req.itemid, 1, null, !0);
+                            }
+                            
+                            this.logStatus(`✔ تم قبول الطلب وإرساله بصمت بالخلفية!`);
+                            
+                            // إزالة من المصفوفة لعدم المعالجة مجددا
+                            appData.gifts_noreceived.splice(i, 1);
+                            processedInLoop++;
+                        } catch (e) {
+                            this.logStatus(`خطأ أثناء إرسال الطلب: ${e.message}`, true);
+                        }
+                    }
+                }
+            }
+            
+            // تحديث واجهة الإشعارات للعبة إن أمكن
+            if (processedInLoop > 0 && unsafeWindow.GF.wishGiftController) {
+                try {
+                    unsafeWindow.GF.wishGiftController.updateGiftNum();
+                } catch(e){}
+            }
+        }
+        
+        // يمكن التوسع هنا لمعالجة Inbox Messages العادية لو لزم الأمر
+    }
+};
+
+// Register the module
+SF.modules.register(new SF.AutoResponderModule());
+
+
+// --- File: features/DashboardModule.js ---
+// --- features\DashboardModule.js ---
+window.SF = window.SF || {};
+
+SF.DashboardModule = class DashboardModule extends SF.ModuleBase {
+    constructor() {
+        super('dashboard', 'لوحة التحكم', '📊');
+    }
+
+    init(container) {
+        super.init(container);
+        SF.bus.on('player:update', () => this.update());
+
+        // Update stats periodically
+        setInterval(() => {
+            if(this.container.classList.contains('active')) this.update();
+        }, 1000);
+    }
+
+    render() {
+        return `
+            <div class="sf-card">
+                <h3 class="sf-card-title">معلومات اللاعب</h3>
+                <div class="sf-grid">
+                    <div class="sf-stat">
+                        <div class="sf-stat-label">المعرف (SNS ID)</div>
+                        <div class="sf-stat-value" id="sf-dash-sns">جاري...</div>
+                    </div>
+                    <div class="sf-stat">
+                        <div class="sf-stat-label">المستوى</div>
+                        <div class="sf-stat-value" id="sf-dash-lvl">0</div>
+                    </div>
+                    <div class="sf-stat">
+                        <div class="sf-stat-label">العملات</div>
+                        <div class="sf-stat-value" id="sf-dash-coins">0</div>
+                    </div>
+                    <div class="sf-stat">
+                        <div class="sf-stat-label">الدنانير</div>
+                        <div class="sf-stat-value" id="sf-dash-cash">0</div>
+                    </div>
+                </div>
+            </div>
+            <div class="sf-card">
+                <h3 class="sf-card-title">حالة الشبكة</h3>
+                <div class="sf-grid">
+                    <div class="sf-stat">
+                        <div class="sf-stat-label">الطلبات الكلية</div>
+                        <div class="sf-stat-value" id="sf-dash-req">0</div>
+                    </div>
+                    <div class="sf-stat">
+                        <div class="sf-stat-label">طلبات اللعبة</div>
+                        <div class="sf-stat-value" id="sf-dash-greq">0</div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    update() {
+        if (!SF.dataExtractor || !SF.netMonitor) return;
+
+        const p = SF.dataExtractor.playerInfo;
+        const s = SF.netMonitor.getStats();
+
+        const elSns = document.getElementById('sf-dash-sns');
+        if(elSns) elSns.innerText = p.snsId;
+        const elLvl = document.getElementById('sf-dash-lvl');
+        if(elLvl) elLvl.innerText = p.level;
+        const elCoins = document.getElementById('sf-dash-coins');
+        if(elCoins) elCoins.innerText = p.coins.toLocaleString();
+        const elCash = document.getElementById('sf-dash-cash');
+        if(elCash) elCash.innerText = p.diamonds.toLocaleString();
+
+        const elReq = document.getElementById('sf-dash-req');
+        if(elReq) elReq.innerText = s.totalRequests;
+        const elGreq = document.getElementById('sf-dash-greq');
+        if(elGreq) elGreq.innerText = s.gameRequests;
+    }
+};
+
+// Register the module
+SF.modules.register(new SF.DashboardModule());
+
+
+
+
+// --- File: features/TargetProductionModule.js ---
+window.SF = window.SF || {};
+
+SF.TargetProductionModule = class TargetProductionModule extends SF.ModuleBase {
+    constructor() {
+        super('target_production', 'Target Production (Smart)', '🎯');
+        this.isActive = false;
+        // Delay injection to ensure DOM is ready and prevent crash
+        setTimeout(() => this.injectHooks(), 1000);
+    }
+
+    render() {
+        return `
+            <div class="sf-card">
+                <h3 style="color:#2ecc71; text-align:center; margin-bottom:5px;">🎯 Smart Target Production</h3>
+                <p style="font-size:12px; color:#aaa; text-align:center; margin-bottom:10px;">
+                    This system is integrated natively with the game's Auto-Operate buttons.<br>
+                    Click the Yellow Gear icon on any machine, and it will ask you for a target count.
+                </p>
+                <div id="sf-target-prod-list" style="font-size:12px; color:#ddd; background:rgba(0,0,0,0.4); padding:10px; border-radius:6px; max-height: 200px; overflow-y:auto;">
+                    <i>No machines are currently running with a target count...</i>
+                </div>
+            </div>
+        `;
+    }
+
+    bindEvents() {
+        setInterval(() => {
+            const listContainer = document.getElementById('sf-target-prod-list');
+            if (!listContainer) return;
+            
+            let dataStr = null;
+            if (typeof unsafeWindow !== 'undefined' && unsafeWindow._sf_target_prod) {
+                dataStr = JSON.stringify(unsafeWindow._sf_target_prod);
+            } else if (window._sf_target_prod) {
+                dataStr = JSON.stringify(window._sf_target_prod);
+            }
+            if (!dataStr) return;
+            
+            let targets = JSON.parse(dataStr);
+            let html = '';
+            for (let uid in targets) {
+                let data = targets[uid];
+                html += `<div style="display:flex; justify-content:space-between; margin-bottom:5px; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:5px;">
+                            <span>⚙️ ${data.name}</span>
+                            <span style="color:#f1c40f; font-weight:bold;">Remaining: ${data.count}</span>
+                         </div>`;
+            }
+            
+            if (html === '') {
+                listContainer.innerHTML = '<i>No machines are currently running with a target count...</i>';
+            } else {
+                listContainer.innerHTML = html;
+            }
+        }, 1000);
+    }
+
+    injectHooks() {
+        if (this.isActive) return;
+        this.isActive = true;
+
+        const fnStr = function() {
+            window._sf_target_prod = window._sf_target_prod || {};
+
+            const initToggleHook = function() {
+                if (window.App && window.App.ControllerManager && window.GameConst) {
+                    const orig_applyFunc = window.App.ControllerManager.applyFunc;
+                    window.App.ControllerManager.applyFunc = function(controller, funcId, param) {
+                        if (funcId === window.GameConst.MAPOBJECT_TOGGLE_AUTOMATION && param) {
+                            let objName = param.configData ? (param.configData.name_ar || param.configData.name) : "Machine";
+                            let uid = param.map_unique_id || param.unique_id || param.id;
+
+                            if (!param.automatic) {
+                                let userInput = prompt("🎯 Smart Target Production for [" + objName + "]\n\nHow many products do you want to make?\n(Leave empty and click OK for infinite operation)", "");
+                                
+                                if (userInput !== null && userInput.trim() !== "") {
+                                    let count = parseInt(userInput);
+                                    if (!isNaN(count) && count > 0) {
+                                        window._sf_target_prod[uid] = { count: count, name: objName };
+                                    }
+                                }
+                            } else {
+                                if (window._sf_target_prod[uid]) {
+                                    delete window._sf_target_prod[uid];
+                                }
+                            }
+                        }
+                        return orig_applyFunc.apply(this, arguments);
+                    };
+                    console.log("✅ [TargetProduction] Main Context Hooked: MAPOBJECT_TOGGLE_AUTOMATION");
+                } else {
+                    setTimeout(initToggleHook, 2000);
+                }
+            };
+            setTimeout(initToggleHook, 3000);
+
+            const initNetHook = function() {
+                if (window.NetUtils && window.NetUtils.enqueue) {
+                    const orig_enqueue = window.NetUtils.enqueue;
+                    window.NetUtils.enqueue = function(action, payload) {
+                        try {
+                            const targetActions = ['feed_animal', 'add_material', 'start_produce', 'produce', 'gear_start', 'collect_product', 'harvest'];
+                            if (payload && action && targetActions.some(a => action.includes(a))) {
+                                let uid = payload.unique_id || payload.machine_id || payload.id;
+                                if (uid && window._sf_target_prod[uid]) {
+                                    window._sf_target_prod[uid].count--;
+                                    
+                                    if (window._sf_target_prod[uid].count <= 0) {
+                                        delete window._sf_target_prod[uid];
+                                        
+                                        const layer = window.GF && window.GF.gameController && window.GF.gameController.gameView && window.GF.gameController.gameView.objLayer;
+                                        if (layer && layer.$children) {
+                                            const obj = layer.$children.find(c => c && (c.map_unique_id == uid || c.unique_id == uid || c.id == uid));
+                                            if (obj) {
+                                                obj.automatic = false;
+                                                if (typeof obj.automation_turn === 'function') {
+                                                    obj.automation_turn();
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        } catch(e) {}
+                        return orig_enqueue.apply(this, arguments);
+                    };
+                    console.log("✅ [TargetProduction] Main Context Hooked: NetUtils.enqueue");
+                } else {
+                    setTimeout(initNetHook, 2000);
+                }
+            };
+            setTimeout(initNetHook, 3500);
+        };
+
+        const tryInject = () => {
+            const headOrDoc = document.head || document.documentElement;
+            if (headOrDoc) {
+                const script = document.createElement('script');
+                script.textContent = '(' + fnStr + ')();';
+                headOrDoc.appendChild(script);
+                script.remove();
+            } else {
+                // If head isn't available yet, wait for DOMContentLoaded
+                window.addEventListener('DOMContentLoaded', tryInject, { once: true });
+            }
+        };
+        
+        if (document.readyState === 'loading') {
+            window.addEventListener('DOMContentLoaded', tryInject, { once: true });
+        } else {
+            tryInject();
+        }
+    }
+};
+// Register the module
+SF.modules.register(new SF.TargetProductionModule());
+
+
 // --- System Initialization ---
 (function() {
     'use strict';
