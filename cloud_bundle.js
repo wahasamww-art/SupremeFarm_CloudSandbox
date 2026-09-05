@@ -8119,7 +8119,7 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
         const gc = gw.GF?.gameController;
         if (!gc) return;
 
-        const hasProducts = sd.products && ((Array.isArray(sd.products) && sd.products.length > 0) || parseInt(sd.products) > 0);
+        const hasProducts = typeof mo.can_collect === 'function' ? mo.can_collect() : false;
         if (hasProducts) {
             try { 
                 if (gc._collectMapObject) {
@@ -8226,7 +8226,7 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
             this._renderAnimals(); this._updateBadge(key); return;
         }
 
-        const hasProducts = sd.products && ((Array.isArray(sd.products) && sd.products.length > 0) || parseInt(sd.products) > 0);
+        const hasProducts = typeof mo.can_collect === 'function' ? mo.can_collect() : false;
         if (hasProducts) {
             try { 
                 if (gc._collectMapObject) {
