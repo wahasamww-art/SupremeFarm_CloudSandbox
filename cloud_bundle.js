@@ -1881,8 +1881,8 @@ SF.AutoFarmModule = class AutoFarmModule extends SF.ModuleBase {
         const LoginProxyClass = gw.LoginProxy || (loginProxy ? loginProxy.constructor : null);
 
         // ── Phase 3: Send network payloads in small batches with generous yields ──
-        const BATCH_SIZE = 200;
-        const BATCH_DELAY_MS = 0;
+        const BATCH_SIZE = 50;
+        const BATCH_DELAY_MS = 20;
 
         for (let i = 0; i < matches.length; i += BATCH_SIZE) {
             const batch = matches.slice(i, i + BATCH_SIZE);
@@ -1935,7 +1935,8 @@ SF.AutoFarmModule = class AutoFarmModule extends SF.ModuleBase {
 
                 // Lightweight state updates only - NO eui.Image creation
                 try { if (typeof targetCrop.updateStage === 'function') targetCrop.updateStage(); } catch (e) {}
-                try { if (typeof targetCrop.pollinate === 'function') targetCrop.pollinate(); } catch (e) {}
+                // Disable native pollinate animation to prevent massive browser freezing when doing bulk pollination
+                // try { if (typeof targetCrop.pollinate === 'function') targetCrop.pollinate(); } catch (e) {}
 
                 if (typeof beeHouse.addProduct === 'function') {
                     try {
@@ -2003,14 +2004,24 @@ SF.ZeroGasModule = class ZeroGasModule {
             const initZeroGas = function() {
                 if (window.GF && window.GF.loginModel && window.GF.loginModel.AppData && window.TreasureType) {
                     
-                    // Helper: robust OP type check (handles 'op', 'OP', TreasureType.OP, TreasureType.op)
+                    // Helper: robust OP type check (highly optimized for tight loops)
+                    let cachedOpTypes = null;
                     const isOpType = function(type) {
                         if (!type) return false;
-                        let tLow = (typeof type === 'string') ? type.toLowerCase() : '';
-                        if (tLow === 'op') return true;
-                        try { if (type === window.TreasureType.OP) return true; } catch(e) {}
-                        try { if (type === window.TreasureType.op) return true; } catch(e) {}
-                        try { if (type === window.TreasureType.Op) return true; } catch(e) {}
+                        if (typeof type === 'string' && type.toLowerCase() === 'op') return true;
+                        
+                        if (!cachedOpTypes) {
+                            cachedOpTypes = [];
+                            if (window.TreasureType) {
+                                if (window.TreasureType.OP) cachedOpTypes.push(window.TreasureType.OP);
+                                if (window.TreasureType.op) cachedOpTypes.push(window.TreasureType.op);
+                                if (window.TreasureType.Op) cachedOpTypes.push(window.TreasureType.Op);
+                            }
+                        }
+                        
+                        for (let i = 0; i < cachedOpTypes.length; i++) {
+                            if (type === cachedOpTypes[i]) return true;
+                        }
                         return false;
                     };
 
