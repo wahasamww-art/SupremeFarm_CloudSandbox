@@ -7694,6 +7694,8 @@ SF.ProductionSchedulerModule = class ProductionSchedulerModule extends SF.Module
                                 </span>`;
                             }).join('');
                             
+                            const prodCount = p.productId ? this._getInventoryCount(p.productId) : 0;
+                            return `
                         <div class="sf-ps-prod-item" data-name="${pNameSafe}" style="display:flex;align-items:center;justify-content:space-between;background:rgba(255,255,255,0.05);padding:8px;border-radius:8px;margin-bottom:6px;border:1px solid rgba(255,255,255,0.1);">
                             <div style="display:flex;align-items:center;gap:10px;flex:1;">
                                 <div style="background:rgba(0,0,0,0.4);border-radius:8px;padding:4px;display:flex;align-items:center;justify-content:center;box-shadow:inset 0 0 5px rgba(0,0,0,0.5);min-width:44px;min-height:44px;">
