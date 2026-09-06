@@ -9226,11 +9226,45 @@ SF.AMFProbeModule = class extends SF.ModuleBase {
             <div style="padding:15px; direction:rtl;">
                 <h3 style="color:#e74c3c; margin-bottom:15px;">🔍 جهاز رصد أوامر اللعبة (Probe)</h3>
                 <p style="color:#aaa; font-size:13px;">قم بدمج عنصر واحد في خريطة "رحلة إلى أوراسيا" وسوف يظهر كود الأمر هنا فوراً لاستخلاصه:</p>
+                <button id="sf-scan-merge" style="background:#3498db; color:#fff; border:none; padding:8px 12px; border-radius:5px; cursor:pointer; margin-bottom:10px;">فحص متغيرات اللعبة (Merge Scan)</button>
                 <div id="sf-probe-logs" style="background:#111; padding:10px; border-radius:8px; max-height:400px; overflow-y:auto; font-family:monospace; direction:ltr; text-align:left;">
                     <div style="color:#777;">Waiting for actions...</div>
                 </div>
             </div>
         `;
+    }
+
+    bindEvents() {
+        const c = this.container;
+        if (!c) return;
+        const btn = c.querySelector('#sf-scan-merge');
+        if (btn) {
+            btn.addEventListener('click', () => {
+                const gw = unsafeWindow;
+                let found = [];
+                for (let key in gw) {
+                    if (typeof key === 'string' && key.toLowerCase().includes('merge')) {
+                        found.push(key);
+                    }
+                }
+                
+                // Also check GF object
+                let gfFound = [];
+                if (gw.GF) {
+                    for (let key in gw.GF) {
+                        if (typeof key === 'string' && key.toLowerCase().includes('merge')) {
+                            gfFound.push('GF.' + key);
+                        }
+                    }
+                }
+                
+                this.recordedActions.push({
+                    action: 'SCAN_RESULT',
+                    params: { window: found, GF: gfFound }
+                });
+                this.update();
+            });
+        }
     }
 
     update() {
