@@ -9436,7 +9436,7 @@ SF.MergeAutoPlayModule = class extends SF.ModuleBase {
                 // Placeholder for order logic
             }
             
-        }, 1000); // Check every second
+        }, 1500); // Check every 1.5 seconds to prevent server out of sync
     }
 
     stopSmartBot() {
@@ -9472,10 +9472,15 @@ SF.MergeAutoPlayModule = class extends SF.ModuleBase {
             if (positions.length >= 2) {
                 const from = positions[0];
                 const to = positions[1];
-                this.sendAction("move", from, to);
                 
-                // Track pending to avoid spamming
+                // Track pending to avoid spamming and out of sync
                 this.pendingMerges.add(from);
+                this.pendingMerges.add(to);
+                
+                this.sendAction("move", from, to, () => {
+                    this.pendingMerges.delete(from);
+                    this.pendingMerges.delete(to);
+                });
                 
                 return; // Do one per tick
             }
@@ -9524,7 +9529,7 @@ SF.MergeAutoPlayModule = class extends SF.ModuleBase {
         return null;
     }
 
-    sendAction(actionType, from, to) {
+    sendAction(actionType, from, to, successCb) {
         const gw = unsafeWindow;
         if (!gw.NetUtils || !gw.NetUtils.enqueue) return;
 
@@ -9534,7 +9539,11 @@ SF.MergeAutoPlayModule = class extends SF.ModuleBase {
             to: to,
             mapId: this.mapId
         };
-        gw.NetUtils.enqueue("MergeGame/Merge", payload);
+        gw.NetUtils.enqueue("MergeGame/Merge", payload, () => {
+            if (successCb) successCb();
+        }, () => {
+            if (successCb) successCb(); // clear pending even on fail to avoid infinite block
+        });
     }
 };
 
